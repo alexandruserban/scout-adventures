@@ -270,6 +270,7 @@
     // Combat & Health
     hp: 3,
     maxHp: 3,
+    jumpsRemaining: 2, // Double Jump support
     invulnerableTimer: 0,
     attackHitboxActive: false,
     attackHasHit: false,
@@ -293,6 +294,7 @@
       if (this.hp <= 0) {
         this.state = 'DEFEATED';
         this.stateTimer = 0;
+        this.mesh.rotation.z = 0;
         this.vx = knockDir * 2.0;
         this.vy = 4.0;
         this.setFrame(textures.boy.defeated);
@@ -304,6 +306,7 @@
         this.state = 'HIT_RECOIL';
         this.stateTimer = 0.22; // Recoil duration
         this.invulnerableTimer = 1.2; // Immunity period
+        this.mesh.rotation.z = 0;
         this.vx = knockDir * 4.5;
         this.vy = 4.2;
         this.setFrame(textures.boy.hit1Flash);
@@ -614,13 +617,30 @@
   });
 
   function handleJumpPress() {
-    if (boy.state === 'DEFEATED' || boy.state === 'HIT_RECOIL') return;
+    if (boy.state === 'DEFEATED' || boy.state === 'HIT_RECOIL' || boy.state === 'HIT_STAGGER') return;
+
+    // First jump from ground
     if (boy.y <= GROUND_Y + 0.05) {
       boy.vy = 9.2;
+      boy.jumpsRemaining = 1;
+      boy.mesh.rotation.z = 0;
       boy.state = 'JUMP';
       boy.setFrame(textures.boy.jump);
       window.SoundEngine.playJump();
       spawnParticles(boy.x, boy.y + 0.1, 5, '#4fb835', 0.6, 0.3); // Grass dust
+    }
+    // Double jump in mid-air!
+    else if (boy.jumpsRemaining > 0) {
+      boy.vy = 8.6;
+      boy.jumpsRemaining = 0;
+      boy.mesh.rotation.z = 0;
+      boy.state = 'DOUBLE_JUMP';
+      boy.setFrame(textures.boy.jump);
+      window.SoundEngine.playDoubleJump();
+
+      // Energetic double-jump particle burst (leaves + air spark)
+      spawnParticles(boy.x, boy.y + 0.2, 8, '#86d66e', 1.3, 0.35);
+      spawnParticles(boy.x, boy.y + 0.2, 6, '#bae6fd', 0.9, 0.25);
     }
   }
 
@@ -665,7 +685,9 @@
     if (boy.y <= GROUND_Y) {
       boy.y = GROUND_Y;
       boy.vy = 0;
-      if (boy.state === 'JUMP' || boy.state === 'FALL') {
+      boy.jumpsRemaining = 2; // Reset double jump
+      boy.mesh.rotation.z = 0;
+      if (boy.state === 'JUMP' || boy.state === 'FALL' || boy.state === 'DOUBLE_JUMP') {
         boy.state = 'IDLE';
         spawnParticles(boy.x, boy.y + 0.1, 4, '#4fb835', 0.5, 0.25);
       }
@@ -723,6 +745,7 @@
         break;
       }
 
+      case 'DOUBLE_JUMP':
       case 'JUMP':
       case 'FALL': {
         // Air control
@@ -735,10 +758,18 @@
         }
         boy.x += boy.vx * dt;
 
+        // Acrobatic somersault spin while executing the double jump!
+        if (boy.state === 'DOUBLE_JUMP') {
+          boy.mesh.rotation.z -= boy.facing * 18.0 * dt;
+        }
+
         // Switch to fall frame when velocity is negative
-        if (boy.vy < 0 && boy.state === 'JUMP') {
-          boy.state = 'FALL';
-          boy.setFrame(textures.boy.fall);
+        if (boy.vy < 0) {
+          if (boy.state === 'DOUBLE_JUMP' || boy.state === 'JUMP') {
+            boy.mesh.rotation.z = 0;
+            boy.state = 'FALL';
+            boy.setFrame(textures.boy.fall);
+          }
         }
         break;
       }
@@ -980,11 +1011,13 @@
 
     // Reset boy
     boy.hp = boy.maxHp;
+    boy.jumpsRemaining = 2;
     boy.x = 0;
     boy.y = GROUND_Y;
     boy.vx = 0;
     boy.vy = 0;
     boy.facing = 1;
+    boy.mesh.rotation.z = 0;
     boy.state = 'IDLE';
     boy.invulnerableTimer = 0;
     boy.setFrame(textures.boy.idle[0]);

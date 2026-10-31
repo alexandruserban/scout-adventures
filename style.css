@@ -167,6 +167,7 @@ body, html {
 .state-idle { background: #14532d; color: #86efac; border-color: #22c55e; }
 .state-walk { background: #166534; color: #bbf7d0; border-color: #4ade80; }
 .state-jump, .state-fall { background: #0369a1; color: #bae6fd; border-color: #38bdf8; }
+.state-double_jump { background: #0284c7; color: #e0f2fe; border-color: #38bdf8; animation: pulse-heart 0.3s ease-out; }
 .state-attack { background: #b45309; color: #fef08a; border-color: #facc15; }
 .state-hit_recoil { background: #b91c1c; color: #ffffff; border-color: #ef4444; animation: flash-hit 0.15s infinite; }
 .state-hit_stagger { background: #991b1b; color: #fca5a5; border-color: #f87171; }

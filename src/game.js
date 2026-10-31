@@ -25,8 +25,8 @@
     0.1,
     100
   );
-  camera.position.set(0, 3.2, 20);
-  camera.lookAt(0, 3.2, 0);
+  camera.position.set(0, 2.6, 20);
+  camera.lookAt(0, 2.6, 0);
 
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -243,8 +243,11 @@
   // ==========================================
   // Boy (Player Character)
   // ==========================================
-  const boyMesh = R.createSpriteMesh(textures.boy.idle[0], PIXEL_SCALE);
-  boyMesh.position.set(0, GROUND_Y + (textures.boy.idle[0].height * PIXEL_SCALE) / 2, 0.3);
+  const BOY_SCALE = 0.85;       // Straighter, more compact and agile
+  const MUSHROOM_SCALE = 0.80;  // Straighter, compact evil mushroom
+
+  const boyMesh = R.createSpriteMesh(textures.boy.idle[0], PIXEL_SCALE * BOY_SCALE);
+  boyMesh.position.set(0, GROUND_Y + (textures.boy.idle[0].height * PIXEL_SCALE * BOY_SCALE) / 2, 0.3);
   scene.add(boyMesh);
 
   const boy = {
@@ -254,8 +257,8 @@
     vx: 0,
     vy: 0,
     facing: 1, // 1: Right, -1: Left
-    width: textures.boy.idle[0].width * PIXEL_SCALE,
-    height: textures.boy.idle[0].height * PIXEL_SCALE,
+    width: textures.boy.idle[0].width * PIXEL_SCALE * BOY_SCALE,
+    height: textures.boy.idle[0].height * PIXEL_SCALE * BOY_SCALE,
 
     // Multiple States:
     // 'IDLE', 'WALK', 'JUMP', 'FALL', 'ATTACK', 'HIT_RECOIL', 'HIT_STAGGER', 'DEFEATED'
@@ -326,9 +329,9 @@
       this.speed = 1.3;
       this.aggroSpeed = 2.4;
 
-      this.mesh = R.createSpriteMesh(textures.mushroom.walk[0], PIXEL_SCALE);
-      this.width = textures.mushroom.walk[0].width * PIXEL_SCALE;
-      this.height = textures.mushroom.walk[0].height * PIXEL_SCALE;
+      this.mesh = R.createSpriteMesh(textures.mushroom.walk[0], PIXEL_SCALE * MUSHROOM_SCALE);
+      this.width = textures.mushroom.walk[0].width * PIXEL_SCALE * MUSHROOM_SCALE;
+      this.height = textures.mushroom.walk[0].height * PIXEL_SCALE * MUSHROOM_SCALE;
       this.mesh.position.set(this.x, this.y + this.height / 2, 0.25);
       scene.add(this.mesh);
 
@@ -338,6 +341,7 @@
       this.stateTimer = 0;
       this.animFrame = 0;
       this.animTimer = 0;
+      this.shudderOffset = 0;
 
       this.hp = 2; // Takes 2 hits to defeat
       this.dead = false;
@@ -475,11 +479,13 @@
 
         case 'HIT_DAZED': {
           this.stateTimer -= dt;
-          // Dazed wobble shake
-          const wobble = Math.sin(this.stateTimer * 30) * 0.1;
-          this.mesh.rotation.z = wobble;
+          // Symmetrical horizontal shudder shake - perfectly straight upright without crooked tilt
+          const shudder = Math.sin(this.stateTimer * 45) * 0.04;
+          this.shudderOffset = shudder;
+          this.mesh.rotation.z = 0;
 
           if (this.stateTimer <= 0) {
+            this.shudderOffset = 0;
             this.mesh.rotation.z = 0;
             this.state = 'PATROL';
           }
@@ -501,11 +507,13 @@
         }
       }
 
-      // Update Mesh Transform
+      // Update Mesh Transform (Keeps sprite perfectly straight)
       if (this.state !== 'DEFEATED') {
         this.mesh.scale.x = this.facing;
       }
-      this.mesh.position.set(this.x, this.y + this.height / 2, 0.25);
+      this.mesh.rotation.z = 0;
+      const renderX = this.x + (this.shudderOffset || 0);
+      this.mesh.position.set(renderX, this.y + this.height / 2, 0.25);
 
       // Contact damage with player
       if (!this.dead && this.state !== 'HIT_SQUASH' && this.state !== 'HIT_DAZED' && this.state !== 'DEFEATED') {
@@ -813,11 +821,11 @@
   }
 
   function checkMeleeSlashCollisions() {
-    // Attack hitbox positioned in front of the boy
-    const attackRangeX = 1.6;
-    const attackRangeY = 1.4;
-    const slashCenterX = boy.x + boy.facing * 0.9;
-    const slashCenterY = boy.y + 0.8;
+    // Attack hitbox positioned in front of the boy (tuned for smaller straight sprites)
+    const attackRangeX = 1.35;
+    const attackRangeY = 1.15;
+    const slashCenterX = boy.x + boy.facing * 0.75;
+    const slashCenterY = boy.y + boy.height * 0.55;
 
     mushrooms.forEach(m => {
       if (m.dead || m.state === 'DEFEATED') return;
@@ -828,7 +836,7 @@
         m.takeHit(1, boy.x);
         boy.attackHasHit = true;
         // Hit spark slash particles
-        spawnParticles(m.x, m.y + 0.8, 8, '#ffeaa7', 1.5, 0.4);
+        spawnParticles(m.x, m.y + 0.6, 8, '#ffeaa7', 1.3, 0.35);
       }
     });
   }
@@ -872,8 +880,8 @@
 
   function updateCamera(dt) {
     // Smooth camera follow with forward lookahead
-    const targetX = boy.x + boy.facing * 1.5;
-    const targetY = Math.max(3.0, boy.y + 2.4);
+    const targetX = boy.x + boy.facing * 1.3;
+    const targetY = Math.max(2.6, boy.y + 2.0);
 
     camera.position.x += (targetX - camera.position.x) * 4.5 * dt;
     camera.position.y += (targetY - camera.position.y) * 4.0 * dt;

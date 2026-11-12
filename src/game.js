@@ -41,25 +41,51 @@
   const S = window.SpriteData;
   const P = S.PALETTE;
 
-  const textures = {
+  // Wrap a pre-drawn canvas as a crisp pixel texture
+  function texFromCanvas(canvas) {
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    return { texture: tex, canvas, width: canvas.width, height: canvas.height };
+  }
+
+  // Small pixel-art disc / ring textures for explosion flashes and shockwaves
+  function makeRoundTexture(ring) {
+    const size = 24;
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const d = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2);
+        if (ring ? d > 9.5 && d < 11.5 : d < 11.5) ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    return texFromCanvas(c).texture;
+  }
+
+  const BA = window.BoyAnimation;
+
+const textures = {
     boy: {
-      idle: S.BOY.IDLE.map((rows, i) => R.createTexture(rows, P, `b_idle_${i}`)),
-      walk: S.BOY.WALK.map((rows, i) => R.createTexture(rows, P, `b_walk_${i}`)),
-      jump: R.createTexture(S.BOY.JUMP, P, 'b_jump'),
-      fall: R.createTexture(S.BOY.FALL, P, 'b_fall'),
-      attack: S.BOY.ATTACK.map((rows, i) => R.createTexture(rows, P, `b_atk_${i}`)),
-      hit1: R.createTexture(S.BOY.HIT_1, P, 'b_hit1'),
-      hit1Flash: R.createTexture(R.createHitFlashRows(S.BOY.HIT_1, 'X'), P, 'b_hit1_f'),
-      hit2: R.createTexture(S.BOY.HIT_2, P, 'b_hit2'),
-      defeated: R.createTexture(S.BOY.DEFEATED, P, 'b_def')
+      idle: BA.IDLE.map(texFromCanvas),
+      walk: BA.WALK.map(texFromCanvas),
+      jump: texFromCanvas(BA.JUMP),
+      fall: texFromCanvas(BA.FALL),
+      attack: BA.ATTACK.map(f => Object.assign(texFromCanvas(f.canvas), { meta: f })),
+      hit1: texFromCanvas(BA.HIT_1),
+      hit1Flash: texFromCanvas(BA.HIT_1_FLASH),
+      hit2: texFromCanvas(BA.HIT_2),
+      defeated: texFromCanvas(BA.DEFEATED)
     },
     mushroom: {
       walk: S.MUSHROOM.WALK.map((rows, i) => R.createTexture(rows, P, `m_walk_${i}`)),
       aggro: R.createTexture(S.MUSHROOM.AGGRO, P, 'm_aggro'),
       hit1: R.createTexture(S.MUSHROOM.HIT_1, P, 'm_hit1'),
       hit1Flash: R.createTexture(R.createHitFlashRows(S.MUSHROOM.HIT_1, 'X'), P, 'm_hit1_f'),
-      hit2: R.createTexture(S.MUSHROOM.HIT_2, P, 'm_hit2'),
-      defeated: R.createTexture(S.MUSHROOM.DEFEATED, P, 'm_def')
+      hit2: R.createTexture(S.MUSHROOM.HIT_2, P, 'm_hit2')
     },
     tree: (function() {
       const canvas = S.createAncientTreeCanvas();
@@ -216,6 +242,145 @@
     }
   }
 
+  // ==========================================
+  // Impact Feel: Hit-Stop, Screen Shake, Explosions
+  // ==========================================
+  let hitStop = 0;      // seconds of frozen gameplay after a heavy hit
+  let shakeTime = 0;
+  let shakeMag = 0;
+
+  function shakeCamera(mag, time) {
+    shakeMag = Math.max(shakeMag, mag);
+    shakeTime = Math.max(shakeTime, time);
+  }
+
+  const discTex = makeRoundTexture(false);
+  const ringTex = makeRoundTexture(true);
+  const effects = []; // expanding flashes, shockwaves, smoke puffs
+  const debris = [];  // physical pixel chunks
+
+  function spawnEffect(tex, color, x, y, fromScale, toScale, life, opts = {}) {
+    const mat = new THREE.MeshBasicMaterial({ map: tex, color, transparent: true, alphaTest: 0.05, depthWrite: false });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    mesh.position.set(x, y, opts.z || 0.6);
+    mesh.scale.setScalar(fromScale);
+    scene.add(mesh);
+    effects.push({ mesh, life, maxLife: life, fromScale, toScale, vy: opts.vy || 0, startOpacity: opts.opacity || 1 });
+  }
+
+  const debrisGeo = new THREE.PlaneGeometry(1, 1);
+
+  // Break the mushroom sprite into its own pixels and blow them outward
+  function explodeMushroom(m) {
+    const rows = S.MUSHROOM.HIT_1;
+    const ps = PIXEL_SCALE * MUSHROOM_SCALE;
+    const w = rows[0].length, h = rows.length;
+    const cx = m.x, cy = m.y + m.height / 2;
+    const CHUNK = 2;
+
+    for (let y = 0; y < h; y += CHUNK) {
+      for (let x = 0; x < w; x += CHUNK) {
+        let color = null;
+        for (let yy = y; yy < y + CHUNK && !color; yy++) {
+          for (let xx = x; xx < x + CHUNK && !color; xx++) {
+            const c = P[(rows[yy] || '')[xx]];
+            if (c && c !== 'transparent') color = c;
+          }
+        }
+        if (!color) continue;
+
+        const wx = cx + (x + CHUNK / 2 - w / 2) * ps;
+        const wy = cy + (h / 2 - y - CHUNK / 2) * ps;
+        const dx = wx - cx, dy = wy - cy;
+        const len = Math.hypot(dx, dy) || 1;
+        const power = 3.5 + Math.random() * 4.5;
+        const size = ps * CHUNK * (0.8 + Math.random() * 0.5);
+
+        const mesh = new THREE.Mesh(debrisGeo, new THREE.MeshBasicMaterial({ color, transparent: true }));
+        mesh.scale.set(size, size, 1);
+        mesh.position.set(wx, wy, 0.55);
+        scene.add(mesh);
+        debris.push({
+          mesh, size,
+          vx: (dx / len) * power + (Math.random() - 0.5) * 1.5,
+          vy: (dy / len) * power * 0.6 + 3.5 + Math.random() * 3.5,
+          spin: (Math.random() - 0.5) * 20,
+          life: 1.1 + Math.random() * 0.9
+        });
+      }
+    }
+
+    // Bright flash, double shockwave, lingering poison smoke
+    spawnEffect(discTex, '#fff4c2', cx, cy, 0.6, 2.4, 0.12, { z: 0.62 });
+    spawnEffect(ringTex, '#ffd166', cx, cy, 0.4, 3.6, 0.32, { z: 0.61 });
+    spawnEffect(ringTex, '#9d4edd', cx, cy, 0.3, 2.6, 0.5, { z: 0.6 });
+    for (let i = 0; i < 6; i++) {
+      spawnEffect(discTex, i % 2 ? '#4a2d55' : '#6b4a72',
+        cx + (Math.random() - 0.5) * 1.2, cy + (Math.random() - 0.3) * 0.8,
+        0.3, 1.0 + Math.random() * 0.6, 0.7 + Math.random() * 0.4,
+        { z: 0.4, vy: 0.6 + Math.random() * 0.6, opacity: 0.55 });
+    }
+    spawnParticles(cx, cy, 16, '#9d4edd', 2.2, 0.8);
+    spawnParticles(cx, cy, 10, '#ffd166', 1.8, 0.6);
+
+    window.SoundEngine.playExplosion();
+    window.SoundEngine.playMushroomDefeated();
+    shakeCamera(0.16, 0.3);
+  }
+
+  function updateEffects(dt) {
+    for (let i = effects.length - 1; i >= 0; i--) {
+      const e = effects[i];
+      e.life -= dt;
+      if (e.life <= 0) {
+        scene.remove(e.mesh);
+        e.mesh.material.dispose();
+        e.mesh.geometry.dispose();
+        effects.splice(i, 1);
+        continue;
+      }
+      const t = 1 - e.life / e.maxLife; // 0 -> 1
+      const eased = 1 - Math.pow(1 - t, 3);
+      e.mesh.scale.setScalar(e.fromScale + (e.toScale - e.fromScale) * eased);
+      e.mesh.position.y += e.vy * dt;
+      e.mesh.material.opacity = e.startOpacity * (1 - t);
+    }
+
+    for (let i = debris.length - 1; i >= 0; i--) {
+      const d = debris[i];
+      d.life -= dt;
+      if (d.life <= 0) {
+        scene.remove(d.mesh);
+        d.mesh.material.dispose();
+        debris.splice(i, 1);
+        continue;
+      }
+      d.vy -= 20 * dt;
+      d.mesh.position.x += d.vx * dt;
+      d.mesh.position.y += d.vy * dt;
+      d.mesh.rotation.z += d.spin * dt;
+
+      // Bounce and skid on the grass
+      const floor = GROUND_Y + d.size / 2;
+      if (d.mesh.position.y < floor) {
+        d.mesh.position.y = floor;
+        d.vy = Math.abs(d.vy) > 1 ? -d.vy * 0.35 : 0;
+        d.vx *= 0.6;
+        d.spin *= 0.5;
+      }
+      if (d.life < 0.4) d.mesh.material.opacity = d.life / 0.4;
+    }
+  }
+
+  function clearEffects() {
+    effects.forEach(e => scene.remove(e.mesh));
+    debris.forEach(d => scene.remove(d.mesh));
+    effects.length = 0;
+    debris.length = 0;
+    hitStop = 0;
+    shakeTime = 0;
+  }
+
   // Ambient Drifting Forest Leaves
   const ambientLeaves = [];
   for (let i = 0; i < 24; i++) {
@@ -244,14 +409,29 @@
   // Boy (Player Character)
   // ==========================================
   const BOY_SCALE = 0.85;       // Straighter, more compact and agile
+
   const MUSHROOM_SCALE = 0.80;  // Straighter, compact evil mushroom
 
   const boyMesh = R.createSpriteMesh(textures.boy.idle[0], PIXEL_SCALE * BOY_SCALE);
   boyMesh.position.set(0, GROUND_Y + (textures.boy.idle[0].height * PIXEL_SCALE * BOY_SCALE) / 2, 0.3);
   scene.add(boyMesh);
 
+  // Separate, larger sprite for the overhead slam (sword reaches well outside the 24x24 box)
+  const BOY_PX = PIXEL_SCALE * BOY_SCALE;
+  const boyAttackMesh = R.createSpriteMesh(textures.boy.attack[0], BOY_PX);
+  boyAttackMesh.visible = false;
+  scene.add(boyAttackMesh);
+  // Offset from the 24x24 body centre to the attack canvas centre (world units, facing right)
+  const ATTACK_OFFSET = {
+    x: (BA.ATTACK_SIZE.w / 2 - (BA.ATTACK_ORIGIN.x + 12)) * BOY_PX,
+    y: -(BA.ATTACK_SIZE.h / 2 - (BA.ATTACK_ORIGIN.y + 12)) * BOY_PX
+  };
+
   const boy = {
     mesh: boyMesh,
+    attackMesh: boyAttackMesh,
+    sx: 1, // squash & stretch
+    sy: 1,
     x: 0,
     y: GROUND_Y,
     vx: 0,
@@ -278,6 +458,11 @@
     setFrame(texInfo) {
       this.mesh.material.map = texInfo.texture;
       this.mesh.material.needsUpdate = true;
+    },
+
+    setAttackFrame(i) {
+      this.attackMesh.material.map = textures.boy.attack[i].texture;
+      this.attackMesh.material.needsUpdate = true;
     },
 
     takeDamage(damage, fromX) {
@@ -370,13 +555,14 @@
       spawnParticles(this.x, this.y + 0.7, 6, '#ffd166', 1.1, 0.4);
 
       if (this.hp <= 0) {
-        // Defeated State!
+        // Defeated: flash white for a moment, then burst apart (see DEFEATED in update)
         this.state = 'DEFEATED';
-        this.stateTimer = 0.8;
-        this.vx = knockDir * 2.8;
-        this.vy = 4.5;
-        this.setFrame(textures.mushroom.defeated);
-        window.SoundEngine.playMushroomDefeated();
+        this.stateTimer = 0.08;
+        this.vx = 0;
+        this.vy = 0;
+        this.setFrame(textures.mushroom.hit1Flash);
+        hitStop = Math.max(hitStop, 0.11);
+        shakeCamera(0.12, 0.25);
         mushroomsDefeatedCount++;
         updateHUD();
       } else {
@@ -497,14 +683,15 @@
 
         case 'DEFEATED': {
           this.stateTimer -= dt;
-          // Shrink and fade
-          const alpha = Math.max(0, this.stateTimer / 0.8);
-          this.mesh.material.opacity = alpha;
-          this.mesh.scale.set(this.facing * alpha, alpha, 1);
+          // Swell slightly while flashing, then explode
+          const swell = 1 + (0.08 - Math.max(0, this.stateTimer)) * 3;
+          this.mesh.scale.set(this.facing * swell, swell, 1);
 
           if (this.stateTimer <= 0) {
             this.dead = true;
             scene.remove(this.mesh);
+            explodeMushroom(this);
+            return;
           }
           break;
         }
@@ -626,6 +813,8 @@
       boy.mesh.rotation.z = 0;
       boy.state = 'JUMP';
       boy.setFrame(textures.boy.jump);
+      boy.sx = 0.82; // stretch on take-off
+      boy.sy = 1.2;
       window.SoundEngine.playJump();
       spawnParticles(boy.x, boy.y + 0.1, 5, '#4fb835', 0.6, 0.3); // Grass dust
     }
@@ -636,6 +825,8 @@
       boy.mesh.rotation.z = 0;
       boy.state = 'DOUBLE_JUMP';
       boy.setFrame(textures.boy.jump);
+      boy.sx = 0.86;
+      boy.sy = 1.14;
       window.SoundEngine.playDoubleJump();
 
       // Energetic double-jump particle burst (leaves + air spark)
@@ -653,8 +844,9 @@
     boy.animFrame = 0;
     boy.attackHitboxActive = false;
     boy.attackHasHit = false;
-    boy.setFrame(textures.boy.attack[0]);
-    window.SoundEngine.playSlash();
+    boy.mesh.rotation.z = 0;
+    boy.setAttackFrame(0);
+    // The swoosh plays on the downswing frame, not on the button press
   }
 
   // ==========================================
@@ -665,13 +857,21 @@
   function animate(now) {
     requestAnimationFrame(animate);
 
-    const dt = Math.min((now - lastTime) / 1000, 0.05); // Cap delta to prevent tunneling
+    const rawDt = Math.min((now - lastTime) / 1000, 0.05); // Cap delta to prevent tunneling
     lastTime = now;
+
+    // Hit-stop: freeze gameplay for a few frames on heavy impacts (camera keeps shaking)
+    let dt = rawDt;
+    if (hitStop > 0) {
+      hitStop -= rawDt;
+      dt = 0;
+    }
 
     updatePlayer(dt);
     updateMushrooms(dt);
     updateParticles(dt);
-    updateCamera(dt);
+    updateEffects(dt);
+    updateCamera(rawDt);
     updateInspectorUI();
 
     renderer.render(scene, camera);
@@ -688,7 +888,9 @@
       boy.jumpsRemaining = 2; // Reset double jump
       boy.mesh.rotation.z = 0;
       if (boy.state === 'JUMP' || boy.state === 'FALL' || boy.state === 'DOUBLE_JUMP') {
-        boy.state = 'IDLE';
+        boy.state = (keys.left || keys.right) ? 'WALK' : 'IDLE';
+        boy.sx = 1.22; // squash on landing
+        boy.sy = 0.8;
         spawnParticles(boy.x, boy.y + 0.1, 4, '#4fb835', 0.5, 0.25);
       }
     }
@@ -735,9 +937,9 @@
         boy.vx = moveDir * 5.2;
         boy.x += boy.vx * dt;
 
-        // Walk cycle animation
+        // 8-frame walk cycle (~0.64 s per full stride)
         boy.animTimer += dt;
-        if (boy.animTimer > 0.12) {
+        if (boy.animTimer > 0.08) {
           boy.animTimer = 0;
           boy.animFrame = (boy.animFrame + 1) % textures.boy.walk.length;
           boy.setFrame(textures.boy.walk[boy.animFrame]);
@@ -775,32 +977,40 @@
       }
 
       case 'ATTACK': {
-        // Small forward lunge on swing
-        boy.x += boy.facing * 1.5 * dt;
+        // Feet do NOT move during attack: Braced solid stance because the sword is heavy
+        boy.vx = 0;
 
+        // Overhead slam: lift -> raise -> wind-up hold -> fast downswing -> IMPACT -> recover
         boy.stateTimer += dt;
-        if (boy.stateTimer < 0.08) {
-          // Windup frame
-          boy.setFrame(textures.boy.attack[0]);
-          boy.attackHitboxActive = false;
-        } else if (boy.stateTimer < 0.22) {
-          // ACTIVE SLASH FRAME with trail!
-          boy.setFrame(textures.boy.attack[1]);
-          boy.attackHitboxActive = true;
-
-          // Perform melee attack check against all evil mushrooms
-          if (!boy.attackHasHit) {
-            checkMeleeSlashCollisions();
-          }
-        } else if (boy.stateTimer < 0.32) {
-          // Follow through frame
-          boy.setFrame(textures.boy.attack[2]);
-          boy.attackHitboxActive = false;
-        } else {
-          // Finished attack
-          boy.attackHitboxActive = false;
-          boy.state = (boy.y > GROUND_Y) ? 'FALL' : (keys.left || keys.right ? 'WALK' : 'IDLE');
+        const frames = textures.boy.attack;
+        let t = boy.stateTimer;
+        let idx = 0;
+        while (idx < frames.length && t >= frames[idx].meta.dur) {
+          t -= frames[idx].meta.dur;
+          idx++;
         }
+
+        // Fire events for every frame we entered this tick (short frames can be skipped)
+        for (let f = boy.animFrame + 1; f <= Math.min(idx, frames.length - 1); f++) {
+          const meta = frames[f].meta;
+          if (meta.swing) window.SoundEngine.playSlash();
+          if (meta.hit) onSlamImpact(meta);
+        }
+
+        if (idx >= frames.length) {
+          // Attack finished, return to normal
+          boy.attackHitboxActive = false;
+          boy.attackHasHit = false;
+          boy.state = (boy.y > GROUND_Y) ? 'FALL' : (keys.left || keys.right ? 'WALK' : 'IDLE');
+          boy.setFrame(textures.boy.idle[0]);
+          break;
+        }
+
+        if (idx !== boy.animFrame) {
+          boy.animFrame = idx;
+          boy.setAttackFrame(idx);
+        }
+        boy.attackHitboxActive = frames[idx].meta.hit;
         break;
       }
 
@@ -846,17 +1056,46 @@
     // Clamp Level Boundaries
     boy.x = Math.max(LEVEL_START_X, Math.min(LEVEL_END_X, boy.x));
 
-    // Update Mesh
-    boy.mesh.scale.x = boy.facing;
-    boy.mesh.position.set(boy.x, boy.y + boy.height / 2, 0.3);
+    // Squash & stretch eases back to normal
+    const ease = Math.min(1, 12 * dt);
+    boy.sx += (1 - boy.sx) * ease;
+    boy.sy += (1 - boy.sy) * ease;
+
+    // Update Mesh (scale around the feet so squash never lifts him off the ground)
+    const attacking = boy.state === 'ATTACK';
+    boy.mesh.visible = !attacking;
+    boy.attackMesh.visible = attacking;
+    boy.mesh.scale.set(boy.facing * boy.sx, boy.sy, 1);
+    boy.mesh.position.set(boy.x, boy.y + (boy.height * boy.sy) / 2, 0.3);
+    boy.attackMesh.scale.set(boy.facing, 1, 1);
+    boy.attackMesh.position.set(
+      boy.x + ATTACK_OFFSET.x * boy.facing,
+      boy.y + boy.height / 2 + ATTACK_OFFSET.y,
+      0.3
+    );
+    boy.attackMesh.material.opacity = boy.mesh.material.opacity;
+  }
+
+  // The blade hits the ground: dust, shake, thud, then damage
+  function onSlamImpact(meta) {
+    const tipX = boy.x + boy.facing * (meta.tip.x - 12) * BOY_PX;
+    const tipY = Math.max(GROUND_Y + 0.05, boy.y + (24 - meta.tip.y) * BOY_PX);
+
+    window.SoundEngine.playSlamImpact();
+    shakeCamera(0.07, 0.14);
+    spawnParticles(tipX, tipY, 10, '#8d6849', 1.3, 0.45); // dirt
+    spawnParticles(tipX, tipY, 6, '#4fb835', 1.0, 0.35);  // grass
+    spawnEffect(ringTex, '#ffeaa7', tipX, tipY + 0.1, 0.2, 1.4, 0.2, { z: 0.6 });
+
+    checkMeleeSlashCollisions();
   }
 
   function checkMeleeSlashCollisions() {
-    // Attack hitbox positioned in front of the boy (tuned for smaller straight sprites)
-    const attackRangeX = 1.35;
-    const attackRangeY = 1.15;
-    const slashCenterX = boy.x + boy.facing * 0.75;
-    const slashCenterY = boy.y + boy.height * 0.55;
+    // The overhead arc covers the space in front of the boy, from head height down to the grass
+    const attackRangeX = 1.5;
+    const attackRangeY = 1.4;
+    const slashCenterX = boy.x + boy.facing * 1.15;
+    const slashCenterY = boy.y + boy.height * 0.6;
 
     mushrooms.forEach(m => {
       if (m.dead || m.state === 'DEFEATED') return;
@@ -866,8 +1105,10 @@
       if (dx < attackRangeX && dy < attackRangeY) {
         m.takeHit(1, boy.x);
         boy.attackHasHit = true;
-        // Hit spark slash particles
-        spawnParticles(m.x, m.y + 0.6, 8, '#ffeaa7', 1.3, 0.35);
+        hitStop = Math.max(hitStop, 0.06);
+        // Metallic hit spark & slash particles
+        spawnParticles(m.x, m.y + 0.6, 9, '#ffeaa7', 1.4, 0.38);
+        spawnParticles(m.x, m.y + 0.6, 5, '#ffffff', 1.0, 0.25);
       }
     });
   }
@@ -909,18 +1150,32 @@
     });
   }
 
+  const camBase = { x: camera.position.x, y: camera.position.y };
+
   function updateCamera(dt) {
     // Smooth camera follow with forward lookahead
     const targetX = boy.x + boy.facing * 1.3;
     const targetY = Math.max(2.6, boy.y + 2.0);
 
-    camera.position.x += (targetX - camera.position.x) * 4.5 * dt;
-    camera.position.y += (targetY - camera.position.y) * 4.0 * dt;
+    camBase.x += (targetX - camBase.x) * 4.5 * dt;
+    camBase.y += (targetY - camBase.y) * 4.0 * dt;
 
     // Clamp camera within level bounds
     const minCamX = LEVEL_START_X + viewWidthUnits / 2 - 2;
     const maxCamX = LEVEL_END_X - viewWidthUnits / 2 + 2;
-    camera.position.x = Math.max(minCamX, Math.min(maxCamX, camera.position.x));
+    camBase.x = Math.max(minCamX, Math.min(maxCamX, camBase.x));
+
+    // Screen shake, snapped to the pixel grid so sprites stay crisp
+    let ox = 0, oy = 0;
+    if (shakeTime > 0) {
+      shakeTime -= dt;
+      const m = shakeMag * Math.max(0, Math.min(1, shakeTime / 0.15));
+      ox = Math.round(((Math.random() * 2 - 1) * m) / PIXEL_SCALE) * PIXEL_SCALE;
+      oy = Math.round(((Math.random() * 2 - 1) * m) / PIXEL_SCALE) * PIXEL_SCALE;
+      if (shakeTime <= 0) shakeMag = 0;
+    }
+    camera.position.x = camBase.x + ox;
+    camera.position.y = camBase.y + oy;
 
     // Parallax update
     skyMesh.position.x = camera.position.x * 0.85;
@@ -1020,7 +1275,10 @@
     boy.mesh.rotation.z = 0;
     boy.state = 'IDLE';
     boy.invulnerableTimer = 0;
+    boy.sx = 1;
+    boy.sy = 1;
     boy.setFrame(textures.boy.idle[0]);
+    clearEffects();
 
     // Clear and respawn mushrooms
     mushrooms.forEach(m => {

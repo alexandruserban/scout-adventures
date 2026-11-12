@@ -100,6 +100,7 @@
   <!-- Game Modules -->
   <script src="src/pixelRenderer.js"></script>
   <script src="src/sprites.js"></script>
+  <script src="src/boyAnimation.js"></script>
   <script src="src/audio.js"></script>
   <script src="src/game.js"></script>
 
@@ -145,16 +146,32 @@
       // 1. BOY SECTION
       const boySec = document.createElement('div');
       boySec.className = 'gallery-section';
-      boySec.innerHTML = '<div class="section-name">THE HERO (BOY)</div><div class="sprite-row"></div>';
+      boySec.innerHTML = '<div class="section-name">THE HERO (SIDE-VIEW PROFILE & 2-HANDED SWORD)</div><div class="sprite-row"></div>';
       const boyRow = boySec.querySelector('.sprite-row');
 
-      boyRow.appendChild(makeBox(R.renderAsciiToCanvas(S.BOY.IDLE[0], P, scale), 'Idle 1'));
-      boyRow.appendChild(makeBox(R.renderAsciiToCanvas(S.BOY.WALK[0], P, scale), 'Walk 1'));
-      boyRow.appendChild(makeBox(R.renderAsciiToCanvas(S.BOY.JUMP, P, scale), 'Jump'));
-      boyRow.appendChild(makeBox(R.renderAsciiToCanvas(S.BOY.ATTACK[1], P, scale), 'Attack (Slash)'));
-      boyRow.appendChild(makeBox(R.renderAsciiToCanvas(S.BOY.HIT_1, P, scale), 'Hit: Recoil'));
-      boyRow.appendChild(makeBox(R.renderAsciiToCanvas(S.BOY.HIT_2, P, scale), 'Hit: Stagger'));
-      boyRow.appendChild(makeBox(R.renderAsciiToCanvas(S.BOY.DEFEATED, P, scale), 'Defeated'));
+      function scaled(src, s) {
+        const c = document.createElement('canvas');
+        c.width = src.width * s;
+        c.height = src.height * s;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(src, 0, 0, c.width, c.height);
+        return c;
+      }
+      const BA = window.BoyAnimation;
+      boyRow.appendChild(makeBox(scaled(BA.IDLE[0], scale), 'Idle'));
+      BA.WALK.forEach((c, i) => {
+        boyRow.appendChild(makeBox(scaled(c, scale), `Walk ${i + 1}/8`));
+      });
+      boyRow.appendChild(makeBox(scaled(BA.JUMP, scale), 'Jump'));
+      boyRow.appendChild(makeBox(scaled(BA.FALL, scale), 'Fall'));
+      const atkNames = ['Lift', 'Raise', 'Raise', 'Overhead', 'Wind-up', 'Downswing', 'Downswing', 'IMPACT', 'Settle', 'Recover', 'Recover'];
+      BA.ATTACK.forEach((f, i) => {
+        boyRow.appendChild(makeBox(scaled(f.canvas, 2), `Slam ${i + 1}: ${atkNames[i]}`));
+      });
+      boyRow.appendChild(makeBox(scaled(BA.HIT_1, scale), 'Hit: Recoil'));
+      boyRow.appendChild(makeBox(scaled(BA.HIT_2, scale), 'Hit: Stagger'));
+      boyRow.appendChild(makeBox(scaled(BA.DEFEATED, scale), 'Defeated'));
       container.appendChild(boySec);
 
       // 2. EVIL MUSHROOM SECTION
@@ -167,7 +184,6 @@
       mushRow.appendChild(makeBox(R.renderAsciiToCanvas(S.MUSHROOM.AGGRO, P, scale), 'Aggro (Fangs)'));
       mushRow.appendChild(makeBox(R.renderAsciiToCanvas(S.MUSHROOM.HIT_1, P, scale), 'Hit: Squash'));
       mushRow.appendChild(makeBox(R.renderAsciiToCanvas(S.MUSHROOM.HIT_2, P, scale), 'Hit: Dazed'));
-      mushRow.appendChild(makeBox(R.renderAsciiToCanvas(S.MUSHROOM.DEFEATED, P, scale), 'Defeated'));
       container.appendChild(mushSec);
 
       // 3. FOREST ENVIRONMENT SECTION

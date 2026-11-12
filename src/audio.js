@@ -79,8 +79,8 @@ class SoundEngine {
     const ctx = this.ctx;
     const now = ctx.currentTime;
 
-    // Filtered noise swoosh
-    const bufferSize = ctx.sampleRate * 0.12;
+    // Filtered noise swoosh of heavy two-handed sword cleave
+    const bufferSize = ctx.sampleRate * 0.14;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -92,19 +92,31 @@ class SoundEngine {
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1400, now);
-    filter.frequency.exponentialRampToValueAtTime(300, now + 0.12);
-    filter.Q.value = 3.0;
+    filter.frequency.setValueAtTime(1800, now);
+    filter.frequency.exponentialRampToValueAtTime(250, now + 0.14);
+    filter.Q.value = 2.5;
 
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
 
     noise.connect(filter);
     filter.connect(gain);
     gain.connect(ctx.destination);
-
     noise.start(now);
+
+    // Resonant metallic steel blade ring
+    const steelOsc = ctx.createOscillator();
+    const steelGain = ctx.createGain();
+    steelOsc.type = 'triangle';
+    steelOsc.frequency.setValueAtTime(880, now);
+    steelOsc.frequency.exponentialRampToValueAtTime(320, now + 0.12);
+    steelGain.gain.setValueAtTime(0.08, now);
+    steelGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    steelOsc.connect(steelGain);
+    steelGain.connect(ctx.destination);
+    steelOsc.start(now);
+    steelOsc.stop(now + 0.12);
   }
 
   playMushroomHit() {
@@ -166,6 +178,88 @@ class SoundEngine {
 
     osc.start(now);
     osc.stop(now + 0.22);
+  }
+
+  // Short white-noise buffer helper
+  _noiseBuffer(seconds) {
+    const ctx = this.ctx;
+    const size = Math.floor(ctx.sampleRate * seconds);
+    const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+    return buffer;
+  }
+
+  // Heavy sword slamming down into the ground
+  playSlamImpact() {
+    if (this.muted) return;
+    this.init();
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // Low body thump
+    const thump = ctx.createOscillator();
+    const thumpGain = ctx.createGain();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(140, now);
+    thump.frequency.exponentialRampToValueAtTime(40, now + 0.18);
+    thumpGain.gain.setValueAtTime(0.45, now);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    thump.connect(thumpGain);
+    thumpGain.connect(ctx.destination);
+    thump.start(now);
+    thump.stop(now + 0.2);
+
+    // Dirt crunch
+    const noise = ctx.createBufferSource();
+    noise.buffer = this._noiseBuffer(0.12);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(1400, now);
+    lp.frequency.exponentialRampToValueAtTime(200, now + 0.12);
+    const nGain = ctx.createGain();
+    nGain.gain.setValueAtTime(0.3, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    noise.connect(lp);
+    lp.connect(nGain);
+    nGain.connect(ctx.destination);
+    noise.start(now);
+  }
+
+  // Mushroom bursting apart
+  playExplosion() {
+    if (this.muted) return;
+    this.init();
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // Rumbling noise burst with a falling lowpass
+    const noise = ctx.createBufferSource();
+    noise.buffer = this._noiseBuffer(0.6);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3200, now);
+    lp.frequency.exponentialRampToValueAtTime(120, now + 0.55);
+    const nGain = ctx.createGain();
+    nGain.gain.setValueAtTime(0.5, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    noise.connect(lp);
+    lp.connect(nGain);
+    nGain.connect(ctx.destination);
+    noise.start(now);
+
+    // 8-bit square "boom" drop
+    const boom = ctx.createOscillator();
+    const boomGain = ctx.createGain();
+    boom.type = 'square';
+    boom.frequency.setValueAtTime(180, now);
+    boom.frequency.exponentialRampToValueAtTime(30, now + 0.35);
+    boomGain.gain.setValueAtTime(0.18, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    boom.connect(boomGain);
+    boomGain.connect(ctx.destination);
+    boom.start(now);
+    boom.stop(now + 0.35);
   }
 
   playMushroomDefeated() {

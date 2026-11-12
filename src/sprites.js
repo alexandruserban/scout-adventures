@@ -1,22 +1,24 @@
 // Pixel Art Sprite Definitions for Forest Adventure
-// Handcrafted retro 16-bit pixel matrices - Straightened, symmetrical, and compact
+// Handcrafted retro 16-bit pixel matrices
+// The main character's frames are assembled in src/boyAnimation.js from this palette
 
 const PALETTE = {
   // Transparency
   '.': 'transparent',
 
   // Boy Palette
-  'H': '#3a1f0d', // Hair shadow
-  'h': '#663919', // Hair base
-  'j': '#945b2f', // Hair highlight
+  'H': '#2e1a07', // Hair dark shadow
+  'h': '#59321f', // Hair base brown
+  'j': '#804c2b', // Hair light highlight
   'C': '#a81c2b', // Cap dark red
   'c': '#e63946', // Cap vibrant red
   'v': '#ff6b6b', // Cap highlight
-  'S': '#d6946e', // Skin shadow
-  's': '#fcd5b5', // Skin base
+  'S': '#d6946e', // Skin shadow & solid defined nose tip
+  's': '#fcd5b5', // Skin base peach
   'b': '#f59e8b', // Skin blush
-  'E': '#181b22', // Eye dark
+  'E': '#181b22', // Profile eye dark pupil
   'W': '#ffffff', // White (eyes, teeth, highlights)
+  'q': '#931215', // Mouth open in pain / grit teeth
   'J': '#1c2e4a', // Jacket dark navy
   'k': '#2d4b75', // Jacket blue
   'l': '#466fa8', // Jacket light blue
@@ -26,10 +28,16 @@ const PALETTE = {
   'p': '#8c684a', // Pants khaki
   'B': '#2a1a11', // Boots dark
   'd': '#543623', // Boots leather
-  'O': '#634427', // Wood dark
-  'o': '#96683c', // Wood branch
-  'i': '#cca168', // Wood highlight
-  'L': '#ffeaa7', // Slash energy / spark
+
+  // Two-Handed Sword Palette
+  '-': '#475569', // Steel blade shadow
+  '+': '#94a3b8', // Steel blade mid
+  '*': '#ffffff', // Steel blade edge shine
+  'i': '#d97706', // Hilt pommel & crossguard gold
+  'I': '#fde047', // Crossguard highlight
+  'o': '#451a03', // Two-handed leather grip wrap
+  'O': '#290f02', // Grip shadow
+  'L': '#ffeaa7', // Slash energy / arc trail
 
   // Hit Flash
   'X': '#ffffff', // Full white flash
@@ -50,7 +58,6 @@ const PALETTE = {
   'n': '#9d4edd', // Poison light purple
   'e': '#ffbe0b', // Evil eye amber glow
   'D': '#131114', // Evil eye pupil / mouth cavity
-  'q': '#931215', // Tongue / anger mark
 
   // Environment Palette
   'g': '#2b580c', // Foliage darkest
@@ -59,10 +66,8 @@ const PALETTE = {
   'a': '#99cc33', // Foliage light
   'w': '#c2e85a', // Foliage highlight
   'K': '#281a10', // Bark darkest
-  'k': '#472d1c', // Bark shadow
   '8': '#6b452c', // Bark mid
   '9': '#8f6140', // Bark light
-  '5': '#b88358', // Bark highlight
   '1': '#192b11', // Dirt deep
   '2': '#312015', // Dirt dark
   '3': '#4f3523', // Dirt mid
@@ -73,402 +78,6 @@ const PALETTE = {
   '%': '#4fb835', // Grass bright
   '^': '#8ae35a', // Grass tip highlight
 };
-
-// ==========================================
-// 1. THE BOY SPRITES (Straight & Compact 20x24)
-// ==========================================
-
-// Boy Idle 1 (Straight, balanced posture)
-const BOY_IDLE_1 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ....",
-  "...JkkJffffffJkkJ...",
-  "...JkkJFFFFFFJkkJ...",
-  "...JllJffffffJllJ.o.",
-  "....SS.PppppP.SSoio.",
-  ".......PPPPPP..OoO..",
-  ".......pp..pp...O...",
-  ".......pp..pp.......",
-  ".......BB..BB.......",
-  "......Bdd..Bdd......",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......"
-];
-
-// Boy Idle 2 (Subtle breathing frame, straight)
-const BOY_IDLE_2 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ....",
-  "...JkkJffffffJkkJ...",
-  "...JkkJFFFFFFJkkJ.o.",
-  "...JllJffffffJllJoio",
-  "....SS.PppppP.SSOoO.",
-  ".......PPPPPP....O..",
-  ".......pp..pp.......",
-  ".......pp..pp.......",
-  ".......BB..BB.......",
-  "......Bdd..Bdd......",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......"
-];
-
-// Boy Walk 1 (Straight spine, left leg forward)
-const BOY_WALK_1 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ....",
-  "...JkkJffffffJkkJ...",
-  "...JllJFFFFFFJllJ.o.",
-  "....SS.PppppP.SSoio.",
-  "......PPPP..PPPP.Oo.",
-  ".....pppp....pppp.O.",
-  ".....pppp....pppp...",
-  ".....BB........BB...",
-  "....Bdd........Bdd..",
-  "....Bdd........Bdd..",
-  "....BBB........BBB..",
-  "....................",
-  "...................."
-];
-
-// Boy Walk 2 (Straight passing frame)
-const BOY_WALK_2 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ....",
-  "...JkkJffffffJkkJ...",
-  "...JllJFFFFFFJllJ...",
-  "....SS.PppppP.SS.o..",
-  ".......PPPPPP...oio.",
-  ".......PPPPPP...OoO.",
-  ".......pp..pp....O..",
-  ".......pp..pp.......",
-  ".......BB..BB.......",
-  "......Bdd..Bdd......",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......",
-  "...................."
-];
-
-// Boy Walk 3 (Straight spine, right leg forward)
-const BOY_WALK_3 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ....",
-  "...JkkJffffffJkkJ...",
-  "...JllJFFFFFFJllJ...",
-  "....SS.PppppP.SS....",
-  "......PPPP..PPPP.o..",
-  ".....pppp....pppoio.",
-  ".....pppp....pppOoO.",
-  ".....BB........BB.O.",
-  "....Bdd........Bdd..",
-  "....Bdd........Bdd..",
-  "....BBB........BBB..",
-  "....................",
-  "...................."
-];
-
-// Boy Walk 4 (Straight passing frame 2)
-const BOY_WALK_4 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ....",
-  "...JkkJffffffJkkJ...",
-  "...JllJFFFFFFJllJ.o.",
-  "....SS.PppppP.SSoio.",
-  ".......PPPPPP...OoO.",
-  ".......PPPPPP....O..",
-  ".......pp..pp.......",
-  ".......pp..pp.......",
-  ".......BB..BB.......",
-  "......Bdd..Bdd......",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......",
-  "...................."
-];
-
-// Boy Jump (Straight upright leap)
-const BOY_JUMP = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH.o.",
-  "...HhsssssssssshHoio",
-  "...HssEWs..sEWsSOoO.",
-  "...HssWWs..sWWsSH.O.",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ....",
-  "...JkkJffffffJkkJ...",
-  "...JllJFFFFFFJllJ...",
-  "....SS.PppppP.SS....",
-  ".....PPPP..PPPP.....",
-  ".....pppp..pppp.....",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......",
-  "....................",
-  "....................",
-  "....................",
-  "...................."
-];
-
-// Boy Fall (Straight upright descent)
-const BOY_FALL = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH.o.",
-  "....HssssssssssH.oio",
-  ".....FFffffffFF..OoO",
-  "....JJJffffffJJJ..O.",
-  "...JkkJffffffJkkJ...",
-  "...JllJFFFFFFJllJ...",
-  "....SS.PppppP.SS....",
-  "......PPPP..PPPP....",
-  ".....pppp....pppp...",
-  ".....pppp....pppp...",
-  "....Bdd........Bdd..",
-  "....BBB........BBB..",
-  "....................",
-  "....................",
-  "....................",
-  "...................."
-];
-
-// Boy Attack 1 (Windup, upright)
-const BOY_ATTACK_1 = [
-  "......cccccccc...o..",
-  ".....cccccccccc.oio.",
-  "....cvvvccccccccOoO.",
-  "....ChhhhhhhhCCC.O..",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ....",
-  "...JkkJffffffJkkJ...",
-  "...JllJFFFFFFJllJ...",
-  "....SS.PppppP.SS....",
-  ".......PPPPPP.......",
-  ".......pppppp.......",
-  ".......pp..pp.......",
-  ".......BB..BB.......",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......",
-  "....................",
-  "....................",
-  "...................."
-];
-
-// Boy Attack 2 (Clean horizontal slash strike with luminous trail)
-const BOY_ATTACK_2 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...HssWWs..sWWsSH...",
-  "....HssssssssssH.LLL",
-  ".....FFffffffFF.Loio",
-  "....JJJffffffJJLoiiO",
-  "...JkkJffffffJkLoiiO",
-  "...JllJFFFFFFJk.Ooio",
-  "....SS.PppppP.SS.LLL",
-  ".......PPPPPP.......",
-  ".......pppppp.......",
-  ".......pp..pp.......",
-  ".......BB..BB.......",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......",
-  "....................",
-  "....................",
-  "...................."
-];
-
-// Boy Attack 3 (Follow through, straight)
-const BOY_ATTACK_3 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEWs..sEWsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ..o.",
-  "...JkkJffffffJkkJoio",
-  "...JllJFFFFFFJkkOoO.",
-  "....SS.PppppP.SS.O..",
-  ".......PPPPPP.......",
-  ".......pppppp.......",
-  ".......pp..pp.......",
-  ".......BB..BB.......",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......",
-  "....................",
-  "....................",
-  "...................."
-];
-
-// Boy Hit State 1: Recoil (Straight upright wince with > < eyes and impact flash)
-const BOY_HIT_1 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC...",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEhs..shEsSH...", // Wincing eyes
-  "...Hssqqs..sqqsSH...", // Open hurt mouth
-  "...Hssbbs..sbbSSH.o.",
-  "....HssssssssssH.oio",
-  ".....FFffffffFF..OoO",
-  "....JJJffffffJJJ..O.",
-  "...JkkJffffffJkkJ...",
-  "...JllJFFFFFFJllJ...",
-  "....SS.PppppP.SS....",
-  "......PPPP..PPPP....",
-  ".....pppp....pppp...",
-  ".....BB........BB...",
-  "....Bdd........Bdd..",
-  "....BBB........BBB..",
-  "....................",
-  "....................",
-  "...................."
-];
-
-// Boy Hit State 2: Stagger (Straight upright shock with sweat bead)
-const BOY_HIT_2 = [
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....cvvvcccccccc....",
-  "....ChhhhhhhhCCC....",
-  "...ChhjjhhhhjjhhC.WW", // Sweat drop
-  "...HhhjjhhhhjjhhH.WW",
-  "...HhsssssssssshH...",
-  "...HssEEs..sEESSH...", // Wide stunned eyes
-  "...Hssqqs..sqqsSH...",
-  "...Hssbbs..sbbSSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF...o.",
-  "....JJJffffffJJJ.oio",
-  "...JkkJffffffJkkOoO.",
-  "...JllJFFFFFFJllJ.O.",
-  "....SS.PppppP.SS....",
-  ".......PPPPPP.......",
-  ".......pppppp.......",
-  ".......pp..pp.......",
-  ".......BB..BB.......",
-  "......Bdd..Bdd......",
-  "......BBB..BBB......",
-  "....................",
-  "...................."
-];
-
-// Boy Defeated (Straight sitting pose with X X eyes)
-const BOY_DEFEATED = [
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "......cccccccc......",
-  ".....cccccccccc.....",
-  "....ChhhhhhhhCCC....",
-  "...HhhjjhhhhjjhhH...",
-  "...HhsssssssssshH...",
-  "...HssEXs..sEXsSH...", // Spiral / X eyes
-  "...Hssqqs..sqqsSH...",
-  "....HssssssssssH....",
-  ".....FFffffffFF.....",
-  "....JJJffffffJJJ..o.",
-  "...JkkJffffffJkkJoio",
-  "...JllJFFFFFFJkkOoO.",
-  "....SS.PPPPPP.SS.O..",
-  "...Bdd.pppppp.Bdd...",
-  "...BBB.pppppp.BBB...",
-  "...................."
-];
 
 // ==========================================
 // 2. THE EVIL MUSHROOM (Straight & Symmetrical 20x18)
@@ -576,9 +185,9 @@ const MUSHROOM_AGGRO = [
   ".uUUUUUUUUUUUUUUUUu.",
   "..uuUUUUUUUUUUUUuu..",
   "...tttTTTTTTTTttt...",
-  "...tteeDDTTDDeeTtt..", // Intense amber glow
+  "...tteeDDTTDDeeTtt..",
   "...tttDDDDDDDDtttt..",
-  "..tttWDDDDDDDDWttt..", // Wide toothy snarl
+  "..tttWDDDDDDDDWttt..",
   "..tttDWWDDDDWWDttt..",
   "....tttt....tttt....",
   "....KKKK....KKKK...."
@@ -596,10 +205,10 @@ const MUSHROOM_HIT_1 = [
   ".uUUUUUUUUUUUUUUUUu.",
   "..uuUUUUUUUUUUUUuu..",
   "...tttTTTTTTTTttt...",
-  "..ttWWDDTTTTDDWWtt..", // Bulging shock eyes
+  "..ttWWDDTTTTDDWWtt..",
   "..ttWDDWTTTTWDDWtt..",
   "..ttWWDDTTTTDDWWtt..",
-  "...tttDDqqqqDDtttt..", // Open hurt mouth
+  "...tttDDqqqqDDtttt..",
   "....ttDDqqqqDDtt....",
   ".....TTTTTTTTTT.....",
   "....tttt....tttt....",
@@ -620,34 +229,12 @@ const MUSHROOM_HIT_2 = [
   ".uUUUUUUUUUUUUUUUUu.",
   "..uuUUUUUUUUUUUUuu..",
   "...tttTTTTTTTTttt...",
-  "...tttDeDTTDeDtttt..", // Dizzy spiral eyes
+  "...tttDeDTTDeDtttt..",
   "...tttEDDTTEDDtttt..",
-  "...tttqqqqqqqqtttt..", // Dazed tongue/drool
+  "...tttqqqqqqqqtttt..",
   "....ttDqqqqqqDtt....",
   "....tttt....tttt....",
   "....KKKK....KKKK...."
-];
-
-// Mushroom Defeated (Straight squished cap with centered X X eyes)
-const MUSHROOM_DEFEATED = [
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  "....................",
-  ".....mmmmmmmmmm.....",
-  "...mmRRRRRRRRRRmm...",
-  "..mRRZZRRrrrrRRZZRRm",
-  ".mRRzzZZRRRRZZzzRRm.",
-  ".uUUUUUUUUUUUUUUUUu.",
-  "..ttXXDXTTTTXXDXtt..", // Centered X X eyes
-  "...tttttttttttttt...",
-  "...KKKKKKKKKKKKKK..."
 ];
 
 // ==========================================
@@ -727,11 +314,9 @@ function createAncientTreeCanvas() {
       else if (relX > 0.85) col = P.barkHighlight;
       else if (relX > 0.65) col = P.barkLight;
 
-      // Moss on left side
       if (relX < 0.25 && (x + y) % 3 === 0) col = P.moss;
       if (relX < 0.2 && (x + y) % 5 === 0) col = P.mossLight;
 
-      // Bark grain texture
       if ((x * 7 + y * 13) % 9 === 0) col = P.barkShadow;
       if ((x * 3 + y * 5) % 11 === 0) col = P.barkDark;
 
@@ -819,11 +404,9 @@ function createGrassGroundCanvas() {
     stoneLight: '#64748b'
   };
 
-  // Base earth
   ctx.fillStyle = P.soilMid;
   ctx.fillRect(0, 0, size, size);
 
-  // Dirt texture noise & strata
   for (let y = 8; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const n = (x * 13 + y * 29) % 17;
@@ -836,7 +419,6 @@ function createGrassGroundCanvas() {
     }
   }
 
-  // Embedded stones/pebbles
   const stones = [
     { x: 6, y: 14, w: 3, h: 2 },
     { x: 22, y: 20, w: 4, h: 3 },
@@ -849,14 +431,12 @@ function createGrassGroundCanvas() {
     ctx.fillRect(st.x, st.y, st.w - 1, 1);
   });
 
-  // Tree roots winding through soil
   ctx.fillStyle = '#5c3924';
   for (let x = 0; x < size; x++) {
     const ry = Math.floor(18 + Math.sin(x * 0.3) * 2);
     ctx.fillRect(x, ry, 1, 1);
   }
 
-  // Grass turf transition (Y: 0 to 7)
   ctx.fillStyle = P.grassDark;
   ctx.fillRect(0, 4, size, 4);
   ctx.fillStyle = P.grassMid;
@@ -864,7 +444,6 @@ function createGrassGroundCanvas() {
   ctx.fillStyle = P.grassBright;
   ctx.fillRect(0, 1, size, 2);
 
-  // Jagged grass blades popping up
   const blades = [
     { x: 1, h: 3 }, { x: 3, h: 4 }, { x: 5, h: 2 }, { x: 7, h: 5 },
     { x: 9, h: 3 }, { x: 11, h: 4 }, { x: 13, h: 5 }, { x: 15, h: 2 },
@@ -894,19 +473,16 @@ function createFlowerTuftCanvas() {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  // Stems
   ctx.fillStyle = '#4d7c0f';
   ctx.fillRect(5, 7, 1, 9);
   ctx.fillRect(10, 5, 1, 11);
   ctx.fillRect(8, 9, 1, 7);
 
-  // Leaves
   ctx.fillStyle = '#65a30d';
   ctx.fillRect(3, 11, 2, 1);
   ctx.fillRect(6, 12, 2, 1);
   ctx.fillRect(11, 10, 2, 1);
 
-  // Flowers (Luminescent Forest Bluebell & Daisy)
   ctx.fillStyle = '#38bdf8';
   ctx.fillRect(4, 5, 3, 3);
   ctx.fillStyle = '#bae6fd';
@@ -923,22 +499,12 @@ function createFlowerTuftCanvas() {
 // Global Sprite Registry
 window.SpriteData = {
   PALETTE,
-  BOY: {
-    IDLE: [BOY_IDLE_1, BOY_IDLE_2],
-    WALK: [BOY_WALK_1, BOY_WALK_2, BOY_WALK_3, BOY_WALK_4],
-    JUMP: BOY_JUMP,
-    FALL: BOY_FALL,
-    ATTACK: [BOY_ATTACK_1, BOY_ATTACK_2, BOY_ATTACK_3],
-    HIT_1: BOY_HIT_1,
-    HIT_2: BOY_HIT_2,
-    DEFEATED: BOY_DEFEATED
-  },
+  // The boy's frames are built from parts in src/boyAnimation.js (window.BoyAnimation)
   MUSHROOM: {
     WALK: [MUSHROOM_WALK_1, MUSHROOM_WALK_2, MUSHROOM_WALK_3, MUSHROOM_WALK_4],
     AGGRO: MUSHROOM_AGGRO,
     HIT_1: MUSHROOM_HIT_1,
-    HIT_2: MUSHROOM_HIT_2,
-    DEFEATED: MUSHROOM_DEFEATED
+    HIT_2: MUSHROOM_HIT_2
   },
   createAncientTreeCanvas,
   createGrassGroundCanvas,

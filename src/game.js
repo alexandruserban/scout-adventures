@@ -1308,7 +1308,7 @@ const textures = {
   }
 
   function toggleMute() {
-    window.SoundEngine.muted = !window.SoundEngine.muted;
+    window.SoundEngine.setMuted(!window.SoundEngine.muted);
     const btn = document.getElementById('btn-sound');
     if (btn) btn.innerText = window.SoundEngine.muted ? '🔇 SOUND: OFF' : '🔊 SOUND: ON';
   }

@@ -7,6 +7,18 @@ class SoundEngine {
     this.muted = false;
     this.bgmPlaying = false;
     this.bgmInterval = null;
+    this.bgmAudio = null;
+    this.initAudioElement();
+  }
+
+  initAudioElement() {
+    try {
+      this.bgmAudio = new Audio('soundtrack.mp3');
+      this.bgmAudio.loop = true;
+      this.bgmAudio.volume = 0.55;
+    } catch (e) {
+      console.warn('HTML5 Audio init failed, will fallback to procedural synth', e);
+    }
   }
 
   init() {
@@ -14,7 +26,7 @@ class SoundEngine {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioContext();
     }
-    if (this.ctx.state === 'suspended') {
+    if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
   }
@@ -288,22 +300,63 @@ class SoundEngine {
 
   toggleMusic() {
     this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+
     if (this.bgmPlaying) {
       this.stopMusic();
       return false;
     } else {
-      this.startChiptuneLoop();
-      this.bgmPlaying = true;
+      this.startMusic();
       return true;
     }
   }
 
+  startMusic() {
+    this.stopMusic();
+    this.bgmPlaying = true;
+
+    // Use soundtrack file
+    if (!this.bgmAudio) {
+      this.initAudioElement();
+    }
+
+    if (this.bgmAudio) {
+      this.bgmAudio.currentTime = 0;
+      this.bgmAudio.muted = this.muted;
+      this.bgmAudio.volume = 0.55;
+      const playPromise = this.bgmAudio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Audio play was prevented or failed, falling back to chiptune loop:', err);
+          this.startChiptuneLoop();
+        });
+      }
+    } else {
+      this.startChiptuneLoop();
+    }
+  }
+
   stopMusic() {
+    if (this.bgmAudio) {
+      try {
+        this.bgmAudio.pause();
+        this.bgmAudio.currentTime = 0;
+      } catch (e) {}
+    }
     if (this.bgmInterval) {
       clearInterval(this.bgmInterval);
       this.bgmInterval = null;
     }
     this.bgmPlaying = false;
+  }
+
+  setMuted(isMuted) {
+    this.muted = isMuted;
+    if (this.bgmAudio) {
+      this.bgmAudio.muted = isMuted;
+    }
   }
 
   startChiptuneLoop() {
@@ -316,7 +369,7 @@ class SoundEngine {
 
     // Fast melodic lead line (crisp square wave with pulse-width feel)
     // 32-step phrase looping with energetic variations
-    const D3 = 146.83, F3 = 174.61, G3 = 196.00, A3 = 220.00, Bb3 = 233.08, C4 = 261.63;
+    const D3 = 146.83, E3 = 164.81, F3 = 174.61, G3 = 196.00, A3 = 220.00, Bb3 = 233.08, C4 = 261.63;
     const D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 392.00, A4 = 440.00, Bb4 = 466.16, C5 = 523.25, D5 = 587.33;
 
     // Lead melody pattern (32 sixteenth notes) - driving battle theme
@@ -347,6 +400,10 @@ class SoundEngine {
 
     this.bgmInterval = setInterval(() => {
       if (this.muted || !this.bgmPlaying) return;
+      if (!this.ctx) this.init();
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
       if (!this.ctx) return;
       const ctx = this.ctx;
       const now = ctx.currentTime;

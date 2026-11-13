@@ -1,0 +1,563 @@
+/**
+ * The boy: movement, double jump, overhead sword slam, taking damage, and his animation state machine.
+ */
+(function (Forest) {
+  const { PIXEL_SCALE, GROUND_Y, LEVEL_START_X, LEVEL_END_X } = Forest.Config;
+  const { createSpriteMesh, setMeshSprite } = Forest.Graphics;
+  const { clamp, easeOutQuad } = Forest.MathUtils;
+  const { FRAME_SIZE, SLAM_CANVAS_SIZE, SLAM_BODY_ORIGIN } = Forest.BoySprites;
+  const Sfx = Forest.SoundEffects;
+
+  /** State names double as CSS classes in the state inspector (e.g. "state-double_jump"). */
+  const PlayerState = Object.freeze({
+    IDLE: 'IDLE',
+    WALK: 'WALK',
+    JUMP: 'JUMP',
+    DOUBLE_JUMP: 'DOUBLE_JUMP',
+    FALL: 'FALL',
+    LAND: 'LAND',
+    ATTACK: 'ATTACK',
+    HIT_RECOIL: 'HIT_RECOIL',
+    HIT_STAGGER: 'HIT_STAGGER',
+    DEFEATED: 'DEFEATED'
+  });
+
+  // --- Size ---
+  const SPRITE_SCALE = 0.85;
+  const UNITS_PER_PIXEL = PIXEL_SCALE * SPRITE_SCALE;
+  const MESH_Z = 0.3;
+
+  // --- Health ---
+  const MAX_HP = 3;
+  const INVULNERABLE_SECONDS = 1.2;
+
+  // --- Movement (units per second) ---
+  const WALK_SPEED = 5.2;
+  const AIR_SPEED = 4.6;
+  const IDLE_FRICTION = 0.75;
+  const AIR_DRAG = 0.94;
+  const LANDING_FRICTION = 0.7;
+  const STAGGER_FRICTION = 0.85;
+  const DEFEATED_FRICTION = 0.88;
+
+  // --- Jumping ---
+  const GRAVITY = 25.0;
+  const JUMP_SPEED = 9.2;
+  const DOUBLE_JUMP_SPEED = 8.6;
+  /** Upward speed kept when jump is released early (variable jump height). */
+  const JUMP_CUT_SPEED = 3.5;
+  const MAX_JUMPS = 2;
+  /** A jump pressed this long before landing still fires on touchdown. */
+  const JUMP_BUFFER_SECONDS = 0.12;
+  /** Counts as standing on the ground when this close to it. */
+  const GROUNDED_TOLERANCE = 0.05;
+  /** One full somersault, finishing exactly at the apex of the double jump. */
+  const SOMERSAULT_SECONDS = DOUBLE_JUMP_SPEED / GRAVITY;
+  const LANDING_SECONDS = 0.09;
+  /** Landing at this downward speed (or faster) gives the maximum squash. */
+  const HARD_LANDING_SPEED = 12;
+  /** Vertical speed thresholds for choosing rise / apex / fall poses. */
+  const APEX_SPEED_RANGE = 3;
+
+  // --- Animation timing (seconds per frame) ---
+  const IDLE_FRAME_SECONDS = 0.45;
+  const WALK_FRAME_SECONDS = 0.08;
+  const SQUASH_RECOVERY_RATE = 12;
+
+  // --- Getting hit ---
+  const HIT_RECOIL_SECONDS = 0.22;
+  const HIT_STAGGER_SECONDS = 0.28;
+  const RECOIL_FLASH_RATE = 20;
+  const INVULNERABLE_BLINK_RATE = 35;
+
+  // --- Slam hit area, relative to the boy ---
+  const SLAM_REACH_X = 1.15;
+  const SLAM_HEIGHT_RATIO = 0.6;
+  const SLAM_HALF_WIDTH = 1.5;
+  const SLAM_HALF_HEIGHT = 1.4;
+
+  // --- Particle colours ---
+  const GRASS_DUST = '#4fb835';
+
+  /** Index of the frame showing at `elapsed` seconds, or frames.length when the animation is over. */
+  function frameIndexAt(frames, elapsed) {
+    let remaining = elapsed;
+    let index = 0;
+    while (index < frames.length && remaining >= frames[index].duration) {
+      remaining -= frames[index].duration;
+      index++;
+    }
+    return index;
+  }
+
+  class Player {
+    /**
+     * @param {object} world shared game systems
+     * @param {THREE.Scene} world.scene
+     * @param {object} world.sprites result of Forest.loadGameSprites()
+     * @param {Forest.InputController} world.input
+     * @param {Forest.ParticleSystem} world.particles
+     * @param {Forest.EffectsSystem} world.effects
+     * @param {Forest.CameraController} world.cameraController
+     * @param {object} events
+     * @param {(hp:number) => void} events.onHealthChanged
+     * @param {() => void} events.onDefeated
+     * @param {(hitArea:{centerX, centerY, halfWidth, halfHeight}) => void} events.onSlamLanded
+     */
+    constructor(world, events) {
+      this.sprites = world.sprites.boy;
+      this.input = world.input;
+      this.particles = world.particles;
+      this.effects = world.effects;
+      this.cameraController = world.cameraController;
+      this.events = events;
+
+      this.maxHp = MAX_HP;
+      this.width = this.sprites.idle[0].width * UNITS_PER_PIXEL;
+      this.height = this.sprites.idle[0].height * UNITS_PER_PIXEL;
+
+      // Regular 24x24 frames
+      this.bodyMesh = createSpriteMesh(this.sprites.idle[0], UNITS_PER_PIXEL);
+      world.scene.add(this.bodyMesh);
+
+      // Separate, larger mesh for the overhead slam (the sword reaches well outside the 24x24 box)
+      this.slamMesh = createSpriteMesh(this.sprites.slam[0], UNITS_PER_PIXEL);
+      this.slamMesh.visible = false;
+      world.scene.add(this.slamMesh);
+
+      // Offset from the centre of the body box to the centre of the slam canvas (facing right)
+      this.slamMeshOffset = {
+        x: (SLAM_CANVAS_SIZE.width / 2 - (SLAM_BODY_ORIGIN.x + FRAME_SIZE / 2)) * UNITS_PER_PIXEL,
+        y: -(SLAM_CANVAS_SIZE.height / 2 - (SLAM_BODY_ORIGIN.y + FRAME_SIZE / 2)) * UNITS_PER_PIXEL
+      };
+    }
+
+    /** Put the boy back at full health, standing at `x`. */
+    reset(x) {
+      this.x = x;
+      this.y = GROUND_Y;
+      this.velocityX = 0;
+      this.velocityY = 0;
+      this.facing = 1; // 1 = right, -1 = left
+      this.scaleX = 1; // squash & stretch
+      this.scaleY = 1;
+
+      this.hp = MAX_HP;
+      this.jumpsRemaining = MAX_JUMPS;
+      this.jumpBufferSeconds = 0;
+      this.invulnerableSeconds = 0;
+
+      this.state = PlayerState.IDLE;
+      this.stateTimer = 0;
+      this.animationFrame = 0;
+      this.animationTimer = 0;
+
+      this.bodyMesh.rotation.z = 0;
+      this.showFrame(this.sprites.idle[0]);
+      this.syncMeshes();
+    }
+
+    // ==========================================
+    // State queries
+    // ==========================================
+    get isDefeated() {
+      return this.state === PlayerState.DEFEATED;
+    }
+
+    /** True while knocked back or defeated: the boy ignores jump/attack input. */
+    get isIncapacitated() {
+      return this.state === PlayerState.DEFEATED
+        || this.state === PlayerState.HIT_RECOIL
+        || this.state === PlayerState.HIT_STAGGER;
+    }
+
+    get isAirborne() {
+      return this.state === PlayerState.JUMP
+        || this.state === PlayerState.DOUBLE_JUMP
+        || this.state === PlayerState.FALL;
+    }
+
+    get isAboveGround() {
+      return this.y > GROUND_Y;
+    }
+
+    // ==========================================
+    // Actions triggered by input
+    // ==========================================
+    tryJump() {
+      if (this.isIncapacitated) return;
+
+      if (this.y <= GROUND_Y + GROUNDED_TOLERANCE) {
+        this.jumpFromGround();
+      } else if (this.jumpsRemaining > 0) {
+        this.doubleJump();
+      } else {
+        // Out of jumps: remember the press briefly so it fires on landing
+        this.jumpBufferSeconds = JUMP_BUFFER_SECONDS;
+      }
+    }
+
+    /** Releasing jump early cuts the climb short. */
+    releaseJump() {
+      const isRising = this.state === PlayerState.JUMP || this.state === PlayerState.DOUBLE_JUMP;
+      if (isRising && this.velocityY > JUMP_CUT_SPEED) {
+        this.velocityY = JUMP_CUT_SPEED;
+      }
+    }
+
+    startAttack() {
+      if (this.isIncapacitated || this.state === PlayerState.ATTACK) return;
+
+      this.enterState(PlayerState.ATTACK);
+      this.animationFrame = 0;
+      this.bodyMesh.rotation.z = 0;
+      this.showSlamFrame(0);
+      // The swoosh plays on the downswing frame, not on the button press
+    }
+
+    jumpFromGround() {
+      this.velocityY = JUMP_SPEED;
+      this.jumpsRemaining = MAX_JUMPS - 1;
+      this.jumpBufferSeconds = 0;
+      this.bodyMesh.rotation.z = 0;
+      this.state = PlayerState.JUMP;
+      this.showFrame(this.sprites.jumpRise);
+      this.setSquash(0.82, 1.2); // stretch on take-off
+      Sfx.jump();
+      this.particles.burst(this.x, this.y + 0.1, 5, GRASS_DUST, 0.6, 0.3);
+    }
+
+    doubleJump() {
+      this.velocityY = DOUBLE_JUMP_SPEED;
+      this.jumpsRemaining = 0;
+      this.bodyMesh.rotation.z = 0;
+      this.enterState(PlayerState.DOUBLE_JUMP);
+      this.showFrame(this.sprites.jumpSpin);
+      this.setSquash(0.86, 1.14);
+      Sfx.doubleJump();
+      this.particles.burst(this.x, this.y + 0.2, 8, '#86d66e', 1.3, 0.35); // leaves
+      this.particles.burst(this.x, this.y + 0.2, 6, '#bae6fd', 0.9, 0.25); // air sparks
+    }
+
+    /**
+     * Lose health and get knocked away from the attacker.
+     * Ignored while invulnerable (just hit) or already defeated.
+     */
+    takeDamage(amount, attackerX) {
+      if (this.invulnerableSeconds > 0 || this.isDefeated) return;
+
+      this.hp = Math.max(0, this.hp - amount);
+      Sfx.playerHurt();
+
+      const knockbackDirection = this.x < attackerX ? -1 : 1;
+      this.facing = -knockbackDirection; // turn to face the attacker in surprise
+      this.bodyMesh.rotation.z = 0;
+
+      if (this.hp <= 0) {
+        this.enterState(PlayerState.DEFEATED);
+        this.velocityX = knockbackDirection * 2.0;
+        this.velocityY = 4.0;
+        this.showFrame(this.sprites.defeated);
+        this.particles.burst(this.x, this.y + 0.8, 12, '#ff595e', 1.2, 0.7);
+      } else {
+        this.enterState(PlayerState.HIT_RECOIL, HIT_RECOIL_SECONDS);
+        this.invulnerableSeconds = INVULNERABLE_SECONDS;
+        this.velocityX = knockbackDirection * 4.5;
+        this.velocityY = 4.2;
+        this.showFrame(this.sprites.hitRecoilFlash);
+        this.particles.burst(this.x, this.y + 0.8, 8, '#fcd5b5', 1.0, 0.5);
+      }
+
+      this.events.onHealthChanged(this.hp);
+      if (this.hp <= 0) this.events.onDefeated();
+    }
+
+    // ==========================================
+    // Per-frame update
+    // ==========================================
+    update(deltaSeconds) {
+      this.applyGravity(deltaSeconds);
+      if (this.jumpBufferSeconds > 0) this.jumpBufferSeconds -= deltaSeconds;
+      if (this.y <= GROUND_Y) this.touchGround();
+
+      this.updateInvulnerability(deltaSeconds);
+      this.updateState(deltaSeconds);
+
+      this.x = clamp(this.x, LEVEL_START_X, LEVEL_END_X);
+      this.relaxSquash(deltaSeconds);
+      this.syncMeshes();
+    }
+
+    applyGravity(deltaSeconds) {
+      this.velocityY -= GRAVITY * deltaSeconds;
+      this.y += this.velocityY * deltaSeconds;
+    }
+
+    touchGround() {
+      const impactSpeed = -this.velocityY;
+      this.y = GROUND_Y;
+      this.velocityY = 0;
+      this.jumpsRemaining = MAX_JUMPS;
+      this.bodyMesh.rotation.z = 0;
+      if (this.isAirborne) this.land(impactSpeed);
+    }
+
+    /** Brief landing crouch; harder landings squash more and kick up more dust. */
+    land(impactSpeed) {
+      this.enterState(PlayerState.LAND, LANDING_SECONDS);
+      this.showFrame(this.sprites.crouch);
+
+      const hardness = Math.min(1, impactSpeed / HARD_LANDING_SPEED);
+      this.setSquash(1 + 0.25 * hardness, 1 - 0.22 * hardness);
+      this.particles.burst(this.x, this.y + 0.1, 3 + Math.round(5 * hardness), GRASS_DUST, 0.5 + 0.6 * hardness, 0.25);
+
+      if (this.jumpBufferSeconds > 0) this.tryJump(); // buffered jump fires right away
+    }
+
+    /** Blink while invulnerable after being hit. */
+    updateInvulnerability(deltaSeconds) {
+      if (this.invulnerableSeconds > 0) {
+        this.invulnerableSeconds -= deltaSeconds;
+        const isBlinkOff = Math.sin(this.invulnerableSeconds * INVULNERABLE_BLINK_RATE) > 0;
+        this.bodyMesh.material.opacity = isBlinkOff ? 0.3 : 1.0;
+      } else {
+        this.bodyMesh.material.opacity = 1.0;
+      }
+    }
+
+    updateState(deltaSeconds) {
+      switch (this.state) {
+        case PlayerState.IDLE: this.updateIdle(deltaSeconds); break;
+        case PlayerState.WALK: this.updateWalk(deltaSeconds); break;
+        case PlayerState.JUMP:
+        case PlayerState.DOUBLE_JUMP:
+        case PlayerState.FALL: this.updateAirborne(deltaSeconds); break;
+        case PlayerState.LAND: this.updateLanding(deltaSeconds); break;
+        case PlayerState.ATTACK: this.updateAttack(deltaSeconds); break;
+        case PlayerState.HIT_RECOIL: this.updateHitRecoil(deltaSeconds); break;
+        case PlayerState.HIT_STAGGER: this.updateHitStagger(deltaSeconds); break;
+        case PlayerState.DEFEATED: this.updateDefeated(deltaSeconds); break;
+      }
+    }
+
+    updateIdle(deltaSeconds) {
+      this.slideWithFriction(IDLE_FRICTION, deltaSeconds);
+
+      if (this.input.isPressingLeftOrRight()) {
+        this.state = PlayerState.WALK;
+        return;
+      }
+      this.advanceLoopingAnimation(this.sprites.idle, IDLE_FRAME_SECONDS, deltaSeconds); // gentle breathing
+    }
+
+    updateWalk(deltaSeconds) {
+      const direction = this.input.horizontalDirection();
+      if (direction === 0) {
+        this.state = PlayerState.IDLE;
+        this.showFrame(this.sprites.idle[0]);
+        return;
+      }
+
+      this.facing = direction;
+      this.velocityX = direction * WALK_SPEED;
+      this.x += this.velocityX * deltaSeconds;
+      this.advanceLoopingAnimation(this.sprites.walk, WALK_FRAME_SECONDS, deltaSeconds);
+    }
+
+    updateAirborne(deltaSeconds) {
+      // Air control
+      const direction = this.input.horizontalDirection();
+      if (direction !== 0) {
+        this.facing = direction;
+        this.velocityX = direction * AIR_SPEED;
+      } else {
+        this.velocityX *= AIR_DRAG;
+      }
+      this.x += this.velocityX * deltaSeconds;
+
+      if (this.state === PlayerState.DOUBLE_JUMP) {
+        this.updateSomersault(deltaSeconds);
+        return;
+      }
+
+      // Pick the pose from vertical speed: rise -> apex tuck -> fall
+      if (this.velocityY > APEX_SPEED_RANGE) {
+        this.showFrame(this.sprites.jumpRise);
+      } else if (this.velocityY > -APEX_SPEED_RANGE) {
+        this.showFrame(this.sprites.jumpApex);
+      } else {
+        this.showFrame(this.sprites.fall);
+      }
+      if (this.velocityY < 0 && this.state === PlayerState.JUMP) {
+        this.state = PlayerState.FALL;
+      }
+    }
+
+    /** Exactly one forward somersault in a tucked ball, ending upright at the apex. */
+    updateSomersault(deltaSeconds) {
+      this.stateTimer += deltaSeconds;
+      const progress = Math.min(1, this.stateTimer / SOMERSAULT_SECONDS);
+      this.bodyMesh.rotation.z = -this.facing * easeOutQuad(progress) * Math.PI * 2;
+      if (progress >= 1) {
+        this.bodyMesh.rotation.z = 0;
+        this.state = PlayerState.FALL;
+      }
+    }
+
+    updateLanding(deltaSeconds) {
+      this.slideWithFriction(LANDING_FRICTION, deltaSeconds);
+      this.stateTimer -= deltaSeconds;
+      if (this.stateTimer <= 0) {
+        this.state = this.input.isPressingLeftOrRight() ? PlayerState.WALK : PlayerState.IDLE;
+        this.showFrame(this.sprites.idle[0]);
+      }
+    }
+
+    /** Overhead slam: lift -> raise -> wind-up hold -> fast downswing -> IMPACT -> recover. */
+    updateAttack(deltaSeconds) {
+      this.velocityX = 0; // feet stay planted: the sword is heavy
+
+      this.stateTimer += deltaSeconds;
+      const frames = this.sprites.slam;
+      const frameIndex = frameIndexAt(frames, this.stateTimer);
+
+      // Fire events for every frame entered this tick (at low frame rates short frames can be skipped)
+      const lastEnteredFrame = Math.min(frameIndex, frames.length - 1);
+      for (let i = this.animationFrame + 1; i <= lastEnteredFrame; i++) {
+        if (frames[i].playsSwoosh) Sfx.swordSwing();
+        if (frames[i].isImpact) this.landSlam(frames[i]);
+      }
+
+      if (frameIndex >= frames.length) {
+        this.finishAttack();
+        return;
+      }
+      if (frameIndex !== this.animationFrame) {
+        this.animationFrame = frameIndex;
+        this.showSlamFrame(frameIndex);
+      }
+    }
+
+    finishAttack() {
+      if (this.isAboveGround) {
+        this.state = PlayerState.FALL;
+      } else {
+        this.state = this.input.isPressingLeftOrRight() ? PlayerState.WALK : PlayerState.IDLE;
+      }
+      this.showFrame(this.sprites.idle[0]);
+    }
+
+    /** The blade hits the ground: dust, shake, thud, then damage whatever is in reach. */
+    landSlam(frame) {
+      const tipX = this.x + this.facing * (frame.bladeTip.x - FRAME_SIZE / 2) * UNITS_PER_PIXEL;
+      const tipY = Math.max(GROUND_Y + 0.05, this.y + (FRAME_SIZE - frame.bladeTip.y) * UNITS_PER_PIXEL);
+
+      Sfx.slamImpact();
+      this.cameraController.shake(0.07, 0.14);
+      this.particles.burst(tipX, tipY, 10, '#8d6849', 1.3, 0.45); // dirt
+      this.particles.burst(tipX, tipY, 6, GRASS_DUST, 1.0, 0.35); // grass
+      this.effects.spawnRing({ color: '#ffeaa7', x: tipX, y: tipY + 0.1, fromScale: 0.2, toScale: 1.4, lifetime: 0.2 });
+
+      this.events.onSlamLanded(this.getSlamHitArea());
+    }
+
+    /** The overhead arc covers the space in front of the boy, from head height down to the grass. */
+    getSlamHitArea() {
+      return {
+        centerX: this.x + this.facing * SLAM_REACH_X,
+        centerY: this.y + this.height * SLAM_HEIGHT_RATIO,
+        halfWidth: SLAM_HALF_WIDTH,
+        halfHeight: SLAM_HALF_HEIGHT
+      };
+    }
+
+    updateHitRecoil(deltaSeconds) {
+      this.x += this.velocityX * deltaSeconds;
+      this.stateTimer -= deltaSeconds;
+
+      // Flicker between the white flash and the hurt frame
+      const showFlash = Math.floor(this.stateTimer * RECOIL_FLASH_RATE) % 2 === 0;
+      this.showFrame(showFlash ? this.sprites.hitRecoilFlash : this.sprites.hitRecoil);
+
+      if (this.stateTimer <= 0) {
+        this.enterState(PlayerState.HIT_STAGGER, HIT_STAGGER_SECONDS);
+        this.showFrame(this.sprites.hitStagger);
+      }
+    }
+
+    updateHitStagger(deltaSeconds) {
+      this.slideWithFriction(STAGGER_FRICTION, deltaSeconds);
+      this.stateTimer -= deltaSeconds;
+      if (this.stateTimer <= 0) {
+        this.state = this.isAboveGround ? PlayerState.FALL : PlayerState.IDLE;
+      }
+    }
+
+    updateDefeated(deltaSeconds) {
+      this.slideWithFriction(DEFEATED_FRICTION, deltaSeconds);
+    }
+
+    // ==========================================
+    // Helpers
+    // ==========================================
+    enterState(state, timer = 0) {
+      this.state = state;
+      this.stateTimer = timer;
+    }
+
+    slideWithFriction(friction, deltaSeconds) {
+      this.velocityX *= friction;
+      this.x += this.velocityX * deltaSeconds;
+    }
+
+    advanceLoopingAnimation(frames, secondsPerFrame, deltaSeconds) {
+      this.animationTimer += deltaSeconds;
+      if (this.animationTimer > secondsPerFrame) {
+        this.animationTimer = 0;
+        this.animationFrame = (this.animationFrame + 1) % frames.length;
+        this.showFrame(frames[this.animationFrame]);
+      }
+    }
+
+    setSquash(scaleX, scaleY) {
+      this.scaleX = scaleX;
+      this.scaleY = scaleY;
+    }
+
+    /** Squash & stretch eases back to normal. */
+    relaxSquash(deltaSeconds) {
+      const amount = Math.min(1, SQUASH_RECOVERY_RATE * deltaSeconds);
+      this.scaleX += (1 - this.scaleX) * amount;
+      this.scaleY += (1 - this.scaleY) * amount;
+    }
+
+    showFrame(sprite) {
+      setMeshSprite(this.bodyMesh, sprite);
+    }
+
+    showSlamFrame(index) {
+      setMeshSprite(this.slamMesh, this.sprites.slam[index]);
+    }
+
+    /** Copy position, facing and squash onto the meshes. Squash scales around the feet. */
+    syncMeshes() {
+      const isAttacking = this.state === PlayerState.ATTACK;
+      this.bodyMesh.visible = !isAttacking;
+      this.slamMesh.visible = isAttacking;
+
+      this.bodyMesh.scale.set(this.facing * this.scaleX, this.scaleY, 1);
+      this.bodyMesh.position.set(this.x, this.y + (this.height * this.scaleY) / 2, MESH_Z);
+
+      this.slamMesh.scale.set(this.facing, 1, 1);
+      this.slamMesh.position.set(
+        this.x + this.slamMeshOffset.x * this.facing,
+        this.y + this.height / 2 + this.slamMeshOffset.y,
+        MESH_Z
+      );
+      this.slamMesh.material.opacity = this.bodyMesh.material.opacity;
+    }
+  }
+
+  Forest.Player = Player;
+  Forest.PlayerState = PlayerState;
+})(window.Forest);

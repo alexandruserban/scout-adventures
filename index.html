@@ -66,10 +66,10 @@
       <span class="key-cap">R</span>
       <span>RESTART</span>
     </div>
-    <button id="btn-music" class="hud-btn" onclick="window.ForestGame.toggleMusic()">🎵 MUSIC: OFF</button>
-    <button id="btn-sound" class="hud-btn" onclick="window.ForestGame.toggleMute()">🔊 SOUND: ON</button>
-    <button id="btn-crt" class="hud-btn" onclick="toggleCRT()">📺 CRT: ON</button>
-    <button id="btn-gallery" class="hud-btn" onclick="openGallery()">🎨 SPRITE GALLERY</button>
+    <button id="btn-music" class="hud-btn">🎵 MUSIC: OFF</button>
+    <button id="btn-sound" class="hud-btn">🔊 SOUND: ON</button>
+    <button id="btn-crt" class="hud-btn">📺 CRT: ON</button>
+    <button id="btn-gallery" class="hud-btn">🎨 SPRITE GALLERY</button>
   </div>
 
   <!-- Touch Controls (Mobile / Click friendly) -->
@@ -92,7 +92,7 @@
     <div class="gallery-card">
       <div class="gallery-header">
         <h2 class="gallery-title">PIXEL ART ASSET SHOWCASE</h2>
-        <button class="pixel-btn" style="padding: 6px 12px; font-size: 8px;" onclick="closeGallery()">[X] CLOSE</button>
+        <button id="btn-gallery-close" class="pixel-btn" style="padding: 6px 12px; font-size: 8px;">[X] CLOSE</button>
       </div>
       <div class="gallery-grid" id="gallery-content"></div>
     </div>
@@ -101,168 +101,50 @@
   <!-- Three.js Library -->
   <script src="three.min.js"></script>
 
-  <!-- Game Modules -->
-  <script src="src/pixelRenderer.js"></script>
-  <script src="src/sprites.js"></script>
-  <script src="src/boyAnimation.js"></script>
-  <script src="src/background.js"></script>
-  <script src="src/audio.js"></script>
-  <script src="src/game.js"></script>
+  <!--
+    Game scripts. These are classic scripts sharing the window.Forest namespace (so the game
+    also runs straight from disk); each one may only use scripts listed above it.
+  -->
+  <script src="src/namespace.js"></script>
 
-  <!-- Interactive Helpers -->
-  <script>
-    function toggleCRT() {
-      const scanline = document.getElementById('scanline-filter');
-      const btn = document.getElementById('btn-crt');
-      if (scanline.style.display === 'none') {
-        scanline.style.display = 'block';
-        btn.innerText = '📺 CRT: ON';
-      } else {
-        scanline.style.display = 'none';
-        btn.innerText = '📺 CRT: OFF';
-      }
-    }
+  <!-- Core helpers -->
+  <script src="src/core/config.js"></script>
+  <script src="src/core/mathUtils.js"></script>
+  <script src="src/core/graphics.js"></script>
 
-    let galleryPopulated = false;
-    function openGallery() {
-      const overlay = document.getElementById('gallery-overlay');
-      const container = document.getElementById('gallery-content');
-      overlay.style.display = 'flex';
+  <!-- Pixel art, painted once at load time -->
+  <script src="src/art/palette.js"></script>
+  <script src="src/art/pixelCanvas.js"></script>
+  <script src="src/art/mushroomSprites.js"></script>
+  <script src="src/art/environmentSprites.js"></script>
+  <script src="src/art/boySprites.js"></script>
+  <script src="src/art/backgroundPainters.js"></script>
 
-      if (galleryPopulated) return;
-      galleryPopulated = true;
+  <!-- Audio -->
+  <script src="src/audio/synth.js"></script>
+  <script src="src/audio/soundEffects.js"></script>
+  <script src="src/audio/music.js"></script>
 
-      const R = window.PixelRenderer;
-      const S = window.SpriteData;
-      const P = S.PALETTE;
-      const scale = 3;
+  <!-- Page UI (toolbar buttons, touch buttons, gallery) -->
+  <script src="src/ui/audioControls.js"></script>
+  <script src="src/ui/crtFilter.js"></script>
+  <script src="src/ui/touchControls.js"></script>
+  <script src="src/ui/spriteGallery.js"></script>
 
-      function makeBox(canvas, caption) {
-        const box = document.createElement('div');
-        box.className = 'sprite-box';
-        box.appendChild(canvas);
-        const cap = document.createElement('div');
-        cap.className = 'sprite-caption';
-        cap.innerText = caption;
-        box.appendChild(cap);
-        return box;
-      }
-
-      // 1. BOY SECTION
-      const boySec = document.createElement('div');
-      boySec.className = 'gallery-section';
-      boySec.innerHTML = '<div class="section-name">THE HERO (SIDE-VIEW PROFILE & 2-HANDED SWORD)</div><div class="sprite-row"></div>';
-      const boyRow = boySec.querySelector('.sprite-row');
-
-      function scaled(src, s) {
-        const c = document.createElement('canvas');
-        c.width = src.width * s;
-        c.height = src.height * s;
-        const ctx = c.getContext('2d');
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(src, 0, 0, c.width, c.height);
-        return c;
-      }
-      const BA = window.BoyAnimation;
-      boyRow.appendChild(makeBox(scaled(BA.IDLE[0], scale), 'Idle'));
-      BA.WALK.forEach((c, i) => {
-        boyRow.appendChild(makeBox(scaled(c, scale), `Walk ${i + 1}/8`));
-      });
-      boyRow.appendChild(makeBox(scaled(BA.JUMP_CROUCH, scale), 'Crouch / Land'));
-      boyRow.appendChild(makeBox(scaled(BA.JUMP_RISE, scale), 'Jump: Rise'));
-      boyRow.appendChild(makeBox(scaled(BA.JUMP_APEX, scale), 'Jump: Apex'));
-      boyRow.appendChild(makeBox(scaled(BA.FALL, scale), 'Fall'));
-      boyRow.appendChild(makeBox(scaled(BA.JUMP_SPIN, scale), 'Double Jump Spin'));
-      const atkNames = ['Lift', 'Raise', 'Raise', 'Overhead', 'Wind-up', 'Downswing', 'Downswing', 'IMPACT', 'Settle', 'Recover', 'Recover'];
-      BA.ATTACK.forEach((f, i) => {
-        boyRow.appendChild(makeBox(scaled(f.canvas, 2), `Slam ${i + 1}: ${atkNames[i]}`));
-      });
-      boyRow.appendChild(makeBox(scaled(BA.HIT_1, scale), 'Hit: Recoil'));
-      boyRow.appendChild(makeBox(scaled(BA.HIT_2, scale), 'Hit: Stagger'));
-      boyRow.appendChild(makeBox(scaled(BA.DEFEATED, scale), 'Defeated'));
-      container.appendChild(boySec);
-
-      // 2. EVIL MUSHROOM SECTION
-      const mushSec = document.createElement('div');
-      mushSec.className = 'gallery-section';
-      mushSec.innerHTML = '<div class="section-name">EVIL MUSHROOM</div><div class="sprite-row"></div>';
-      const mushRow = mushSec.querySelector('.sprite-row');
-
-      mushRow.appendChild(makeBox(R.renderAsciiToCanvas(S.MUSHROOM.WALK[0], P, scale), 'Patrol'));
-      mushRow.appendChild(makeBox(R.renderAsciiToCanvas(S.MUSHROOM.AGGRO, P, scale), 'Aggro (Fangs)'));
-      mushRow.appendChild(makeBox(R.renderAsciiToCanvas(S.MUSHROOM.HIT_1, P, scale), 'Hit: Squash'));
-      mushRow.appendChild(makeBox(R.renderAsciiToCanvas(S.MUSHROOM.HIT_2, P, scale), 'Hit: Dazed'));
-      container.appendChild(mushSec);
-
-      // 3. FOREST ENVIRONMENT SECTION
-      const envSec = document.createElement('div');
-      envSec.className = 'gallery-section';
-      envSec.innerHTML = '<div class="section-name">STATIC FOREST ASSETS</div><div class="sprite-row"></div>';
-      const envRow = envSec.querySelector('.sprite-row');
-
-      // Tree (scale 2 to fit nicely)
-      const treeCanvas = S.createAncientTreeCanvas();
-      const scaledTree = document.createElement('canvas');
-      scaledTree.width = treeCanvas.width * 2;
-      scaledTree.height = treeCanvas.height * 2;
-      const tCtx = scaledTree.getContext('2d');
-      tCtx.imageSmoothingEnabled = false;
-      tCtx.drawImage(treeCanvas, 0, 0, scaledTree.width, scaledTree.height);
-      envRow.appendChild(makeBox(scaledTree, 'Ancient Oak (64x96)'));
-
-      // Grass Tile
-      const grassCanvas = S.createGrassGroundCanvas();
-      const scaledGrass = document.createElement('canvas');
-      scaledGrass.width = grassCanvas.width * 3;
-      scaledGrass.height = grassCanvas.height * 3;
-      const gCtx = scaledGrass.getContext('2d');
-      gCtx.imageSmoothingEnabled = false;
-      gCtx.drawImage(grassCanvas, 0, 0, scaledGrass.width, scaledGrass.height);
-      envRow.appendChild(makeBox(scaledGrass, 'Grass & Soil Tile'));
-
-      // Flower Tuft
-      const flowerCanvas = S.createFlowerTuftCanvas();
-      const scaledFlower = document.createElement('canvas');
-      scaledFlower.width = flowerCanvas.width * 3;
-      scaledFlower.height = flowerCanvas.height * 3;
-      const fCtx = scaledFlower.getContext('2d');
-      fCtx.imageSmoothingEnabled = false;
-      fCtx.drawImage(flowerCanvas, 0, 0, scaledFlower.width, scaledFlower.height);
-      envRow.appendChild(makeBox(scaledFlower, 'Wildflowers'));
-
-      container.appendChild(envSec);
-    }
-
-    function closeGallery() {
-      document.getElementById('gallery-overlay').style.display = 'none';
-    }
-
-    // Touch button bindings
-    function bindTouch(id, code) {
-      const btn = document.getElementById(id);
-      if (!btn) return;
-      btn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        window.dispatchEvent(new KeyboardEvent('keydown', { code: code }));
-      });
-      btn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        window.dispatchEvent(new KeyboardEvent('keyup', { code: code }));
-      });
-      btn.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        window.dispatchEvent(new KeyboardEvent('keydown', { code: code }));
-      });
-      btn.addEventListener('mouseup', (e) => {
-        e.preventDefault();
-        window.dispatchEvent(new KeyboardEvent('keyup', { code: code }));
-      });
-    }
-
-    bindTouch('btn-touch-left', 'KeyA');
-    bindTouch('btn-touch-right', 'KeyD');
-    bindTouch('btn-touch-jump', 'Space');
-    bindTouch('btn-touch-atk', 'KeyJ');
-  </script>
+  <!-- Game -->
+  <script src="src/game/levelData.js"></script>
+  <script src="src/game/gameSprites.js"></script>
+  <script src="src/game/stage.js"></script>
+  <script src="src/game/parallaxBackground.js"></script>
+  <script src="src/game/forestScenery.js"></script>
+  <script src="src/game/particles.js"></script>
+  <script src="src/game/ambientLeaves.js"></script>
+  <script src="src/game/effects.js"></script>
+  <script src="src/game/cameraController.js"></script>
+  <script src="src/game/input.js"></script>
+  <script src="src/game/hud.js"></script>
+  <script src="src/game/player.js"></script>
+  <script src="src/game/evilMushroom.js"></script>
+  <script src="src/game/main.js"></script>
 </body>
 </html>

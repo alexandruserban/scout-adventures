@@ -289,8 +289,7 @@ class SoundEngine {
   toggleMusic() {
     this.init();
     if (this.bgmPlaying) {
-      clearInterval(this.bgmInterval);
-      this.bgmPlaying = false;
+      this.stopMusic();
       return false;
     } else {
       this.startChiptuneLoop();
@@ -299,37 +298,153 @@ class SoundEngine {
     }
   }
 
+  stopMusic() {
+    if (this.bgmInterval) {
+      clearInterval(this.bgmInterval);
+      this.bgmInterval = null;
+    }
+    this.bgmPlaying = false;
+  }
+
   startChiptuneLoop() {
-    const notes = [
-      261.63, 293.66, 329.63, 392.00,
-      329.63, 392.00, 440.00, 523.25,
-      392.00, 329.63, 293.66, 261.63,
-      220.00, 246.94, 261.63, 293.66
+    this.stopMusic();
+    this.bgmPlaying = true;
+
+    // Driving, tense, energetic 16-bit action chiptune in D minor (150 BPM)
+    // 16th note subdivision: ~100ms per step
+    const STEP_MS = 100;
+
+    // Fast melodic lead line (crisp square wave with pulse-width feel)
+    // 32-step phrase looping with energetic variations
+    const D3 = 146.83, F3 = 174.61, G3 = 196.00, A3 = 220.00, Bb3 = 233.08, C4 = 261.63;
+    const D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 392.00, A4 = 440.00, Bb4 = 466.16, C5 = 523.25, D5 = 587.33;
+
+    // Lead melody pattern (32 sixteenth notes) - driving battle theme
+    const leadPattern = [
+      D4, 0, D4, F4, G4, 0, A4, 0,
+      Bb4, A4, G4, F4, G4, A4, F4, E4,
+      D4, 0, D4, A4, C5, 0, Bb4, A4,
+      G4, F4, E4, F4, D4, 0, D4, 0
     ];
+
+    // Driving syncopated bassline (punchy triangle/saw bass)
+    const bassPattern = [
+      D3, D3, 0, D3, F3, 0, G3, 0,
+      Bb3, 0, A3, 0, G3, F3, E3, C4,
+      D3, D3, 0, D3, F3, 0, G3, 0,
+      Bb3, A3, G3, F3, E3, F3, D3, 0
+    ];
+
+    // Hi-hat / snare rhythm (0 = rest, 1 = closed hat, 2 = snare/noise pop, 3 = kick)
+    const drumPattern = [
+      3, 1, 1, 1,  2, 1, 3, 1,
+      3, 1, 2, 1,  2, 1, 1, 2,
+      3, 1, 1, 1,  2, 1, 3, 1,
+      3, 1, 2, 2,  3, 2, 1, 2
+    ];
+
     let step = 0;
 
     this.bgmInterval = setInterval(() => {
       if (this.muted || !this.bgmPlaying) return;
+      if (!this.ctx) return;
       const ctx = this.ctx;
       const now = ctx.currentTime;
-      const freq = notes[step % notes.length];
+      const curStep = step % 32;
 
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, now);
+      // 1. LEAD SYNTH (Square Wave - fast, punchy 8-bit lead)
+      const leadNote = leadPattern[curStep];
+      if (leadNote > 0) {
+        const leadOsc = ctx.createOscillator();
+        const leadGain = ctx.createGain();
+        leadOsc.type = 'square';
+        leadOsc.frequency.setValueAtTime(leadNote, now);
 
-      gain.gain.setValueAtTime(0.04, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        // Accent certain beats for urgency
+        const isAccent = (curStep % 8 === 0) || (curStep % 8 === 4);
+        const peakVol = isAccent ? 0.055 : 0.038;
 
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+        leadGain.gain.setValueAtTime(peakVol, now);
+        leadGain.gain.exponentialRampToValueAtTime(0.001, now + (STEP_MS / 1000) * 0.9);
 
-      osc.start(now);
-      osc.stop(now + 0.22);
+        leadOsc.connect(leadGain);
+        leadGain.connect(ctx.destination);
+
+        leadOsc.start(now);
+        leadOsc.stop(now + (STEP_MS / 1000) * 0.9);
+      }
+
+      // 2. BASSLINE (Triangle / Low Saw - driving urgent groove)
+      const bassNote = bassPattern[curStep];
+      if (bassNote > 0) {
+        const bassOsc = ctx.createOscillator();
+        const bassGain = ctx.createGain();
+        bassOsc.type = 'triangle';
+        bassOsc.frequency.setValueAtTime(bassNote, now);
+
+        bassGain.gain.setValueAtTime(0.07, now);
+        bassGain.gain.exponentialRampToValueAtTime(0.002, now + (STEP_MS / 1000) * 0.85);
+
+        bassOsc.connect(bassGain);
+        bassGain.connect(ctx.destination);
+
+        bassOsc.start(now);
+        bassOsc.stop(now + (STEP_MS / 1000) * 0.85);
+      }
+
+      // 3. CHIPTUNE PERCUSSION (Kicks, Snare pops, Hi-hat clicks)
+      const drum = drumPattern[curStep];
+      if (drum === 3) {
+        // Chiptune Kick: fast pitch drop sine
+        const kickOsc = ctx.createOscillator();
+        const kickGain = ctx.createGain();
+        kickOsc.type = 'sine';
+        kickOsc.frequency.setValueAtTime(150, now);
+        kickOsc.frequency.exponentialRampToValueAtTime(35, now + 0.07);
+
+        kickGain.gain.setValueAtTime(0.12, now);
+        kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+        kickOsc.connect(kickGain);
+        kickGain.connect(ctx.destination);
+        kickOsc.start(now);
+        kickOsc.stop(now + 0.07);
+      } else if (drum === 2) {
+        // Chiptune Snare / Noise burst
+        const noise = ctx.createBufferSource();
+        noise.buffer = this._noiseBuffer(0.06);
+        const nFilter = ctx.createBiquadFilter();
+        nFilter.type = 'highpass';
+        nFilter.frequency.setValueAtTime(1200, now);
+
+        const nGain = ctx.createGain();
+        nGain.gain.setValueAtTime(0.08, now);
+        nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+        noise.connect(nFilter);
+        nFilter.connect(nGain);
+        nGain.connect(ctx.destination);
+        noise.start(now);
+      } else if (drum === 1) {
+        // Crisp Hi-hat click
+        const hat = ctx.createBufferSource();
+        hat.buffer = this._noiseBuffer(0.02);
+        const hFilter = ctx.createBiquadFilter();
+        hFilter.type = 'highpass';
+        hFilter.frequency.setValueAtTime(5000, now);
+
+        const hGain = ctx.createGain();
+        hGain.gain.setValueAtTime(0.035, now);
+        hGain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+
+        hat.connect(hFilter);
+        hFilter.connect(hGain);
+        hGain.connect(ctx.destination);
+        hat.start(now);
+      }
 
       step++;
-    }, 240);
+    }, STEP_MS);
   }
 }
 

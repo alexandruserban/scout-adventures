@@ -123,62 +123,13 @@ const textures = {
   const LEVEL_END_X = 48;
   const GROUND_Y = 0;
 
-  // Parallax Sky / Forest Background
-  const skyGeometry = new THREE.PlaneGeometry(160, 40);
-  const skyCanvas = document.createElement('canvas');
-  skyCanvas.width = 16;
-  skyCanvas.height = 32;
-  const sCtx = skyCanvas.getContext('2d');
-  const grad = sCtx.createLinearGradient(0, 0, 0, 32);
-  grad.addColorStop(0, '#1c3130');
-  grad.addColorStop(0.5, '#284b42');
-  grad.addColorStop(1, '#4b6e58');
-  sCtx.fillStyle = grad;
-  sCtx.fillRect(0, 0, 16, 32);
-  const skyTex = new THREE.CanvasTexture(skyCanvas);
-  skyTex.magFilter = THREE.NearestFilter;
-  skyTex.minFilter = THREE.NearestFilter;
-  const skyMat = new THREE.MeshBasicMaterial({ map: skyTex });
-  const skyMesh = new THREE.Mesh(skyGeometry, skyMat);
-  skyMesh.position.set(LEVEL_END_X / 2, 8, -15);
-  scene.add(skyMesh);
-
-  // Distant Mountain Silhouettes & Deep Trees (Parallax Layer)
-  const bgTreeMat = new THREE.MeshBasicMaterial({
-    map: textures.tree.texture,
-    transparent: true,
-    opacity: 0.35,
-    color: new THREE.Color('#122b22')
+  // Layered parallax background (sky, sun, clouds, mountains, pines, mist, forest, rays, fireflies)
+  const background = window.ForestBackground.create(scene, {
+    pixelScale: PIXEL_SCALE,
+    viewWidthUnits,
+    cameraBaseY: camera.position.y
   });
-
-  const distantTrees = [];
-  for (let x = LEVEL_START_X - 10; x < LEVEL_END_X + 15; x += 3.5) {
-    const scale = 0.9 + Math.sin(x * 2.3) * 0.3;
-    const tMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(textures.tree.width * PIXEL_SCALE * scale, textures.tree.height * PIXEL_SCALE * scale),
-      bgTreeMat
-    );
-    tMesh.position.set(x + (Math.sin(x) * 1.2), 3.0 + scale * 1.2, -6.0);
-    scene.add(tMesh);
-    distantTrees.push(tMesh);
-  }
-
-  // Midground Trees Layer
-  const midTreeMat = new THREE.MeshBasicMaterial({
-    map: textures.tree.texture,
-    transparent: true,
-    opacity: 0.75,
-    color: new THREE.Color('#224430')
-  });
-  for (let x = LEVEL_START_X - 5; x < LEVEL_END_X + 10; x += 5.2) {
-    const scale = 1.1 + Math.cos(x * 1.7) * 0.2;
-    const tMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(textures.tree.width * PIXEL_SCALE * scale, textures.tree.height * PIXEL_SCALE * scale),
-      midTreeMat
-    );
-    tMesh.position.set(x, 3.4 + scale * 1.2, -2.5);
-    scene.add(tMesh);
-  }
+  scene.background = new THREE.Color(background.topColor);
 
   // Foreground Majestic Trees (Static requirement from user)
   const foregroundTrees = [
@@ -216,6 +167,22 @@ const textures = {
       fMesh.position.set(fx, GROUND_Y + (textures.flowerTuft.height * PIXEL_SCALE * 1.1) / 2 - 0.05, 0.15);
       scene.add(fMesh);
     }
+  }
+
+  // Deep soil below the ground tiles so tall screens never show sky under the floor
+  {
+    const soilCanvas = document.createElement('canvas');
+    soilCanvas.width = soilCanvas.height = 1;
+    const sc = soilCanvas.getContext('2d');
+    sc.fillStyle = '#290f02';
+    sc.fillRect(0, 0, 1, 1);
+    const soilW = LEVEL_END_X - LEVEL_START_X + 40;
+    const soil = new THREE.Mesh(
+      new THREE.PlaneGeometry(soilW, 30),
+      new THREE.MeshBasicMaterial({ map: texFromCanvas(soilCanvas).texture })
+    );
+    soil.position.set((LEVEL_START_X + LEVEL_END_X) / 2, GROUND_Y - groundTileHeight - 15 + PIXEL_SCALE, 0.05);
+    scene.add(soil);
   }
 
   // ==========================================
@@ -774,6 +741,9 @@ const textures = {
       case 'KeyM':
         toggleMute();
         break;
+      case 'KeyB':
+        window.ForestGame.toggleMusic();
+        break;
     }
   });
 
@@ -1226,11 +1196,7 @@ const textures = {
     camera.position.y = camBase.y + oy;
 
     // Parallax update
-    skyMesh.position.x = camera.position.x * 0.85;
-    distantTrees.forEach(t => {
-      // Parallax offset
-      t.position.x = t.userData.baseX ? t.userData.baseX + (camera.position.x * 0.15) : t.position.x;
-    });
+    background.update(camera.position.x, camera.position.y, dt);
   }
 
   // ==========================================

@@ -72,8 +72,11 @@ const textures = {
     boy: {
       idle: BA.IDLE.map(texFromCanvas),
       walk: BA.WALK.map(texFromCanvas),
-      jump: texFromCanvas(BA.JUMP),
+      crouch: texFromCanvas(BA.JUMP_CROUCH),
+      rise: texFromCanvas(BA.JUMP_RISE),
+      apex: texFromCanvas(BA.JUMP_APEX),
       fall: texFromCanvas(BA.FALL),
+      spin: texFromCanvas(BA.JUMP_SPIN),
       attack: BA.ATTACK.map(f => Object.assign(texFromCanvas(f.canvas), { meta: f })),
       hit1: texFromCanvas(BA.HIT_1),
       hit1Flash: texFromCanvas(BA.HIT_1_FLASH),
@@ -451,6 +454,7 @@ const textures = {
     hp: 3,
     maxHp: 3,
     jumpsRemaining: 2, // Double Jump support
+    jumpBuffer: 0,     // jump pressed just before landing still counts
     invulnerableTimer: 0,
     attackHitboxActive: false,
     attackHasHit: false,
@@ -787,6 +791,10 @@ const textures = {
       case 'ArrowUp':
       case 'Space':
         keys.jump = false;
+        // Variable jump height: letting go early cuts the climb short
+        if ((boy.state === 'JUMP' || boy.state === 'DOUBLE_JUMP') && boy.vy > JUMP_CUT_VY) {
+          boy.vy = JUMP_CUT_VY;
+        }
         break;
       case 'KeyJ':
       case 'KeyZ':
@@ -803,16 +811,24 @@ const textures = {
     handleAttackPress();
   });
 
+  const JUMP_VY = 9.2;
+  const DOUBLE_JUMP_VY = 8.6;
+  const JUMP_CUT_VY = 3.5;          // upward speed kept when the button is released early
+  const GRAVITY = 25.0;
+  const SPIN_TIME = DOUBLE_JUMP_VY / GRAVITY; // one full somersault, finishing at the apex
+  const LAND_TIME = 0.09;
+
   function handleJumpPress() {
     if (boy.state === 'DEFEATED' || boy.state === 'HIT_RECOIL' || boy.state === 'HIT_STAGGER') return;
 
     // First jump from ground
     if (boy.y <= GROUND_Y + 0.05) {
-      boy.vy = 9.2;
+      boy.vy = JUMP_VY;
       boy.jumpsRemaining = 1;
+      boy.jumpBuffer = 0;
       boy.mesh.rotation.z = 0;
       boy.state = 'JUMP';
-      boy.setFrame(textures.boy.jump);
+      boy.setFrame(textures.boy.rise);
       boy.sx = 0.82; // stretch on take-off
       boy.sy = 1.2;
       window.SoundEngine.playJump();
@@ -820,11 +836,12 @@ const textures = {
     }
     // Double jump in mid-air!
     else if (boy.jumpsRemaining > 0) {
-      boy.vy = 8.6;
+      boy.vy = DOUBLE_JUMP_VY;
       boy.jumpsRemaining = 0;
       boy.mesh.rotation.z = 0;
       boy.state = 'DOUBLE_JUMP';
-      boy.setFrame(textures.boy.jump);
+      boy.stateTimer = 0;
+      boy.setFrame(textures.boy.spin);
       boy.sx = 0.86;
       boy.sy = 1.14;
       window.SoundEngine.playDoubleJump();
@@ -832,6 +849,10 @@ const textures = {
       // Energetic double-jump particle burst (leaves + air spark)
       spawnParticles(boy.x, boy.y + 0.2, 8, '#86d66e', 1.3, 0.35);
       spawnParticles(boy.x, boy.y + 0.2, 6, '#bae6fd', 0.9, 0.25);
+    }
+    // Out of jumps: remember the press briefly so it fires on landing
+    else {
+      boy.jumpBuffer = 0.12;
     }
   }
 
@@ -879,19 +900,26 @@ const textures = {
 
   function updatePlayer(dt) {
     // Gravity & Vertical Movement
-    boy.vy -= 25.0 * dt;
+    boy.vy -= GRAVITY * dt;
     boy.y += boy.vy * dt;
+    if (boy.jumpBuffer > 0) boy.jumpBuffer -= dt;
 
     if (boy.y <= GROUND_Y) {
+      const impactSpeed = -boy.vy;
       boy.y = GROUND_Y;
       boy.vy = 0;
       boy.jumpsRemaining = 2; // Reset double jump
       boy.mesh.rotation.z = 0;
       if (boy.state === 'JUMP' || boy.state === 'FALL' || boy.state === 'DOUBLE_JUMP') {
-        boy.state = (keys.left || keys.right) ? 'WALK' : 'IDLE';
-        boy.sx = 1.22; // squash on landing
-        boy.sy = 0.8;
-        spawnParticles(boy.x, boy.y + 0.1, 4, '#4fb835', 0.5, 0.25);
+        // Brief landing crouch; harder landings squash more
+        boy.state = 'LAND';
+        boy.stateTimer = LAND_TIME;
+        boy.setFrame(textures.boy.crouch);
+        const k = Math.min(1, impactSpeed / 12);
+        boy.sx = 1 + 0.25 * k;
+        boy.sy = 1 - 0.22 * k;
+        spawnParticles(boy.x, boy.y + 0.1, 3 + Math.round(5 * k), '#4fb835', 0.5 + 0.6 * k, 0.25);
+        if (boy.jumpBuffer > 0) handleJumpPress(); // buffered jump fires right away
       }
     }
 
@@ -960,18 +988,38 @@ const textures = {
         }
         boy.x += boy.vx * dt;
 
-        // Acrobatic somersault spin while executing the double jump!
         if (boy.state === 'DOUBLE_JUMP') {
-          boy.mesh.rotation.z -= boy.facing * 18.0 * dt;
-        }
-
-        // Switch to fall frame when velocity is negative
-        if (boy.vy < 0) {
-          if (boy.state === 'DOUBLE_JUMP' || boy.state === 'JUMP') {
+          // Exactly one forward somersault in a tucked ball, landing upright at the apex
+          boy.stateTimer += dt;
+          const t = Math.min(1, boy.stateTimer / SPIN_TIME);
+          const eased = 1 - Math.pow(1 - t, 2); // fast start, settles at the end
+          boy.mesh.rotation.z = -boy.facing * eased * Math.PI * 2;
+          if (t >= 1) {
             boy.mesh.rotation.z = 0;
             boy.state = 'FALL';
-            boy.setFrame(textures.boy.fall);
           }
+          break;
+        }
+
+        // Pick the pose from vertical speed: rise -> apex tuck -> fall
+        if (boy.vy > 3) {
+          boy.setFrame(textures.boy.rise);
+        } else if (boy.vy > -3) {
+          boy.setFrame(textures.boy.apex);
+        } else {
+          boy.setFrame(textures.boy.fall);
+        }
+        if (boy.vy < 0 && boy.state === 'JUMP') boy.state = 'FALL';
+        break;
+      }
+
+      case 'LAND': {
+        boy.vx *= 0.7;
+        boy.x += boy.vx * dt;
+        boy.stateTimer -= dt;
+        if (boy.stateTimer <= 0) {
+          boy.state = (keys.left || keys.right) ? 'WALK' : 'IDLE';
+          boy.setFrame(textures.boy.idle[0]);
         }
         break;
       }

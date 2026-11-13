@@ -190,7 +190,9 @@
     const near = legPoints(HIP_NEAR, pose.legs.near[0], pose.legs.near[1]);
     const far = legPoints(HIP_FAR, pose.legs.far[0], pose.legs.far[1]);
     // Lower the whole body so the lowest boot rests on row 23
-    const drop = 23 - Math.round(Math.max(near.ankle.y, far.ankle.y));
+    // (or centre it vertically, for poses that spin around the sprite centre)
+    const gap = 23 - Math.round(Math.max(near.ankle.y, far.ankle.y));
+    const drop = pose.center ? Math.round(gap / 2) : gap;
     const by = oy + drop;
     const ux = ox + (pose.upperDx || 0);
     const uy = by + (pose.upperDy || 0);
@@ -245,11 +247,21 @@
     }));
   }
 
-  const JUMP = poseFrame({
-    legs: { near: [50, 95], far: [25, 75] }, arms: { near: 150, far: 125 }, scarf: 'hang', sword: 'back'
+  // Jump arc: crouch (take-off / landing) -> rise -> apex tuck -> fall, plus a tucked ball for the double-jump spin
+  const JUMP_CROUCH = poseFrame({ // knees bent, body low, arms down ready to swing
+    legs: { near: [40, 80], far: [-10, 60] }, arms: { near: 25, far: 5 }, scarf: 'hang', sword: 'back'
   });
-  const FALL = poseFrame({
-    legs: { near: [12, 15], far: [-14, 10] }, arms: { near: 115, far: 95 }, scarf: 'up', sword: 'back'
+  const JUMP_RISE = poseFrame({ // stretched upward, back leg trailing, arms thrown up
+    legs: { near: [5, 5], far: [-25, 35] }, arms: { near: 118, far: 150 }, scarf: 'hang', sword: 'back'
+  });
+  const JUMP_APEX = poseFrame({ // knees pulled up at the top of the arc
+    legs: { near: [45, 90], far: [20, 70] }, arms: { near: 110, far: 90 }, scarf: 'wave', phase: 1, sword: 'back'
+  });
+  const FALL = poseFrame({ // legs reaching for the ground, arms up for balance, scarf streaming up
+    legs: { near: [18, 25], far: [-12, 10] }, arms: { near: 95, far: 130 }, scarf: 'up', sword: 'back'
+  });
+  const JUMP_SPIN = poseFrame({ // tight ball, centred so it spins around its middle
+    legs: { near: [85, 160], far: [75, 150] }, arms: { near: 75, far: 55 }, scarf: 'wave', sword: 'back', center: true
   });
   const HIT_1 = poseFrame({
     head: 'hurt', upperDx: -1,
@@ -383,8 +395,11 @@
   window.BoyAnimation = {
     IDLE,
     WALK,
-    JUMP,
+    JUMP_CROUCH,
+    JUMP_RISE,
+    JUMP_APEX,
     FALL,
+    JUMP_SPIN,
     HIT_1,
     HIT_1_FLASH: flashOf(HIT_1),
     HIT_2,

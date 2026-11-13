@@ -163,8 +163,11 @@
       BA.WALK.forEach((c, i) => {
         boyRow.appendChild(makeBox(scaled(c, scale), `Walk ${i + 1}/8`));
       });
-      boyRow.appendChild(makeBox(scaled(BA.JUMP, scale), 'Jump'));
+      boyRow.appendChild(makeBox(scaled(BA.JUMP_CROUCH, scale), 'Crouch / Land'));
+      boyRow.appendChild(makeBox(scaled(BA.JUMP_RISE, scale), 'Jump: Rise'));
+      boyRow.appendChild(makeBox(scaled(BA.JUMP_APEX, scale), 'Jump: Apex'));
       boyRow.appendChild(makeBox(scaled(BA.FALL, scale), 'Fall'));
+      boyRow.appendChild(makeBox(scaled(BA.JUMP_SPIN, scale), 'Double Jump Spin'));
       const atkNames = ['Lift', 'Raise', 'Raise', 'Overhead', 'Wind-up', 'Downswing', 'Downswing', 'IMPACT', 'Settle', 'Recover', 'Recover'];
       BA.ATTACK.forEach((f, i) => {
         boyRow.appendChild(makeBox(scaled(f.canvas, 2), `Slam ${i + 1}: ${atkNames[i]}`));

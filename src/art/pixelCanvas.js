@@ -14,9 +14,13 @@
     return { canvas, ctx };
   }
 
-  /** Palette colour for a sprite character, or null when the character is transparent/unknown. */
-  function paletteColor(key) {
-    const color = PALETTE[key];
+  /**
+   * Palette colour for a sprite character, or null when the character is transparent/unknown.
+   * @param {string} key
+   * @param {Object<string, string>} [palette] defaults to the shared Forest.PALETTE
+   */
+  function paletteColor(key, palette = PALETTE) {
+    const color = palette[key];
     return color && color !== 'transparent' ? color : null;
   }
 
@@ -27,11 +31,12 @@
    * @param {number} [offsetX] left edge, in canvas pixels
    * @param {number} [offsetY] top edge, in canvas pixels
    * @param {number} [pixelSize] size of each art pixel, in canvas pixels
+   * @param {Object<string, string>} [palette] defaults to the shared Forest.PALETTE
    */
-  function drawAsciiArt(ctx, rows, offsetX = 0, offsetY = 0, pixelSize = 1) {
+  function drawAsciiArt(ctx, rows, offsetX = 0, offsetY = 0, pixelSize = 1, palette = PALETTE) {
     rows.forEach((row, y) => {
       for (let x = 0; x < row.length; x++) {
-        const color = paletteColor(row[x]);
+        const color = paletteColor(row[x], palette);
         if (!color) continue;
         ctx.fillStyle = color;
         ctx.fillRect(offsetX + x * pixelSize, offsetY + y * pixelSize, pixelSize, pixelSize);
@@ -40,9 +45,9 @@
   }
 
   /** Render ASCII pixel art to a new canvas sized to the first row's width. */
-  function asciiToCanvas(rows, pixelSize = 1) {
+  function asciiToCanvas(rows, pixelSize = 1, palette = PALETTE) {
     const { canvas, ctx } = createPixelCanvas(rows[0].length * pixelSize, rows.length * pixelSize);
-    drawAsciiArt(ctx, rows, 0, 0, pixelSize);
+    drawAsciiArt(ctx, rows, 0, 0, pixelSize, palette);
     return canvas;
   }
 

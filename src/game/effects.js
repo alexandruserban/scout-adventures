@@ -76,6 +76,17 @@
     return null;
   }
 
+  /** CSS colour of the first opaque pixel inside a square block of RGBA canvas data, or null. */
+  function firstOpaquePixelInBlock(pixels, width, height, left, top, blockSize) {
+    for (let y = top; y < Math.min(top + blockSize, height); y++) {
+      for (let x = left; x < Math.min(left + blockSize, width); x++) {
+        const i = (y * width + x) * 4;
+        if (pixels[i + 3] > 128) return `rgb(${pixels[i]}, ${pixels[i + 1]}, ${pixels[i + 2]})`;
+      }
+    }
+    return null;
+  }
+
   class EffectsSystem {
     constructor(scene) {
       this.scene = scene;
@@ -132,6 +143,26 @@
       for (let top = 0; top < height; top += DEBRIS_CHUNK) {
         for (let left = 0; left < width; left += DEBRIS_CHUNK) {
           const color = firstColorInBlock(rows, left, top, DEBRIS_CHUNK);
+          if (!color) continue;
+
+          const x = centerX + (left + DEBRIS_CHUNK / 2 - width / 2) * worldUnitsPerPixel;
+          const y = centerY + (height / 2 - top - DEBRIS_CHUNK / 2) * worldUnitsPerPixel;
+          this.spawnDebrisChunk(color, x, y, x - centerX, y - centerY, worldUnitsPerPixel);
+        }
+      }
+    }
+
+    /**
+     * Like shatterSprite, but for art that's only available as a painted canvas
+     * (e.g. sprites drawn with their own palette).
+     */
+    shatterCanvas(canvas, centerX, centerY, worldUnitsPerPixel) {
+      const { width, height } = canvas;
+      const pixels = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+
+      for (let top = 0; top < height; top += DEBRIS_CHUNK) {
+        for (let left = 0; left < width; left += DEBRIS_CHUNK) {
+          const color = firstOpaquePixelInBlock(pixels, width, height, left, top, DEBRIS_CHUNK);
           if (!color) continue;
 
           const x = centerX + (left + DEBRIS_CHUNK / 2 - width / 2) * worldUnitsPerPixel;

@@ -5,6 +5,20 @@
   const Boy = Forest.BoySprites;
   const Mushroom = Forest.MushroomSprites;
   const Environment = Forest.EnvironmentSprites;
+  const SkyArt = Forest.SkyCreatureSprites;
+
+  /**
+   * Every frame of one sky creature, each with a white "just got hit" twin.
+   * @returns {Object<string, {normal: object, flash: object}>} frame name -> sprites
+   */
+  function loadCreatureFrames({ palette, frames }) {
+    const result = {};
+    Object.entries(frames).forEach(([frameName, rows]) => {
+      const canvas = asciiToCanvas(rows, 1, palette);
+      result[frameName] = { normal: createSprite(canvas), flash: createSprite(createWhiteSilhouette(canvas)) };
+    });
+    return result;
+  }
 
   function loadGameSprites() {
     const mushroomSquashCanvas = asciiToCanvas(Mushroom.squash);
@@ -32,6 +46,11 @@
         squashFlash: createSprite(createWhiteSilhouette(mushroomSquashCanvas)),
         dazed: createSprite(asciiToCanvas(Mushroom.dazed))
       },
+      /** kind (nutling, thornback, ...) -> frame name -> { normal, flash } */
+      skyCreatures: Object.fromEntries(
+        Object.entries(SkyArt.creatures).map(([kind, art]) => [kind, loadCreatureFrames(art)])
+      ),
+      fireball: createSprite(asciiToCanvas(SkyArt.fireball.rows, 1, SkyArt.fireball.palette)),
       oakTree: createSprite(Environment.createOakTree()),
       grassTile: createSprite(Environment.createGrassTile()),
       flowerTuft: createSprite(Environment.createFlowerTuft())

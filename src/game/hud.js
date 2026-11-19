@@ -7,6 +7,8 @@
       this.playerStateBadge = document.getElementById('inspector-boy-state');
       this.mushroomStateBadge = document.getElementById('inspector-mushroom-state');
       this.overlayElement = document.getElementById('game-overlay');
+      this.bannerElement = document.getElementById('wave-banner');
+      this.lastScoreHtml = null;
     }
 
     showHealth(hp, maxHp) {
@@ -19,8 +21,38 @@
       this.heartsElement.innerHTML = html;
     }
 
-    showScore(defeatedCount, totalCount) {
-      this.scoreElement.textContent = `MUSHROOMS DEFEATED: ${defeatedCount} / ${totalCount}`;
+    /**
+     * Objective text, with an optional smaller second line.
+     * Cheap to call every frame: the DOM is only touched when the text changes.
+     */
+    showScore(mainLine, detailLine = '') {
+      const html = detailLine
+        ? `${mainLine}<span class="hud-score-detail">${detailLine}</span>`
+        : mainLine;
+      if (html === this.lastScoreHtml) return;
+      this.lastScoreHtml = html;
+      this.scoreElement.innerHTML = html;
+    }
+
+    /**
+     * Big announcement in the middle of the screen that fades out by itself.
+     * @param {object} banner
+     * @param {string} banner.title
+     * @param {string} banner.subtitle
+     * @param {'wave'|'boss'|'cleared'} banner.variant colour scheme
+     * @param {number} banner.seconds how long it stays up
+     */
+    showBanner({ title, subtitle, variant, seconds }) {
+      const banner = this.bannerElement;
+      banner.innerHTML = `<div class="banner-title">${title}</div><div class="banner-subtitle">${subtitle}</div>`;
+      banner.className = '';
+      void banner.offsetWidth; // restart the CSS animation
+      banner.style.animationDuration = `${seconds}s`;
+      banner.className = `show ${variant}`;
+    }
+
+    hideBanner() {
+      this.bannerElement.className = '';
     }
 
     /** Show the boy's state and the state of whichever mushroom is closest to him. */
@@ -35,24 +67,21 @@
       }
     }
 
-    showGameOver(onRestart) {
+    /**
+     * @param {() => void} onRestart
+     * @param {{wave:number, foesDefeated:number, bestWave:number, isNewBest:boolean}} run
+     */
+    showGameOver(onRestart, { wave, foesDefeated, bestWave, isNewBest }) {
+      const message = wave === 0
+        ? 'The evil forest mushrooms overwhelmed the boy...'
+        : `The boy fell on WAVE ${wave} after defeating ${foesDefeated} foes.<br><br>`
+          + (isNewBest ? '&#9733; NEW BEST WAVE! &#9733;' : `BEST: WAVE ${bestWave}`);
       this.showOverlay({
         variant: 'game-over',
         titleClass: 'text-red',
         title: 'DEFEATED!',
-        message: 'The evil forest mushrooms overwhelmed the boy...',
+        message,
         buttonLabel: 'PRESS [ R ] TO TRY AGAIN',
-        onRestart
-      });
-    }
-
-    showVictory(onRestart) {
-      this.showOverlay({
-        variant: 'victory',
-        titleClass: 'text-green',
-        title: 'FOREST CLEARED!',
-        message: 'All evil mushrooms have been vanquished! The ancient forest is safe!',
-        buttonLabel: 'PRESS [ R ] TO PLAY AGAIN',
         onRestart
       });
     }

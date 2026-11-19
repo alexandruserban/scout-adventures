@@ -142,6 +142,7 @@
       this.scaleX = 1; // squash & stretch
       this.scaleY = 1;
 
+      this.maxHp = MAX_HP;
       this.hp = MAX_HP;
       this.jumpsRemaining = MAX_JUMPS;
       this.jumpBufferSeconds = 0;
@@ -270,6 +271,23 @@
 
       this.events.onHealthChanged(this.hp);
       if (this.hp <= 0) this.events.onDefeated();
+    }
+
+    /** Restore health (never above the maximum). Does nothing once defeated. */
+    heal(amount) {
+      if (this.isDefeated || this.hp >= this.maxHp) return;
+      this.hp = Math.min(this.maxHp, this.hp + amount);
+      Sfx.heal();
+      this.particles.burst(this.x, this.y + this.height * 0.6, 12, '#ff6b6b', 1.0, 0.7);
+      this.particles.burst(this.x, this.y + this.height * 0.6, 8, '#86efac', 0.8, 0.6);
+      this.events.onHealthChanged(this.hp);
+    }
+
+    /** Grant extra heart containers, up to `cap`, and fill them up. */
+    raiseMaxHp(amount, cap) {
+      if (this.isDefeated) return;
+      this.maxHp = Math.min(cap, this.maxHp + amount);
+      this.heal(this.maxHp);
     }
 
     // ==========================================

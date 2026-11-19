@@ -38,7 +38,7 @@
         <span id="inspector-boy-state" class="state-badge">IDLE</span>
       </div>
       <div class="state-row">
-        <span>MUSHROOM:</span>
+        <span>ENEMY:</span>
         <span id="inspector-mushroom-state" class="state-badge">PATROL</span>
       </div>
     </div>
@@ -85,7 +85,10 @@
     </div>
   </div>
 
-  <!-- Game Over & Victory Overlay Modal -->
+  <!-- Wave announcements (fade in and out by themselves) -->
+  <div id="wave-banner"></div>
+
+  <!-- Game Over Overlay Modal -->
   <div id="game-overlay"></div>
 
   <!-- Sprite Art Showcase Modal -->
@@ -117,6 +120,7 @@
   <script src="src/art/palette.js"></script>
   <script src="src/art/pixelCanvas.js"></script>
   <script src="src/art/mushroomSprites.js"></script>
+  <script src="src/art/skyCreatureSprites.js"></script>
   <script src="src/art/environmentSprites.js"></script>
   <script src="src/art/boySprites.js"></script>
   <script src="src/art/backgroundPainters.js"></script>
@@ -146,6 +150,8 @@
   <script src="src/game/hud.js"></script>
   <script src="src/game/player.js"></script>
   <script src="src/game/evilMushroom.js"></script>
+  <script src="src/game/skyCreatures.js"></script>
+  <script src="src/game/waveDirector.js"></script>
   <script src="src/game/main.js"></script>
 </body>
 </html>

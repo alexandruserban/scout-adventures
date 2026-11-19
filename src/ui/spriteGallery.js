@@ -4,6 +4,7 @@
   const Boy = Forest.BoySprites;
   const Mushroom = Forest.MushroomSprites;
   const Environment = Forest.EnvironmentSprites;
+  const SkyArt = Forest.SkyCreatureSprites;
 
   const overlay = document.getElementById('gallery-overlay');
   const content = document.getElementById('gallery-content');
@@ -56,6 +57,17 @@
       { canvas: asciiToCanvas(Mushroom.aggro, ZOOM), caption: 'Aggro (Fangs)' },
       { canvas: asciiToCanvas(Mushroom.squash, ZOOM), caption: 'Hit: Squash' },
       { canvas: asciiToCanvas(Mushroom.dazed, ZOOM), caption: 'Hit: Dazed' }
+    ]);
+
+    const skyCreatureFrames = Object.values(SkyArt.creatures).flatMap((creature, tierIndex) =>
+      Object.entries(creature.frames).map(([frameName, rows]) => ({
+        canvas: asciiToCanvas(rows, ZOOM, creature.palette),
+        caption: `T${tierIndex + 1} ${creature.name}: ${frameName}`
+      }))
+    );
+    addSection('SKY CREATURES (ENDLESS WAVES)', [
+      ...skyCreatureFrames,
+      { canvas: asciiToCanvas(SkyArt.fireball.rows, ZOOM, SkyArt.fireball.palette), caption: 'Golem Fireball' }
     ]);
 
     addSection('STATIC FOREST ASSETS', [

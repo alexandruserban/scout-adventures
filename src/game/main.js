@@ -1,8 +1,16 @@
 /**
  * Entry point: builds the world, wires the systems together, and runs the game loop.
+ *
+ * The game starts with the evil mushrooms. Once they're all defeated, endless waves of
+ * creatures start falling from the sky (see WaveDirector) until the boy is defeated.
  */
 (function (Forest) {
   const { Config, LevelData } = Forest;
+  const Sfx = Forest.SoundEffects;
+
+  /** Hearts gained for beating a boss wave can't go beyond this. */
+  const MAX_HEARTS = 6;
+  const BEST_WAVE_STORAGE_KEY = 'forest-pixel-adventure.bestWave';
 
   // ==========================================
   // World setup
@@ -40,71 +48,169 @@
   Forest.TouchControls.bind(input);
 
   /** Systems that the player and enemies use to affect the world. */
-  const world = { scene: stage.scene, sprites, input, particles, effects, hitStop, cameraController };
+  const world = {
+    scene: stage.scene,
+    sprites,
+    input,
+    particles,
+    effects,
+    hitStop,
+    cameraController,
+    /** Adds an enemy created mid-fight (e.g. the halves of a split Thunder Jelly). */
+    spawnEnemy: enemy => enemies.push(enemy)
+  };
+  world.projectiles = new Forest.ProjectileSystem(world);
 
   const player = new Forest.Player(world, {
-    onHealthChanged: refreshHud,
-    onDefeated: () => hud.showGameOver(restartGame),
-    onSlamLanded: hitMushroomsInArea
+    onHealthChanged: refreshHealth,
+    onDefeated: showGameOver,
+    onSlamLanded: hitEnemiesInArea
   });
 
-  let mushrooms = [];
+  /** Mushrooms and sky creatures alike. */
+  let enemies = [];
   let mushroomsDefeated = 0;
+  let foesDefeated = 0;
   const totalMushrooms = LevelData.mushroomSpawns.length;
 
+  const waves = new Forest.WaveDirector({
+    spawnCreature: (kind, x, stats) => {
+      enemies.push(new Forest.SkyCreatures[kind](world, { x, stats, onDefeated: onEnemyDefeated }));
+    },
+    countLivingCreatures: () => enemies.filter(enemy => !enemy.isGone).length,
+    getPlayerX: () => player.x,
+    onWaveAnnounced: announceWave,
+    onWaveCleared: rewardWaveCleared
+  });
+
   function spawnMushrooms() {
-    mushrooms = LevelData.mushroomSpawns.map(spawn => new Forest.EvilMushroom(world, spawn, onMushroomDefeated));
+    LevelData.mushroomSpawns.forEach(spawn => {
+      enemies.push(new Forest.EvilMushroom(world, spawn, onEnemyDefeated));
+    });
   }
 
   // ==========================================
   // Game rules
   // ==========================================
-  function onMushroomDefeated() {
-    mushroomsDefeated++;
-    refreshHud();
-  }
-
-  function refreshHud() {
-    hud.showHealth(player.hp, player.maxHp);
-    hud.showScore(mushroomsDefeated, totalMushrooms);
-    if (mushroomsDefeated >= totalMushrooms) {
-      hud.showVictory(restartGame);
+  function onEnemyDefeated(enemy) {
+    foesDefeated++;
+    if (enemy instanceof Forest.EvilMushroom) {
+      mushroomsDefeated++;
+      // The last mushroom angers the sky itself
+      if (mushroomsDefeated >= totalMushrooms) waves.start();
     }
   }
 
-  /** The sword slam damages every mushroom inside its hit area. */
-  function hitMushroomsInArea(hitArea) {
-    mushrooms.forEach(mushroom => {
-      if (!mushroom.isHittable || !mushroom.isInsideArea(hitArea)) return;
-
-      mushroom.takeHit(1, player.x);
-      hitStop.trigger(0.06);
-      // Metallic hit sparks
-      particles.burst(mushroom.x, mushroom.y + 0.6, 9, '#ffeaa7', 1.4, 0.38);
-      particles.burst(mushroom.x, mushroom.y + 0.6, 5, '#ffffff', 1.0, 0.25);
+  function announceWave(wave) {
+    Sfx.waveStart();
+    hud.showBanner({
+      title: `WAVE ${wave.number}: ${wave.name}`,
+      subtitle: wave.flavor,
+      variant: wave.isBoss ? 'boss' : 'wave',
+      seconds: 3.2
     });
   }
 
-  function updateMushrooms(deltaSeconds) {
-    mushrooms.forEach(mushroom => {
-      mushroom.update(deltaSeconds, player);
-      if (mushroom.canHurtPlayer && mushroom.isTouching(player)) {
-        player.takeDamage(1, mushroom.x);
+  /** A heart back after every wave; an extra heart container after each boss. */
+  function rewardWaveCleared(wave) {
+    Sfx.waveCleared();
+    let reward = player.hp < player.maxHp ? '+1 HEART' : 'FULL HEALTH!';
+    if (wave.isBoss && player.maxHp < MAX_HEARTS) {
+      player.raiseMaxHp(1, MAX_HEARTS);
+      reward = '+1 MAX HEART & FULLY HEALED!';
+    } else {
+      player.heal(1);
+    }
+    hud.showBanner({
+      title: `WAVE ${wave.number} CLEARED!`,
+      subtitle: `${reward} The sky is rumbling again...`,
+      variant: 'cleared',
+      seconds: 2.4
+    });
+  }
+
+  function refreshHealth() {
+    hud.showHealth(player.hp, player.maxHp);
+  }
+
+  function refreshScore() {
+    if (!waves.isActive) {
+      hud.showScore(`MUSHROOMS DEFEATED: ${mushroomsDefeated} / ${totalMushrooms}`);
+    } else {
+      hud.showScore(`WAVE ${waves.waveNumber} &middot; FOES LEFT: ${waves.remainingFoes}`, `TOTAL DEFEATED: ${foesDefeated}`);
+    }
+  }
+
+  function showGameOver() {
+    const previousBest = loadBestWave();
+    const isNewBest = waves.waveNumber > previousBest;
+    if (isNewBest) saveBestWave(waves.waveNumber);
+    hud.showGameOver(restartGame, {
+      wave: waves.waveNumber,
+      foesDefeated,
+      bestWave: Math.max(previousBest, waves.waveNumber),
+      isNewBest
+    });
+  }
+
+  function loadBestWave() {
+    try {
+      return Number(localStorage.getItem(BEST_WAVE_STORAGE_KEY)) || 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  function saveBestWave(wave) {
+    try {
+      localStorage.setItem(BEST_WAVE_STORAGE_KEY, String(wave));
+    } catch (error) {
+      // Storage unavailable (private mode, blocked): the best score just isn't remembered
+    }
+  }
+
+  /** The sword slam damages every enemy inside its hit area and swats fireballs out of the air. */
+  function hitEnemiesInArea(hitArea) {
+    enemies.forEach(enemy => {
+      if (!enemy.isHittable || !enemy.isInsideArea(hitArea)) return;
+
+      enemy.takeHit(1, player.x);
+      hitStop.trigger(0.06);
+      // Metallic hit sparks
+      particles.burst(enemy.x, enemy.centerY, 9, '#ffeaa7', 1.4, 0.38);
+      particles.burst(enemy.x, enemy.centerY, 5, '#ffffff', 1.0, 0.25);
+    });
+
+    if (world.projectiles.destroyInArea(hitArea) > 0) hitStop.trigger(0.05);
+  }
+
+  function updateEnemies(deltaSeconds) {
+    enemies.forEach(enemy => {
+      enemy.update(deltaSeconds, player);
+      if (enemy.canHurtPlayer && enemy.isTouching(player)) {
+        player.takeDamage(enemy.damage || 1, enemy.x);
       }
     });
+    enemies = enemies.filter(enemy => !enemy.isGone);
   }
 
   function restartGame() {
     hud.hideOverlay();
+    hud.hideBanner();
     player.reset(LevelData.playerStartX);
     effects.clear();
+    world.projectiles.clear();
     hitStop.reset();
     cameraController.stopShake();
 
-    mushrooms.forEach(mushroom => mushroom.remove());
+    enemies.forEach(enemy => enemy.remove());
+    enemies = [];
+    waves.reset();
     spawnMushrooms();
     mushroomsDefeated = 0;
-    refreshHud();
+    foesDefeated = 0;
+    refreshHealth();
+    refreshScore();
   }
 
   // ==========================================
@@ -121,14 +227,17 @@
     const gameDeltaSeconds = hitStop.consume(realDeltaSeconds);
 
     player.update(gameDeltaSeconds);
-    updateMushrooms(gameDeltaSeconds);
+    if (!player.isDefeated) waves.update(gameDeltaSeconds);
+    updateEnemies(gameDeltaSeconds);
+    world.projectiles.update(gameDeltaSeconds, player);
     particles.update(gameDeltaSeconds);
     ambientLeaves.update(gameDeltaSeconds);
     effects.update(gameDeltaSeconds);
 
     cameraController.update(player, realDeltaSeconds);
     background.update(stage.camera.position.x, stage.camera.position.y, realDeltaSeconds);
-    hud.showInspector(player, mushrooms);
+    hud.showInspector(player, enemies);
+    refreshScore();
 
     stage.render();
   }

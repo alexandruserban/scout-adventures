@@ -319,15 +319,39 @@ body, html {
 }
 
 /* Mobile / On-Screen Touch Controls */
+:root {
+  --touch-size: clamp(52px, min(14vw, 18vh), 72px);
+}
+
 #touch-controls {
   position: absolute;
-  bottom: 70px;
-  left: 20px;
-  right: 20px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  align-items: flex-end;
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
   display: none;
   justify-content: space-between;
   pointer-events: none;
   z-index: 25;
+}
+
+.menu-toggle {
+  width: 40px;
+  height: 40px;
+  pointer-events: auto;
+  background: rgba(20, 33, 30, 0.8);
+  border: 3px solid #4fa354;
+  border-radius: 8px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 18px;
+  box-shadow: 0 3px 0 #1b4d1b;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.menu-toggle[aria-expanded="true"] {
+  background: #3c8b3e;
 }
 
 .touch-cluster {
@@ -337,14 +361,16 @@ body, html {
 }
 
 .touch-btn {
-  width: 54px;
-  height: 54px;
+  width: var(--touch-size);
+  height: var(--touch-size);
   background: rgba(20, 33, 30, 0.8);
-  border: 3px solid #4fa354;
-  border-radius: 8px;
+  border: 4px solid #4fa354;
+  border-radius: 12px;
   color: #ffffff;
   font-family: inherit;
-  font-size: 14px;
+  font-size: calc(var(--touch-size) * 0.38);
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -449,8 +475,31 @@ body, html {
   text-align: center;
 }
 
-@media (max-width: 768px) {
+/* Show touch buttons on narrow screens and on any touch-first device (incl. landscape phones) */
+@media (max-width: 768px), (pointer: coarse) {
   #touch-controls { display: flex; }
+
+  /* The menu bar is hidden until the ☰ toggle opens it; it then pops up above the touch buttons */
+  #controls-bar {
+    display: none;
+    bottom: calc(var(--touch-size) + 28px + env(safe-area-inset-bottom, 0px));
+    flex-wrap: wrap;
+    justify-content: center;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    z-index: 26;
+  }
+  #controls-bar.open { display: flex; }
+  /* Keyboard hints don't apply on touch screens */
+  #controls-bar .control-item { display: none; }
+  #controls-bar .hud-btn { font-size: 9px; padding: 10px 12px; }
+}
+
+@media (min-width: 769px) and (pointer: fine) {
+  .menu-toggle { display: none; }
+}
+
+@media (max-width: 768px) {
   #controls-bar { font-size: 7px; padding: 6px 10px; gap: 8px; }
   .state-inspector { min-width: 180px; }
 }

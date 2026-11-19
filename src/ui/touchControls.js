@@ -13,19 +13,39 @@
       const button = document.getElementById(buttonId);
       if (!button) return;
 
+      let held = false;
       const press = event => {
         event.preventDefault();
+        held = true;
         input.press(action);
       };
       const release = event => {
         event.preventDefault();
+        if (!held) return;
+        held = false;
         input.release(action);
       };
 
       button.addEventListener('touchstart', press);
       button.addEventListener('touchend', release);
+      button.addEventListener('touchcancel', release);
       button.addEventListener('mousedown', press);
       button.addEventListener('mouseup', release);
+      button.addEventListener('mouseleave', release);
+    });
+
+    bindMenuToggle();
+  }
+
+  /** The ☰ button shows/hides the settings bar (music, sound, CRT, gallery) on touch screens. */
+  function bindMenuToggle() {
+    const toggle = document.getElementById('btn-menu-toggle');
+    const bar = document.getElementById('controls-bar');
+    if (!toggle || !bar) return;
+
+    toggle.addEventListener('click', () => {
+      const open = bar.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', String(open));
     });
   }
 

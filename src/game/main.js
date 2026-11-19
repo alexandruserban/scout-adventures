@@ -7,9 +7,8 @@
 (function (Forest) {
   const { Config, LevelData } = Forest;
   const Sfx = Forest.SoundEffects;
+  const { Difficulty } = Forest;
 
-  /** Hearts gained for beating a boss wave can't go beyond this. */
-  const MAX_HEARTS = 6;
   const BEST_WAVE_STORAGE_KEY = 'forest-pixel-adventure.bestWave';
 
   // ==========================================
@@ -111,15 +110,19 @@
     });
   }
 
-  /** A heart back after every wave; an extra heart container after each boss. */
+  /** Hearts back after every wave (depending on difficulty); an extra heart container after each boss. */
   function rewardWaveCleared(wave) {
     Sfx.waveCleared();
-    let reward = player.hp < player.maxHp ? '+1 HEART' : 'FULL HEALTH!';
-    if (wave.isBoss && player.maxHp < MAX_HEARTS) {
-      player.raiseMaxHp(1, MAX_HEARTS);
-      reward = '+1 MAX HEART & FULLY HEALED!';
+    const { heartsPerWaveCleared, maxHearts } = Difficulty.current;
+    let reward;
+    if (wave.isBoss) {
+      player.raiseMaxHp(1, maxHearts);
+      reward = 'BOSS DOWN - FULLY HEALED!';
+    } else if (heartsPerWaveCleared === 0) {
+      reward = 'NO HEALING ON HARD!';
     } else {
-      player.heal(1);
+      reward = player.hp < player.maxHp ? `+${heartsPerWaveCleared} HEART${heartsPerWaveCleared > 1 ? 'S' : ''}` : 'FULL HEALTH!';
+      player.heal(heartsPerWaveCleared);
     }
     hud.showBanner({
       title: `WAVE ${wave.number} CLEARED!`,
@@ -153,9 +156,14 @@
     });
   }
 
+  /** Best wave is tracked separately for each difficulty. */
+  function bestWaveKey() {
+    return `${BEST_WAVE_STORAGE_KEY}.${Difficulty.current.id}`;
+  }
+
   function loadBestWave() {
     try {
-      return Number(localStorage.getItem(BEST_WAVE_STORAGE_KEY)) || 0;
+      return Number(localStorage.getItem(bestWaveKey())) || 0;
     } catch (error) {
       return 0;
     }
@@ -163,7 +171,7 @@
 
   function saveBestWave(wave) {
     try {
-      localStorage.setItem(BEST_WAVE_STORAGE_KEY, String(wave));
+      localStorage.setItem(bestWaveKey(), String(wave));
     } catch (error) {
       // Storage unavailable (private mode, blocked): the best score just isn't remembered
     }
@@ -197,7 +205,7 @@
   function restartGame() {
     hud.hideOverlay();
     hud.hideBanner();
-    player.reset(LevelData.playerStartX);
+    player.reset(LevelData.playerStartX, Difficulty.current.startHearts);
     effects.clear();
     world.projectiles.clear();
     hitStop.reset();
@@ -212,6 +220,17 @@
     refreshHealth();
     refreshScore();
   }
+
+  // A new difficulty starts a fresh run with that many hearts
+  Difficulty.onChange(level => {
+    restartGame();
+    hud.showBanner({
+      title: `DIFFICULTY: ${level.label}`,
+      subtitle: `${level.startHearts} hearts. A fresh adventure begins!`,
+      variant: level.id === 'HARD' ? 'boss' : 'cleared',
+      seconds: 2.2
+    });
+  });
 
   // ==========================================
   // Game loop

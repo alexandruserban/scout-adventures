@@ -68,7 +68,8 @@
     </div>
     <button id="btn-music" class="hud-btn">🎵 MUSIC: OFF</button>
     <button id="btn-sound" class="hud-btn">🔊 SOUND: ON</button>
-    <button id="btn-crt" class="hud-btn">📺 CRT: ON</button>
+    <button id="btn-crt" class="hud-btn" title="Retro TV scanlines">📺 CRT: ON</button>
+    <button id="btn-difficulty" class="hud-btn" title="Difficulty (restarts the game)">⚔️ NORMAL</button>
     <button id="btn-gallery" class="hud-btn">🎨 SPRITE GALLERY</button>
   </div>
 
@@ -114,6 +115,7 @@
   <!-- Core helpers -->
   <script src="src/core/config.js"></script>
   <script src="src/core/mathUtils.js"></script>
+  <script src="src/core/difficulty.js"></script>
   <script src="src/core/graphics.js"></script>
 
   <!-- Pixel art, painted once at load time -->
@@ -133,6 +135,7 @@
   <!-- Page UI (toolbar buttons, touch buttons, gallery) -->
   <script src="src/ui/audioControls.js"></script>
   <script src="src/ui/crtFilter.js"></script>
+  <script src="src/ui/difficultyControls.js"></script>
   <script src="src/ui/touchControls.js"></script>
   <script src="src/ui/spriteGallery.js"></script>
 

@@ -23,6 +23,10 @@
   /** Kinds that can appear as random escorts in later cycles (the golem is only ever the boss). */
   const ESCORT_KINDS = ['nutling', 'thornback', 'gloomwing', 'jelly'];
 
+  const BOSS_KIND = 'golem';
+  /** The boss gets this many times the difficulty's health bonus (e.g. +3 on Hard, -3 on Easy). */
+  const BOSS_HP_BONUS_SCALE = 3;
+
   const WAVES = [
     {
       name: 'NUTLING RAIN',
@@ -93,14 +97,16 @@
   }
 
   /**
-   * Work out what wave `number` (1, 2, 3, ...) contains.
+   * Work out what wave `number` (1, 2, 3, ...) contains at the given difficulty level.
+   * @param {number} number
+   * @param {object} difficulty a Forest.Difficulty level
    * @returns {{number:number, cycle:number, name:string, flavor:string, isBoss:boolean,
    *   spawnInterval:number, queue:{kind:string, stats:object}[]}}
    */
-  function buildWave(number) {
+  function buildWave(number, difficulty) {
     const definition = WAVES[(number - 1) % WAVES.length];
     const cycle = Math.floor((number - 1) / WAVES.length);
-    const speed = Math.min(1.6, 1 + 0.12 * cycle);
+    const speed = Math.min(1.6, 1 + 0.12 * cycle) * difficulty.creatureSpeed;
 
     const mainCount = definition.main.count + (definition.isBoss ? Math.floor(cycle / 2) : cycle);
     const mainKinds = repeat(definition.main.kind, mainCount);
@@ -116,7 +122,8 @@
       : shuffle([...mainKinds, ...escortKinds]);
 
     const statsFor = kind => ({
-      hp: BASE_STATS[kind].hp + HP_PER_CYCLE[kind] * cycle,
+      hp: Math.max(1, BASE_STATS[kind].hp + HP_PER_CYCLE[kind] * cycle
+        + difficulty.creatureHpBonus * (kind === BOSS_KIND ? BOSS_HP_BONUS_SCALE : 1)),
       damage: BASE_STATS[kind].damage,
       speed
     });
@@ -127,7 +134,7 @@
       name: cycle > 0 ? `${definition.name} +${cycle}` : definition.name,
       flavor: definition.flavor,
       isBoss: Boolean(definition.isBoss),
-      spawnInterval: definition.spawnInterval * Math.max(0.55, 1 - 0.1 * cycle),
+      spawnInterval: definition.spawnInterval * Math.max(0.55, 1 - 0.1 * cycle) * difficulty.spawnIntervalScale,
       queue: kinds.map(kind => ({ kind, stats: statsFor(kind) }))
     };
   }
@@ -172,7 +179,7 @@
 
     announceNextWave() {
       this.waveNumber++;
-      this.currentWave = buildWave(this.waveNumber);
+      this.currentWave = buildWave(this.waveNumber, Forest.Difficulty.current);
       this.queue = [...this.currentWave.queue];
       this.phase = Phase.INTRO;
       this.phaseTimer = INTRO_SECONDS;

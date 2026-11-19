@@ -307,6 +307,11 @@ body, html {
   transform: translateY(1px);
 }
 
+/* Difficulty button colour follows the selected level */
+#btn-difficulty[data-level="EASY"] { border-color: #86efac; background: #14532d; }
+#btn-difficulty[data-level="NORMAL"] { border-color: #facc15; background: #713f12; }
+#btn-difficulty[data-level="HARD"] { border-color: #f87171; background: #7f1d1d; }
+
 /* Game Overlay (Game Over / Victory) */
 #game-overlay {
   position: absolute;
@@ -395,8 +400,8 @@ body, html {
   position: absolute;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   align-items: flex-end;
-  left: calc(16px + env(safe-area-inset-left, 0px));
-  right: calc(16px + env(safe-area-inset-right, 0px));
+  left: calc(24px + env(safe-area-inset-left, 0px));
+  right: calc(24px + env(safe-area-inset-right, 0px));
   display: none;
   justify-content: space-between;
   pointer-events: none;
@@ -424,7 +429,8 @@ body, html {
 
 .touch-cluster {
   display: flex;
-  gap: 12px;
+  /* Generous spacing so thumbs don't hit the neighbouring button */
+  gap: clamp(28px, 7vw, 56px);
   pointer-events: auto;
 }
 
@@ -572,4 +578,9 @@ body, html {
   .state-inspector { min-width: 180px; }
   .banner-title { font-size: 13px; }
   .banner-subtitle { font-size: 7px; }
+}
+
+/* Short landscape phones: keep the wave banner clear of the HUD cards */
+@media (max-height: 450px) {
+  #wave-banner { top: 34%; }
 }

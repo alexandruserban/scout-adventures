@@ -28,7 +28,8 @@
   const MESH_Z = 0.3;
 
   // --- Health ---
-  const MAX_HP = 3;
+  /** Default hearts; the difficulty level normally decides (see reset). */
+  const MAX_HP = 5;
   const INVULNERABLE_SECONDS = 1.2;
 
   // --- Movement (units per second) ---
@@ -132,8 +133,8 @@
       };
     }
 
-    /** Put the boy back at full health, standing at `x`. */
-    reset(x) {
+    /** Put the boy back at full health (`maxHp` hearts), standing at `x`. */
+    reset(x, maxHp = MAX_HP) {
       this.x = x;
       this.y = GROUND_Y;
       this.velocityX = 0;
@@ -142,8 +143,8 @@
       this.scaleX = 1; // squash & stretch
       this.scaleY = 1;
 
-      this.maxHp = MAX_HP;
-      this.hp = MAX_HP;
+      this.maxHp = maxHp;
+      this.hp = maxHp;
       this.jumpsRemaining = MAX_JUMPS;
       this.jumpBufferSeconds = 0;
       this.invulnerableSeconds = 0;

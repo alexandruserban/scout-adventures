@@ -37,7 +37,7 @@
     bindMenuToggle();
   }
 
-  /** The ☰ button shows/hides the settings bar (music, sound, CRT, gallery) on touch screens. */
+  /** The ☰ button shows/hides the settings bar (music, sound, CRT, difficulty, gallery) on touch screens. */
   function bindMenuToggle() {
     const toggle = document.getElementById('btn-menu-toggle');
     const bar = document.getElementById('controls-bar');

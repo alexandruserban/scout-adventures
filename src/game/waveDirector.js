@@ -4,6 +4,9 @@
  * Waves 1-5 each introduce a tougher creature. After wave 5 the cycle repeats with
  * more health, more speed, more creatures and extra random escorts, so it goes on
  * until the boy finally falls.
+ *
+ * From wave 2, randomly generated mutants (Forest.MonsterForge) join in too, growing
+ * stronger and more numerous wave after wave.
  */
 (function (Forest) {
   const { LEVEL_START_X, LEVEL_END_X } = Forest.Config;
@@ -24,6 +27,12 @@
   const ESCORT_KINDS = ['nutling', 'thornback', 'gloomwing', 'jelly'];
 
   const BOSS_KIND = 'golem';
+
+  /** Queue entries of this kind carry a `genome` and are built by Forest.MonsterForge. */
+  const MUTANT_KIND = 'mutant';
+  const FIRST_MUTANT_WAVE = 2;
+  const WAVES_PER_EXTRA_MUTANT = 3;
+  const MAX_MUTANTS_PER_WAVE = 4;
   /** The boss gets this many times the difficulty's health bonus (e.g. +3 on Hard, -3 on Easy). */
   const BOSS_HP_BONUS_SCALE = 3;
 
@@ -101,7 +110,7 @@
    * @param {number} number
    * @param {object} difficulty a Forest.Difficulty level
    * @returns {{number:number, cycle:number, name:string, flavor:string, isBoss:boolean,
-   *   spawnInterval:number, queue:{kind:string, stats:object}[]}}
+   *   spawnInterval:number, queue:{kind:string, stats:object, genome?:object}[]}}
    */
   function buildWave(number, difficulty) {
     const definition = WAVES[(number - 1) % WAVES.length];
@@ -116,33 +125,56 @@
       escortKinds.push(ESCORT_KINDS[Math.floor(Math.random() * ESCORT_KINDS.length)]);
     }
 
-    // The boss always arrives first; otherwise everything falls in a random order
-    const kinds = definition.isBoss
-      ? [...mainKinds, ...shuffle(escortKinds)]
-      : shuffle([...mainKinds, ...escortKinds]);
-
     const statsFor = kind => ({
       hp: Math.max(1, BASE_STATS[kind].hp + HP_PER_CYCLE[kind] * cycle
         + difficulty.creatureHpBonus * (kind === BOSS_KIND ? BOSS_HP_BONUS_SCALE : 1)),
       damage: BASE_STATS[kind].damage,
       speed
     });
+    const toEntry = kind => ({ kind, stats: statsFor(kind) });
+
+    const mutants = buildMutants(number, difficulty);
+
+    // The boss always arrives first; otherwise everything falls in a random order
+    const mainEntries = mainKinds.map(toEntry);
+    const otherEntries = [...escortKinds.map(toEntry), ...mutants];
+    const queue = definition.isBoss
+      ? [...mainEntries, ...shuffle(otherEntries)]
+      : shuffle([...mainEntries, ...otherEntries]);
+
+    const mutantWarning = mutants.length === 0 ? ''
+      : mutants.length === 1 ? ' Beware: a wild mutant lurks among them!'
+        : ` Beware: ${mutants.length} wild mutants lurk among them!`;
 
     return {
       number,
       cycle,
       name: cycle > 0 ? `${definition.name} +${cycle}` : definition.name,
-      flavor: definition.flavor,
+      flavor: definition.flavor + mutantWarning,
       isBoss: Boolean(definition.isBoss),
       spawnInterval: definition.spawnInterval * Math.max(0.55, 1 - 0.1 * cycle) * difficulty.spawnIntervalScale,
-      queue: kinds.map(kind => ({ kind, stats: statsFor(kind) }))
+      queue
     };
+  }
+
+  /**
+   * Randomly generated monsters (see Forest.MonsterForge) join from wave 2 on: one at first,
+   * one more every few waves, each as strong as the wave number.
+   */
+  function buildMutants(number, difficulty) {
+    if (number < FIRST_MUTANT_WAVE) return [];
+    const count = Math.min(MAX_MUTANTS_PER_WAVE, 1 + Math.floor((number - FIRST_MUTANT_WAVE) / WAVES_PER_EXTRA_MUTANT));
+    return Array.from({ length: count }, () => {
+      const genome = Forest.MonsterForge.generate({ power: number });
+      return { kind: MUTANT_KIND, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) };
+    });
   }
 
   class WaveDirector {
     /**
      * @param {object} hooks
-     * @param {(kind:string, x:number, stats:object) => void} hooks.spawnCreature
+     * @param {(entry:{kind:string, stats:object, genome?:object}, x:number) => void} hooks.spawnCreature
+     *   kind 'mutant' entries carry a Monster Forge genome; the rest name a Forest.SkyCreatures class
      * @param {() => number} hooks.countLivingCreatures creatures still in play (including offspring)
      * @param {() => number} hooks.getPlayerX
      * @param {(wave:object) => void} hooks.onWaveAnnounced
@@ -217,14 +249,14 @@
     }
 
     spawnNext() {
-      const { kind, stats } = this.queue.shift();
+      const entry = this.queue.shift();
       const offset = randomDirection() * randomBetween(SPAWN_MIN_DISTANCE, SPAWN_SPREAD);
       const x = clamp(
         this.hooks.getPlayerX() + offset,
         LEVEL_START_X + SPAWN_EDGE_MARGIN,
         LEVEL_END_X - SPAWN_EDGE_MARGIN
       );
-      this.hooks.spawnCreature(kind, x, stats);
+      this.hooks.spawnCreature(entry, x);
     }
   }
 

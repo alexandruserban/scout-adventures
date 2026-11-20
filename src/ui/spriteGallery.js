@@ -14,6 +14,8 @@
   const ZOOM = 3;
   const SLAM_ZOOM = 2; // slam frames are twice as big, so show them smaller
   const TREE_ZOOM = 2;
+  /** One random monster per entry, from gentle to nasty. */
+  const MONSTER_POWERS = [1, 2, 3, 4, 6, 8, 10, 12];
 
   let isPopulated = false;
 
@@ -71,6 +73,8 @@
       { canvas: asciiToCanvas(SkyArt.fireball.rows, ZOOM, SkyArt.fireball.palette), caption: 'Golem Fireball' }
     ]);
 
+    addMonsterForgeSection();
+
     addSection('STATIC FOREST ASSETS', [
       { canvas: scaleCanvas(Environment.createOakTree(), TREE_ZOOM), caption: 'Ancient Oak (64x96)' },
       { canvas: scaleCanvas(Environment.createGrassTile(), ZOOM), caption: 'Grass & Soil Tile' },
@@ -78,6 +82,54 @@
     ]);
   }
 
+  /**
+   * A fresh batch of random monsters every time; click one to summon it into the forest,
+   * or reroll the whole batch. (Forest.MonsterForge loads after this script, so it's looked up lazily.)
+   */
+  function addMonsterForgeSection() {
+    const section = addSection('MONSTER FORGE (RANDOM MUTANTS) - CLICK ONE TO SUMMON IT', []);
+    const row = section.querySelector('.sprite-row');
+
+    const rerollButton = createElement('button', 'pixel-btn', '🎲 REROLL MONSTERS');
+    rerollButton.style.cssText = 'display:block; margin:12px auto 0; padding:8px 14px; font-size:8px;';
+    rerollButton.addEventListener('click', () => fillMonsterRow(row));
+    section.appendChild(rerollButton);
+
+    fillMonsterRow(row);
+  }
+
+  function fillMonsterRow(row) {
+    const Forge = Forest.MonsterForge;
+    row.innerHTML = '';
+    MONSTER_POWERS.forEach(power => {
+      const genome = Forge.generate({ power });
+      const box = createElement('div', 'sprite-box');
+      box.style.cursor = 'pointer';
+      box.title = `${Forge.describe(genome)}\nSeed ${genome.seed}, power ${power}. Click to summon.`;
+
+      const frames = createElement('div', 'monster-frames');
+      frames.style.cssText = 'display:flex; gap:6px; align-items:flex-end;';
+      frames.appendChild(Forge.paintPreview(genome, 'idle', ZOOM));
+      frames.appendChild(Forge.paintPreview(genome, 'attack', ZOOM));
+      box.appendChild(frames);
+
+      const abilities = genome.abilities.map(id => Forge.ABILITIES[id].label).join(', ') || 'No abilities';
+      const { hp, damage, speed } = genome.stats;
+      box.appendChild(createElement('div', 'sprite-caption', genome.name));
+      box.appendChild(createElement('div', 'sprite-caption', `${genome.movement.toUpperCase()} · POWER ${power}`));
+      box.appendChild(createElement('div', 'sprite-caption', `HP ${hp} · DMG ${damage} · SPD ${speed.toFixed(2)}`));
+      box.appendChild(createElement('div', 'sprite-caption', abilities));
+
+      box.addEventListener('click', () => {
+        if (!Forest.Game) return;
+        Forest.Game.summonMonster(genome);
+        close();
+      });
+      row.appendChild(box);
+    });
+  }
+
+  /** @returns {HTMLElement} the section, so callers can add to it */
   function addSection(title, items) {
     const section = createElement('div', 'gallery-section');
     section.appendChild(createElement('div', 'section-name', title));
@@ -91,6 +143,7 @@
     });
     section.appendChild(row);
     content.appendChild(section);
+    return section;
   }
 
   function createElement(tag, className, text) {

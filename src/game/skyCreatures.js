@@ -104,6 +104,8 @@
      *   cameraController, projectiles, spawnEnemy)
      * @param {object} options
      * @param {string} options.kind key into world.sprites.skyCreatures
+     * @param {Object<string, {normal: object, flash: object}>} [options.frames]
+     *   ready-made frames to use instead of looking `kind` up (e.g. generated monsters)
      * @param {number} options.x where it lands
      * @param {{hp:number, speed:number, damage:number}} options.stats
      * @param {number} options.spriteScale on-screen size relative to the boy's pixel size
@@ -113,7 +115,7 @@
      * @param {{y:number, velocityX:number, velocityY:number}} [options.launch]
      *   start mid-air with this motion instead of dropping from the sky
      */
-    constructor(world, { kind, x, stats, spriteScale, fallFrame, colors, onDefeated, launch }) {
+    constructor(world, { kind, frames, x, stats, spriteScale, fallFrame, colors, onDefeated, launch }) {
       this.world = world;
       this.scene = world.scene;
       this.particles = world.particles;
@@ -123,7 +125,7 @@
       this.onDefeated = onDefeated;
       this.colors = colors;
 
-      this.frames = world.sprites.skyCreatures[kind];
+      this.frames = frames || world.sprites.skyCreatures[kind];
       this.unitsPerPixel = PIXEL_SCALE * spriteScale;
       const firstSprite = this.frames[fallFrame].normal;
       this.width = firstSprite.width * this.unitsPerPixel;
@@ -1184,6 +1186,8 @@
   }
 
   Forest.CreatureState = CreatureState;
+  /** Base class, also used by the random monsters of the Monster Forge (src/monsters). */
+  Forest.SkyCreature = SkyCreature;
   Forest.ProjectileSystem = ProjectileSystem;
   /** Creature classes by kind, in the order the waves introduce them. */
   Forest.SkyCreatures = Object.freeze({

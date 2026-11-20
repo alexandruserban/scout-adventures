@@ -73,8 +73,11 @@
   const totalMushrooms = LevelData.mushroomSpawns.length;
 
   const waves = new Forest.WaveDirector({
-    spawnCreature: (kind, x, stats) => {
-      enemies.push(new Forest.SkyCreatures[kind](world, { x, stats, onDefeated: onEnemyDefeated }));
+    spawnCreature: ({ kind, stats, genome }, x) => {
+      const options = { x, stats, onDefeated: onEnemyDefeated };
+      enemies.push(genome
+        ? Forest.MonsterForge.create(world, { ...options, genome })
+        : new Forest.SkyCreatures[kind](world, options));
     },
     countLivingCreatures: () => enemies.filter(enemy => !enemy.isGone).length,
     getPlayerX: () => player.x,
@@ -260,6 +263,30 @@
 
     stage.render();
   }
+
+  // ==========================================
+  // Hooks for the sprite gallery and the browser console
+  // ==========================================
+  const SUMMON_DISTANCE = [2.5, 4];
+
+  Forest.Game = {
+    /**
+     * Drop a Monster Forge monster near the boy, e.g. from the browser console:
+     *   Forest.Game.summonMonster({ power: 6 })
+     *   Forest.Game.summonMonster({ seed: 1234, power: 3, movement: 'flyer' })
+     * @param {object} [genomeOrOptions] a ready genome, or options for Forest.MonsterForge.generate
+     * @returns {object} the monster (its .genome can be saved and summoned again)
+     */
+    summonMonster(genomeOrOptions = {}) {
+      const { MonsterForge, MathUtils } = Forest;
+      const genome = genomeOrOptions.appearance ? genomeOrOptions : MonsterForge.generate(genomeOrOptions);
+      const offset = MathUtils.randomDirection() * MathUtils.randomBetween(...SUMMON_DISTANCE);
+      const x = MathUtils.clamp(player.x + offset, Config.LEVEL_START_X + 1, Config.LEVEL_END_X - 1);
+      const monster = MonsterForge.create(world, { genome, x, onDefeated: onEnemyDefeated });
+      enemies.push(monster);
+      return monster;
+    }
+  };
 
   restartGame();
   requestAnimationFrame(runFrame);

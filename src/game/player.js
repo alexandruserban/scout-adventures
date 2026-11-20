@@ -65,6 +65,8 @@
   const IDLE_FRAME_SECONDS = 0.45;
   const WALK_FRAME_SECONDS = 0.08;
   const SQUASH_RECOVERY_RATE = 12;
+  /** Turning around on the ground: he only changes profile for this long before walking off. */
+  const TURN_PAUSE_SECONDS = 0.12;
 
   // --- Getting hit ---
   const HIT_RECOIL_SECONDS = 0.22;
@@ -147,6 +149,7 @@
       this.velocityX = 0;
       this.velocityY = 0;
       this.facing = 1; // 1 = right, -1 = left
+      this.turnSeconds = 0;
       this.scaleX = 1; // squash & stretch
       this.scaleY = 1;
 
@@ -388,11 +391,23 @@
       const direction = this.input.horizontalDirection();
       if (direction === 0) {
         this.state = PlayerState.IDLE;
+        this.turnSeconds = 0;
         this.showFrame(this.sprites.idle[0]);
         return;
       }
 
-      this.facing = direction;
+      // Turning around: flip the profile first and stay put for a moment, so a tap only turns him
+      if (direction !== this.facing) {
+        this.facing = direction;
+        this.turnSeconds = TURN_PAUSE_SECONDS;
+        this.velocityX = 0;
+        this.showFrame(this.sprites.idle[0]);
+      }
+      if (this.turnSeconds > 0) {
+        this.turnSeconds -= deltaSeconds;
+        return;
+      }
+
       this.velocityX = direction * WALK_SPEED;
       this.x += this.velocityX * deltaSeconds;
       this.advanceLoopingAnimation(this.sprites.walk, WALK_FRAME_SECONDS, deltaSeconds);

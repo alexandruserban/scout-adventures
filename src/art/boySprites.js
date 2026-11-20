@@ -401,17 +401,17 @@
    *  isImpact     the blade hits the ground: deal damage on this frame
    */
   const SLAM_KEYFRAMES = [
-    { name: 'Lift', bladeAngle: 15, handAngle: -25, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.04 },
-    { name: 'Raise', bladeAngle: 60, handAngle: 10, handReach: 7, bodyShiftX: 0, stance: 'stand', duration: 0.04 },
-    { name: 'Raise', bladeAngle: 100, handAngle: 40, handReach: 9, bodyShiftX: -1, stance: 'stand', duration: 0.04 },
-    { name: 'Overhead', bladeAngle: 125, handAngle: 45, handReach: 12, bodyShiftX: -1, stance: 'stand', duration: 0.05 },
-    { name: 'Wind-up', bladeAngle: 140, handAngle: 48, handReach: 12, bodyShiftX: -1, stance: 'stand', duration: 0.09 },
-    { name: 'Downswing', bladeAngle: 85, handAngle: 35, handReach: 10, bodyShiftX: 0, stance: 'stand', duration: 0.03, smearFrom: 140, playsSwoosh: true },
-    { name: 'Downswing', bladeAngle: 30, handAngle: 5, handReach: 8, bodyShiftX: 1, stance: 'lunge', duration: 0.03, smearFrom: 85 },
-    { name: 'IMPACT', bladeAngle: -30, handAngle: -35, handReach: 7, bodyShiftX: 1, stance: 'lunge', duration: 0.11, smearFrom: 30, isImpact: true },
-    { name: 'Settle', bladeAngle: -32, handAngle: -38, handReach: 7, bodyShiftX: 1, stance: 'lunge', duration: 0.08 },
-    { name: 'Recover', bladeAngle: -5, handAngle: -30, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.06 },
-    { name: 'Recover', bladeAngle: 15, handAngle: -25, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.05 }
+    { name: 'Lift', bladeAngle: 15, handAngle: -25, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.025 },
+    { name: 'Raise', bladeAngle: 60, handAngle: 10, handReach: 7, bodyShiftX: 0, stance: 'stand', duration: 0.025 },
+    { name: 'Raise', bladeAngle: 100, handAngle: 40, handReach: 9, bodyShiftX: -1, stance: 'stand', duration: 0.03 },
+    { name: 'Overhead', bladeAngle: 125, handAngle: 45, handReach: 12, bodyShiftX: -1, stance: 'stand', duration: 0.035 },
+    { name: 'Wind-up', bladeAngle: 140, handAngle: 48, handReach: 12, bodyShiftX: -1, stance: 'stand', duration: 0.05 },
+    { name: 'Downswing', bladeAngle: 85, handAngle: 35, handReach: 10, bodyShiftX: 0, stance: 'stand', duration: 0.025, smearFrom: 140, playsSwoosh: true },
+    { name: 'Downswing', bladeAngle: 30, handAngle: 5, handReach: 8, bodyShiftX: 1, stance: 'lunge', duration: 0.025, smearFrom: 85 },
+    { name: 'IMPACT', bladeAngle: -30, handAngle: -35, handReach: 7, bodyShiftX: 1, stance: 'lunge', duration: 0.08, smearFrom: 30, isImpact: true },
+    { name: 'Settle', bladeAngle: -32, handAngle: -38, handReach: 7, bodyShiftX: 1, stance: 'lunge', duration: 0.05 },
+    { name: 'Recover', bladeAngle: -5, handAngle: -30, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.04 },
+    { name: 'Recover', bladeAngle: 15, handAngle: -25, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.03 }
   ];
 
   /**

@@ -67,6 +67,8 @@
   const SQUASH_RECOVERY_RATE = 12;
   /** Turning around on the ground: he only changes profile for this long before walking off. */
   const TURN_PAUSE_SECONDS = 0.12;
+  /** Turning around mid-air: shorter, so steering back during a jump still feels responsive. */
+  const AIR_TURN_PAUSE_SECONDS = 0.06;
 
   // --- Getting hit ---
   const HIT_RECOIL_SECONDS = 0.22;
@@ -416,6 +418,18 @@
     /** Steer left/right while in the air. */
     applyAirControl(deltaSeconds, canTurn = true) {
       const direction = this.input.horizontalDirection();
+      // Turning around mid-air: flip the profile first and hang in place sideways for a moment
+      if (canTurn && direction !== 0 && direction !== this.facing) {
+        this.facing = direction;
+        this.turnSeconds = AIR_TURN_PAUSE_SECONDS;
+        this.velocityX = 0;
+      }
+      if (this.turnSeconds > 0) {
+        this.turnSeconds -= deltaSeconds;
+        if (direction === 0) this.turnSeconds = 0;
+        return; // gravity still pulls him down; only sideways motion pauses
+      }
+
       if (direction !== 0) {
         if (canTurn) this.facing = direction;
         this.velocityX = direction * AIR_SPEED;

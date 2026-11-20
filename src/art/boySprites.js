@@ -376,7 +376,10 @@
 
   const SLAM_STANCES = {
     stand: { near: [8, 0], far: [-8, 0] },
-    lunge: { near: [32, 45], far: [-30, 0] }
+    lunge: { near: [32, 45], far: [-30, 0] },
+    // Mid-air: knees tucked up, back leg trailing
+    airTuck: { near: [40, 75], far: [-15, 45] },
+    airExtend: { near: [20, 30], far: [-30, 20] }
   };
 
   // Blade layers drawn in order: shadow side, core, then the bright cutting edge on top
@@ -409,6 +412,18 @@
     { name: 'Settle', bladeAngle: -32, handAngle: -38, handReach: 7, bodyShiftX: 1, stance: 'lunge', duration: 0.08 },
     { name: 'Recover', bladeAngle: -5, handAngle: -30, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.06 },
     { name: 'Recover', bladeAngle: 15, handAngle: -25, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.05 }
+  ];
+
+  /**
+   * Keyframes of the mid-air slash: a quick horizontal sweep from behind the shoulder to straight ahead.
+   * Same fields as SLAM_KEYFRAMES; `isImpact` marks the frame that deals damage (the blade is level).
+   */
+  const AIR_SLASH_KEYFRAMES = [
+    { name: 'Air: Draw', bladeAngle: 165, handAngle: 140, handReach: 5, bodyShiftX: -1, stance: 'airTuck', duration: 0.045 },
+    { name: 'Air: Swing', bladeAngle: 80, handAngle: 60, handReach: 7, bodyShiftX: 0, stance: 'airTuck', duration: 0.025, smearFrom: 165, playsSwoosh: true },
+    { name: 'Air: SLASH', bladeAngle: 0, handAngle: 5, handReach: 9, bodyShiftX: 1, stance: 'airExtend', duration: 0.08, smearFrom: 80, isImpact: true },
+    { name: 'Air: Follow', bladeAngle: -20, handAngle: -15, handReach: 8, bodyShiftX: 1, stance: 'airExtend', duration: 0.06 },
+    { name: 'Air: Recover', bladeAngle: 10, handAngle: -20, handReach: 6, bodyShiftX: 0, stance: 'airTuck', duration: 0.06 }
   ];
 
   /** Unit vector for an angle in degrees, with y pointing down the canvas. */
@@ -557,6 +572,7 @@
     hitStagger,
     defeated: renderDefeated(),
     slam: SLAM_KEYFRAMES.map(renderSlamFrame),
+    airSlash: AIR_SLASH_KEYFRAMES.map(renderSlamFrame),
     SLAM_CANVAS_SIZE,
     SLAM_BODY_ORIGIN
   });

@@ -47,6 +47,7 @@
       { canvas: scaleCanvas(Boy.fall, ZOOM), caption: 'Fall' },
       { canvas: scaleCanvas(Boy.jumpSpin, ZOOM), caption: 'Double Jump Spin' },
       ...slamFrames,
+      ...Boy.airSlash.map(frame => ({ canvas: scaleCanvas(frame.canvas, SLAM_ZOOM), caption: frame.name })),
       { canvas: scaleCanvas(Boy.hitRecoil, ZOOM), caption: 'Hit: Recoil' },
       { canvas: scaleCanvas(Boy.hitStagger, ZOOM), caption: 'Hit: Stagger' },
       { canvas: scaleCanvas(Boy.defeated, ZOOM), caption: 'Defeated' }

@@ -17,6 +17,7 @@
     FALL: 'FALL',
     LAND: 'LAND',
     ATTACK: 'ATTACK',
+    AIR_ATTACK: 'AIR_ATTACK',
     HIT_RECOIL: 'HIT_RECOIL',
     HIT_STAGGER: 'HIT_STAGGER',
     DEFEATED: 'DEFEATED'
@@ -76,6 +77,12 @@
   const SLAM_HEIGHT_RATIO = 0.6;
   const SLAM_HALF_WIDTH = 1.5;
   const SLAM_HALF_HEIGHT = 1.4;
+
+  // --- Air slash hit area: a horizontal band in front of the boy at chest height ---
+  const AIR_SLASH_REACH_X = 1.1;
+  const AIR_SLASH_HEIGHT_RATIO = 0.55;
+  const AIR_SLASH_HALF_WIDTH = 1.2;
+  const AIR_SLASH_HALF_HEIGHT = 0.9;
 
   // --- Particle colours ---
   const GRASS_DUST = '#4fb835';
@@ -176,7 +183,13 @@
     get isAirborne() {
       return this.state === PlayerState.JUMP
         || this.state === PlayerState.DOUBLE_JUMP
-        || this.state === PlayerState.FALL;
+        || this.state === PlayerState.FALL
+        || this.state === PlayerState.AIR_ATTACK;
+    }
+
+    /** True while either sword attack is playing (the big sword mesh is shown). */
+    get isAttacking() {
+      return this.state === PlayerState.ATTACK || this.state === PlayerState.AIR_ATTACK;
     }
 
     get isAboveGround() {
@@ -207,14 +220,15 @@
       }
     }
 
+    /** Overhead slam on the ground; a quick horizontal slash in the air. */
     startAttack() {
-      if (this.isIncapacitated || this.state === PlayerState.ATTACK) return;
+      if (this.isIncapacitated || this.isAttacking) return;
 
-      this.enterState(PlayerState.ATTACK);
+      this.enterState(this.isAboveGround ? PlayerState.AIR_ATTACK : PlayerState.ATTACK);
       this.animationFrame = 0;
       this.bodyMesh.rotation.z = 0;
-      this.showSlamFrame(0);
-      // The swoosh plays on the downswing frame, not on the button press
+      this.showAttackFrame(0);
+      // The swoosh plays on the swing frame, not on the button press
     }
 
     jumpFromGround() {
@@ -353,6 +367,7 @@
         case PlayerState.FALL: this.updateAirborne(deltaSeconds); break;
         case PlayerState.LAND: this.updateLanding(deltaSeconds); break;
         case PlayerState.ATTACK: this.updateAttack(deltaSeconds); break;
+        case PlayerState.AIR_ATTACK: this.updateAirSlash(deltaSeconds); break;
         case PlayerState.HIT_RECOIL: this.updateHitRecoil(deltaSeconds); break;
         case PlayerState.HIT_STAGGER: this.updateHitStagger(deltaSeconds); break;
         case PlayerState.DEFEATED: this.updateDefeated(deltaSeconds); break;
@@ -383,16 +398,20 @@
       this.advanceLoopingAnimation(this.sprites.walk, WALK_FRAME_SECONDS, deltaSeconds);
     }
 
-    updateAirborne(deltaSeconds) {
-      // Air control
+    /** Steer left/right while in the air. */
+    applyAirControl(deltaSeconds, canTurn = true) {
       const direction = this.input.horizontalDirection();
       if (direction !== 0) {
-        this.facing = direction;
+        if (canTurn) this.facing = direction;
         this.velocityX = direction * AIR_SPEED;
       } else {
         this.velocityX *= AIR_DRAG;
       }
       this.x += this.velocityX * deltaSeconds;
+    }
+
+    updateAirborne(deltaSeconds) {
+      this.applyAirControl(deltaSeconds);
 
       if (this.state === PlayerState.DOUBLE_JUMP) {
         this.updateSomersault(deltaSeconds);
@@ -435,16 +454,26 @@
     /** Overhead slam: lift -> raise -> wind-up hold -> fast downswing -> IMPACT -> recover. */
     updateAttack(deltaSeconds) {
       this.velocityX = 0; // feet stay planted: the sword is heavy
+      this.advanceAttackAnimation(deltaSeconds, frame => this.landSlam(frame));
+    }
 
+    /** Mid-air slash: keeps the jump's momentum and air steering, but can't turn around mid-swing. */
+    updateAirSlash(deltaSeconds) {
+      this.applyAirControl(deltaSeconds, false);
+      this.advanceAttackAnimation(deltaSeconds, frame => this.landAirSlash(frame));
+    }
+
+    /** Step the current attack's frames, firing the swoosh and the hit on their frames. */
+    advanceAttackAnimation(deltaSeconds, onImpact) {
       this.stateTimer += deltaSeconds;
-      const frames = this.sprites.slam;
+      const frames = this.currentAttackFrames();
       const frameIndex = frameIndexAt(frames, this.stateTimer);
 
       // Fire events for every frame entered this tick (at low frame rates short frames can be skipped)
       const lastEnteredFrame = Math.min(frameIndex, frames.length - 1);
       for (let i = this.animationFrame + 1; i <= lastEnteredFrame; i++) {
         if (frames[i].playsSwoosh) Sfx.swordSwing();
-        if (frames[i].isImpact) this.landSlam(frames[i]);
+        if (frames[i].isImpact) onImpact(frames[i]);
       }
 
       if (frameIndex >= frames.length) {
@@ -453,8 +482,25 @@
       }
       if (frameIndex !== this.animationFrame) {
         this.animationFrame = frameIndex;
-        this.showSlamFrame(frameIndex);
+        this.showAttackFrame(frameIndex);
       }
+    }
+
+    /** The level blade sweeps through the air in front of him. */
+    landAirSlash(frame) {
+      const tipX = this.x + this.facing * (frame.bladeTip.x - FRAME_SIZE / 2) * UNITS_PER_PIXEL;
+      const tipY = this.y + (FRAME_SIZE - frame.bladeTip.y) * UNITS_PER_PIXEL;
+      this.particles.burst(tipX, tipY, 5, '#ffeaa7', 0.9, 0.2); // slash sparkle
+      this.events.onSlamLanded(this.getAirSlashHitArea());
+    }
+
+    getAirSlashHitArea() {
+      return {
+        centerX: this.x + this.facing * AIR_SLASH_REACH_X,
+        centerY: this.y + this.height * AIR_SLASH_HEIGHT_RATIO,
+        halfWidth: AIR_SLASH_HALF_WIDTH,
+        halfHeight: AIR_SLASH_HALF_HEIGHT
+      };
     }
 
     finishAttack() {
@@ -554,13 +600,17 @@
       setMeshSprite(this.bodyMesh, sprite);
     }
 
-    showSlamFrame(index) {
-      setMeshSprite(this.slamMesh, this.sprites.slam[index]);
+    currentAttackFrames() {
+      return this.state === PlayerState.AIR_ATTACK ? this.sprites.airSlash : this.sprites.slam;
+    }
+
+    showAttackFrame(index) {
+      setMeshSprite(this.slamMesh, this.currentAttackFrames()[index]);
     }
 
     /** Copy position, facing and squash onto the meshes. Squash scales around the feet. */
     syncMeshes() {
-      const isAttacking = this.state === PlayerState.ATTACK;
+      const isAttacking = this.isAttacking;
       this.bodyMesh.visible = !isAttacking;
       this.slamMesh.visible = isAttacking;
 

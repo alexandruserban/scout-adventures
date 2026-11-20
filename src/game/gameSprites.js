@@ -37,7 +37,8 @@
         hitStagger: createSprite(Boy.hitStagger),
         defeated: createSprite(Boy.defeated),
         // Slam frames keep their timing and event data alongside the texture
-        slam: Boy.slam.map(frame => ({ ...frame, ...createSprite(frame.canvas) }))
+        slam: Boy.slam.map(frame => ({ ...frame, ...createSprite(frame.canvas) })),
+        airSlash: Boy.airSlash.map(frame => ({ ...frame, ...createSprite(frame.canvas) }))
       },
       mushroom: {
         walk: Mushroom.walk.map(rows => createSprite(asciiToCanvas(rows))),

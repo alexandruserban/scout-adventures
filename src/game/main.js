@@ -47,6 +47,28 @@
   });
   Forest.TouchControls.bind(input);
 
+  /** Gap in CSS pixels kept between the top of the soil and the top of the touch buttons. */
+  const TOUCH_BUTTON_SOIL_MARGIN = 8;
+
+  /**
+   * On touch screens, keep the camera low enough that the buttons always sit over the soil
+   * below the grass, never over the playfield.
+   */
+  function keepTouchButtonsOverSoil() {
+    const coveredPixels = Forest.TouchControls.coveredBottomPixels();
+    if (coveredPixels <= 0) {
+      cameraController.setMaxY(Infinity);
+      return;
+    }
+    const pixelsPerUnit = window.innerHeight / stage.viewHeightUnits;
+    const soilTopY = Config.GROUND_Y - Forest.EnvironmentSprites.GRASS_DEPTH_PIXELS * Config.PIXEL_SCALE;
+    // Camera height that puts the soil top exactly the margin above the buttons
+    const soilTopScreenPixels = window.innerHeight - coveredPixels - TOUCH_BUTTON_SOIL_MARGIN;
+    cameraController.setMaxY(soilTopY - stage.viewHeightUnits / 2 + soilTopScreenPixels / pixelsPerUnit);
+  }
+  keepTouchButtonsOverSoil();
+  window.addEventListener('resize', keepTouchButtonsOverSoil);
+
   /** Systems that the player and enemies use to affect the world. */
   const world = {
     scene: stage.scene,
@@ -78,6 +100,8 @@
   let bestPointsBeforeRun = 0;
   /** True while a menu (scrapbook, gallery) covers the game. */
   let isPaused = false;
+  /** Names of the menus currently pausing the game (see Forest.Game.setPaused). */
+  const pauseReasons = new Set();
   const totalMushrooms = LevelData.mushroomSpawns.length;
 
   const waves = new Forest.WaveDirector({
@@ -188,11 +212,8 @@
   }
 
   function refreshScore() {
-    if (!waves.isActive) {
-      hud.showScore(`MUSHROOMS DEFEATED: ${mushroomsDefeated} / ${totalMushrooms}`);
-    } else {
-      hud.showScore(`WAVE ${waves.waveNumber} &middot; FOES LEFT: ${waves.remainingFoes}`, `TOTAL DEFEATED: ${foesDefeated}`);
-    }
+    // No defeated-enemy counts; just the wave number once the sky waves begin
+    hud.showScore(waves.isActive ? `WAVE ${waves.waveNumber}` : '');
   }
 
   function showGameOver() {
@@ -326,7 +347,6 @@
 
     cameraController.update(player, realDeltaSeconds);
     background.update(stage.camera.position.x, stage.camera.position.y, realDeltaSeconds);
-    hud.showInspector(player, enemies);
     refreshScore();
     refreshPoints();
 
@@ -356,9 +376,15 @@
       return monster;
     },
 
-    /** Freeze gameplay while a menu (e.g. the scrapbook) covers the game. */
-    setPaused(paused) {
-      isPaused = Boolean(paused);
+    /**
+     * Freeze gameplay while a menu (e.g. the scrapbook) covers the game. Each menu pauses
+     * under its own reason, so the game only resumes once every one of them has closed
+     * (e.g. closing the scrapbook while the ☰ menu is still open keeps it paused).
+     */
+    setPaused(paused, reason = 'default') {
+      if (paused) pauseReasons.add(reason);
+      else pauseReasons.delete(reason);
+      isPaused = pauseReasons.size > 0;
       // Don't let a key held when the menu opened stay "held" after it closes
       if (isPaused) ['left', 'right'].forEach(action => input.release(action));
     },

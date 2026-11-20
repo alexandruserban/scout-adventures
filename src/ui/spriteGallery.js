@@ -21,7 +21,7 @@
 
   function open() {
     overlay.style.display = 'flex';
-    if (Forest.Game) Forest.Game.setPaused(true);
+    if (Forest.Game) Forest.Game.setPaused(true, 'gallery');
     if (!isPopulated) {
       populate();
       isPopulated = true;
@@ -30,7 +30,7 @@
 
   function close() {
     overlay.style.display = 'none';
-    if (Forest.Game) Forest.Game.setPaused(false);
+    if (Forest.Game) Forest.Game.setPaused(false, 'gallery');
   }
 
   function populate() {

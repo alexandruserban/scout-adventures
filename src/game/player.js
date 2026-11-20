@@ -8,7 +8,6 @@
   const { FRAME_SIZE, SLAM_CANVAS_SIZE, SLAM_BODY_ORIGIN } = Forest.BoySprites;
   const Sfx = Forest.SoundEffects;
 
-  /** State names double as CSS classes in the state inspector (e.g. "state-double_jump"). */
   const PlayerState = Object.freeze({
     IDLE: 'IDLE',
     WALK: 'WALK',

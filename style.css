@@ -58,37 +58,45 @@ body, html {
 }
 
 /* HUD Overlay */
+/* All stats share one line along the top of the screen */
 #hud {
   position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
   display: flex;
+  flex-wrap: nowrap;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: stretch;
+  gap: 8px;
+  white-space: nowrap;
   pointer-events: none;
   z-index: 20;
 }
 
 .hud-left {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
 }
 
 .hud-card {
+  display: flex;
+  align-items: center;
   background: rgba(13, 22, 21, 0.88);
   border: 3px solid #3c8b3e;
   border-radius: 4px;
-  padding: 10px 14px;
-  box-shadow: 0 4px 0 #1b4d1b, 0 8px 16px rgba(0, 0, 0, 0.5);
+  padding: 6px 10px;
+  box-shadow: 0 3px 0 #1b4d1b, 0 6px 12px rgba(0, 0, 0, 0.5);
   pointer-events: auto;
 }
 
 .health-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .label {
@@ -99,11 +107,11 @@ body, html {
 
 #hud-hearts {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .pixel-heart {
-  font-size: 20px;
+  font-size: 14px;
   display: inline-block;
   filter: drop-shadow(2px 2px 0 #4a0000);
 }
@@ -129,67 +137,9 @@ body, html {
   letter-spacing: 1px;
 }
 
-/* State Inspector Panel */
-.state-inspector {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 250px;
-}
-
-.inspector-title {
-  font-size: 9px;
-  color: #38bdf8;
-  border-bottom: 2px dashed #224430;
-  padding-bottom: 6px;
-  text-align: center;
-}
-
-.state-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  font-size: 8px;
-}
-
-.state-badge {
-  padding: 4px 8px;
-  border-radius: 3px;
-  font-size: 8px;
-  background: #1e293b;
-  color: #cbd5e1;
-  border: 1px solid #475569;
-  text-align: right;
-}
-
-/* State Badge dynamic colors */
-.state-idle { background: #14532d; color: #86efac; border-color: #22c55e; }
-.state-walk { background: #166534; color: #bbf7d0; border-color: #4ade80; }
-.state-jump, .state-fall { background: #0369a1; color: #bae6fd; border-color: #38bdf8; }
-.state-double_jump { background: #0284c7; color: #e0f2fe; border-color: #38bdf8; animation: pulse-heart 0.3s ease-out; }
-.state-attack, .state-air_attack { background: #b45309; color: #fef08a; border-color: #facc15; }
-.state-hit_recoil { background: #b91c1c; color: #ffffff; border-color: #ef4444; animation: flash-hit 0.15s infinite; }
-.state-hit_stagger { background: #991b1b; color: #fca5a5; border-color: #f87171; }
-.state-hit_squash { background: #6b21a8; color: #ffffff; border-color: #a855f7; animation: flash-hit 0.15s infinite; }
-.state-hit_dazed { background: #581c87; color: #e9d5ff; border-color: #c084fc; }
-.state-defeated { background: #18181b; color: #94a3b8; border-color: #52525b; text-decoration: line-through; }
-.state-patrol { background: #1e293b; color: #94a3b8; border-color: #64748b; }
-.state-aggro { background: #c2410c; color: #ffedd5; border-color: #fb923c; }
-
-/* Sky creature states */
-.state-falling { background: #7f1d1d; color: #fecaca; border-color: #f87171; }
-.state-hop { background: #78350f; color: #fde68a; border-color: #f59e0b; }
-.state-telegraph { background: #9f1239; color: #ffe4e6; border-color: #fb7185; animation: flash-hit 0.15s infinite; }
-.state-charge { background: #be123c; color: #ffffff; border-color: #f43f5e; }
-.state-hover { background: #4c1d95; color: #ddd6fe; border-color: #a78bfa; }
-.state-swoop { background: #86198f; color: #fae8ff; border-color: #e879f9; }
-.state-throw { background: #c2410c; color: #fff7ed; border-color: #fb923c; animation: flash-hit 0.2s infinite; }
-.state-hurt { background: #b91c1c; color: #ffffff; border-color: #ef4444; }
-
 .hud-score-detail {
-  display: block;
-  margin-top: 6px;
+  display: inline;
+  margin-left: 8px;
   font-size: 7px;
   color: #cbd5e1;
 }
@@ -393,7 +343,7 @@ body, html {
 
 /* Mobile / On-Screen Touch Controls */
 :root {
-  --touch-size: clamp(52px, min(14vw, 18vh), 72px);
+  --touch-size: clamp(44px, min(11vw, 14vh), 58px);
 }
 
 #touch-controls {
@@ -429,8 +379,8 @@ body, html {
 
 .touch-cluster {
   display: flex;
-  /* Generous spacing so thumbs don't hit the neighbouring button */
-  gap: clamp(28px, 7vw, 56px);
+  /* Enough spacing that thumbs don't hit the neighbouring button */
+  gap: clamp(18px, 4.5vw, 36px);
   pointer-events: auto;
 }
 
@@ -575,7 +525,6 @@ body, html {
 
 @media (max-width: 768px) {
   #controls-bar { font-size: 7px; padding: 6px 10px; gap: 8px; }
-  .state-inspector { min-width: 180px; }
   .banner-title { font-size: 13px; }
   .banner-subtitle { font-size: 7px; }
 }
@@ -751,4 +700,16 @@ body, html {
 @media (max-width: 768px) {
   #species-toast { top: 38%; width: min(88vw, 420px); }
   .scrapbook-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}
+
+/* Narrow screens: tighter HUD cards, and drop the extras so the stats stay on one line.
+   (Kept last so it overrides the base HUD sizes above.) */
+@media (max-width: 768px) {
+  #hud, .hud-left { gap: 4px; }
+  .hud-card { padding: 4px 6px; border-width: 2px; }
+  .label, .hud-score, .hud-points { font-size: 7px; letter-spacing: 0; }
+  .pixel-heart { font-size: 11px; }
+  #hud-hearts { gap: 2px; }
+  .health-row { gap: 4px; }
+  .hud-score-detail { display: none; }
 }

@@ -37,7 +37,10 @@
     bindMenuToggle();
   }
 
-  /** The ☰ button shows/hides the settings bar (music, sound, CRT, difficulty, gallery) on touch screens. */
+  /**
+   * The ☰ button shows/hides the settings bar (music, sound, CRT, difficulty, gallery) on touch
+   * screens. The game is paused while it's open.
+   */
   function bindMenuToggle() {
     const toggle = document.getElementById('btn-menu-toggle');
     const bar = document.getElementById('controls-bar');
@@ -46,8 +49,16 @@
     toggle.addEventListener('click', () => {
       const open = bar.classList.toggle('open');
       toggle.setAttribute('aria-expanded', String(open));
+      if (Forest.Game) Forest.Game.setPaused(open, 'menu');
     });
   }
 
-  Forest.TouchControls = { bind };
+  /** Height in CSS pixels, from the bottom of the window, that the touch buttons cover (0 when hidden). */
+  function coveredBottomPixels() {
+    const panel = document.getElementById('touch-controls');
+    if (!panel || getComputedStyle(panel).display === 'none') return 0;
+    return window.innerHeight - panel.getBoundingClientRect().top;
+  }
+
+  Forest.TouchControls = { bind, coveredBottomPixels };
 })(window.Forest);

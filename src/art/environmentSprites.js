@@ -190,6 +190,9 @@
   // One blade on every odd column so the pattern tiles seamlessly
   const GRASS_BLADE_HEIGHTS = [3, 4, 2, 5, 3, 4, 5, 2, 4, 3, 5, 3, 4, 5, 2, 4];
 
+  /** Rows of grass at the top of the ground tile; everything below is soil. */
+  const GRASS_DEPTH_PIXELS = 8;
+
   function createGrassTile() {
     const { canvas, ctx } = createPixelCanvas(TILE_SIZE, TILE_SIZE);
     const fillPixel = (x, y, color) => {
@@ -201,7 +204,7 @@
     ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
     // Speckled soil: lighter near the surface, darker deeper down
-    for (let y = 8; y < TILE_SIZE; y++) {
+    for (let y = GRASS_DEPTH_PIXELS; y < TILE_SIZE; y++) {
       for (let x = 0; x < TILE_SIZE; x++) {
         const noise = (x * 13 + y * 29) % 17;
         let color;
@@ -269,6 +272,7 @@
   }
 
   Forest.EnvironmentSprites = {
+    GRASS_DEPTH_PIXELS,
     createOakTree,
     createGrassTile,
     createFlowerTuft

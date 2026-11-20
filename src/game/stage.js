@@ -32,6 +32,7 @@
     fitToWindow() {
       const aspect = window.innerWidth / window.innerHeight;
       const viewHeightUnits = (VIEW_WIDTH_PIXELS / aspect) * PIXEL_SCALE;
+      this.viewHeightUnits = viewHeightUnits;
 
       this.camera.left = -this.viewWidthUnits / 2;
       this.camera.right = this.viewWidthUnits / 2;

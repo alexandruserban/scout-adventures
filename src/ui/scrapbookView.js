@@ -23,12 +23,12 @@
   function open() {
     render();
     overlay.style.display = 'flex';
-    if (Forest.Game) Forest.Game.setPaused(true);
+    if (Forest.Game) Forest.Game.setPaused(true, 'scrapbook');
   }
 
   function close() {
     overlay.style.display = 'none';
-    if (Forest.Game) Forest.Game.setPaused(false);
+    if (Forest.Game) Forest.Game.setPaused(false, 'scrapbook');
   }
 
   function isOpen() {

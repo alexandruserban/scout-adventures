@@ -27,6 +27,15 @@
       this.focusY = camera.position.y;
       this.shakeSecondsLeft = 0;
       this.shakeMagnitude = 0;
+      /** Highest the camera may go (e.g. so the soil stays behind the touch buttons). */
+      this.maxY = Infinity;
+    }
+
+    /** Caps the camera height; applies immediately, without easing. */
+    setMaxY(maxY) {
+      this.maxY = maxY;
+      this.focusY = Math.min(this.focusY, maxY);
+      this.camera.position.y = Math.min(this.camera.position.y, maxY);
     }
 
     /** Start shaking; a stronger or longer request overrides a weaker one already running. */
@@ -43,11 +52,12 @@
     /** @param {{x:number, y:number, facing:number}} target */
     update(target, deltaSeconds) {
       const targetX = target.x + target.facing * LOOK_AHEAD;
-      const targetY = Math.max(CAMERA_REST_Y, target.y + HEIGHT_ABOVE_PLAYER);
+      const targetY = Math.min(this.maxY, Math.max(CAMERA_REST_Y, target.y + HEIGHT_ABOVE_PLAYER));
 
       this.focusX += (targetX - this.focusX) * FOLLOW_SPEED_X * deltaSeconds;
       this.focusY += (targetY - this.focusY) * FOLLOW_SPEED_Y * deltaSeconds;
       this.focusX = clamp(this.focusX, this.minX, this.maxX);
+      this.focusY = Math.min(this.focusY, this.maxY);
 
       const shake = this.nextShakeOffset(deltaSeconds);
       this.camera.position.x = this.focusX + shake.x;

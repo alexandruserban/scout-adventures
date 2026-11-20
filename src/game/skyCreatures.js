@@ -16,7 +16,6 @@
   const { createPixelCanvas } = Forest.PixelCanvas;
   const Sfx = Forest.SoundEffects;
 
-  /** State names double as CSS classes in the state inspector (e.g. "state-swoop"). */
   const CreatureState = Object.freeze({
     FALLING: 'FALLING',
     HOP: 'HOP',

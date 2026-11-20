@@ -137,7 +137,6 @@
       });
       this.artKey = art.key;
       this.genome = genome;
-      /** Shown in the state inspector. */
       this.displayName = genome.name;
       this.movement = genome.movement;
       this.bodyWidth = art.bodyWidthPixels * this.unitsPerPixel;

@@ -9,7 +9,6 @@
   const MushroomArt = Forest.MushroomSprites;
   const Sfx = Forest.SoundEffects;
 
-  /** State names double as CSS classes in the state inspector (e.g. "state-hit_dazed"). */
   const MushroomState = Object.freeze({
     PATROL: 'PATROL',
     AGGRO: 'AGGRO',

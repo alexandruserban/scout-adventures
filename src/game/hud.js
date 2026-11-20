@@ -1,11 +1,9 @@
-/** On-screen DOM interface: hearts, score, the live state inspector, and the game over / victory overlays. */
+/** On-screen DOM interface: hearts, score, points, banners, toasts, and the game over / victory overlays. */
 (function (Forest) {
   class Hud {
     constructor() {
       this.heartsElement = document.getElementById('hud-hearts');
       this.scoreElement = document.getElementById('hud-score');
-      this.playerStateBadge = document.getElementById('inspector-boy-state');
-      this.mushroomStateBadge = document.getElementById('inspector-mushroom-state');
       this.overlayElement = document.getElementById('game-overlay');
       this.bannerElement = document.getElementById('wave-banner');
       this.pointsElement = document.getElementById('hud-points');
@@ -62,6 +60,8 @@
       if (html === this.lastScoreHtml) return;
       this.lastScoreHtml = html;
       this.scoreElement.innerHTML = html;
+      // An empty objective hides its whole card
+      this.scoreElement.parentElement.style.display = html ? '' : 'none';
     }
 
     /**
@@ -83,18 +83,6 @@
 
     hideBanner() {
       this.bannerElement.className = '';
-    }
-
-    /** Show the boy's state and the state of whichever mushroom is closest to him. */
-    showInspector(player, mushrooms) {
-      setStateBadge(this.playerStateBadge, player.state, player.state);
-
-      const closest = findClosestByX(mushrooms, player.x);
-      if (closest) {
-        setStateBadge(this.mushroomStateBadge, closest.state, `${closest.state} (HP: ${Math.max(0, closest.hp)})`);
-      } else {
-        setStateBadge(this.mushroomStateBadge, null, 'NONE');
-      }
     }
 
     /**
@@ -135,25 +123,6 @@
       this.overlayElement.querySelector('button').addEventListener('click', onRestart);
       this.overlayElement.style.display = 'flex';
     }
-  }
-
-  /** The badge's colour comes from a CSS class named after the state, e.g. "state-hit_recoil". */
-  function setStateBadge(element, state, label) {
-    element.textContent = label;
-    element.className = state ? `state-badge state-${state.toLowerCase()}` : 'state-badge';
-  }
-
-  function findClosestByX(entities, x) {
-    let closest = null;
-    let closestDistance = Infinity;
-    entities.forEach(entity => {
-      const distance = Math.abs(entity.x - x);
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closest = entity;
-      }
-    });
-    return closest;
   }
 
   Forest.Hud = Hud;

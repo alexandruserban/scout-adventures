@@ -73,7 +73,7 @@ LEVEL_ORDER.forEach(id => {
 const EXPECTED = {
   //            nutling thornback gloomwing jelly golem
   NORMAL: { 1: [1, 2, 2, 3, 10], 2: [2, 3, 3, 5, 14], 3: [3, 4, 4, 7, 18] },
-  EASY: { 1: [1, 1, 1, 2, 7], 2: [1, 2, 2, 4, 11], 3: [2, 3, 3, 6, 15] },
+  EASY: { 1: [1, 1, 1, 2, 7], 2: [2, 2, 2, 4, 11], 3: [3, 3, 3, 6, 15] },
   HARD: { 1: [2, 3, 3, 4, 13], 2: [3, 4, 4, 6, 17], 3: [4, 5, 5, 8, 21] }
 };
 LEVEL_ORDER.forEach(id => {

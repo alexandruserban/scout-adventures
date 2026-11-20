@@ -125,8 +125,11 @@
       escortKinds.push(ESCORT_KINDS[Math.floor(Math.random() * ESCORT_KINDS.length)]);
     }
 
+    // The minimum grows every cycle too, so a negative bonus (Easy) can't keep a creature
+    // stuck at 1 hp: Easy Nutlings go 1 -> 2 -> 3 like everything else.
+    const minimumHp = kind => 1 + HP_PER_CYCLE[kind] * cycle;
     const statsFor = kind => ({
-      hp: Math.max(1, BASE_STATS[kind].hp + HP_PER_CYCLE[kind] * cycle
+      hp: Math.max(minimumHp(kind), BASE_STATS[kind].hp + HP_PER_CYCLE[kind] * cycle
         + difficulty.creatureHpBonus * (kind === BOSS_KIND ? BOSS_HP_BONUS_SCALE : 1)),
       damage: BASE_STATS[kind].damage,
       speed

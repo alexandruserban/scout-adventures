@@ -897,8 +897,14 @@
   const GOLEM_THROW_RECOVER_SECONDS = 0.4;
   /** Its meteor landing hurts a boy standing on the grass this close. */
   const GOLEM_LANDING_RADIUS = 3.6;
-  /** Doesn't bother walking when it's already this close. */
-  const GOLEM_STOP_DISTANCE = 1.0;
+  /** Doesn't bother walking when it's already this close (inside its touch range, so it still walks into the boy). */
+  const GOLEM_STOP_DISTANCE = 0.6;
+  /**
+   * Touch box hugging the rock body, as fractions of each one's width. Vertically the boy's feet must
+   * clear the top of its head (~1.87 units): a normal jump peaks at ~1.69, so only a double jump gets over.
+   */
+  const GOLEM_BODY_HALF_WIDTH_RATIO = 0.3;
+  const GOLEM_PLAYER_HALF_WIDTH_RATIO = 0.25;
   const GOLEM_ENRAGED_PACE = 1.6;
   const GOLEM_ENRAGED_TINT = 0xffb0a0;
   const GOLEM_GLOW_TINT = 0xffc080;
@@ -920,6 +926,14 @@
       this.throwTimer = GOLEM_THROW_INTERVAL;
       this.stepTimer = 0;
       this.hasThrown = false;
+    }
+
+    /** Too tall to hop over: touching unless the boy's feet are above its head (a double jump). */
+    isTouching(player) {
+      const halfWidth = this.width * GOLEM_BODY_HALF_WIDTH_RATIO + player.width * GOLEM_PLAYER_HALF_WIDTH_RATIO;
+      const isOverlappingX = Math.abs(player.x - this.x) < halfWidth;
+      const isOverlappingY = player.y < this.y + this.height && player.y + player.height > this.y;
+      return isOverlappingX && isOverlappingY;
     }
 
     /** Burns through the sky like a meteor. */

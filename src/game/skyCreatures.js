@@ -12,7 +12,7 @@
 (function (Forest) {
   const { PIXEL_SCALE, GROUND_Y, LEVEL_START_X, LEVEL_END_X } = Forest.Config;
   const { createSpriteMesh, setMeshSprite, removeMesh, createPixelTexture } = Forest.Graphics;
-  const { clamp, randomBetween, randomDirection } = Forest.MathUtils;
+  const { clamp, randomBetween, randomDirection, isBodyTouching } = Forest.MathUtils;
   const { createPixelCanvas } = Forest.PixelCanvas;
   const Sfx = Forest.SoundEffects;
 
@@ -62,6 +62,8 @@
   // --- Collision with the player (fractions of the combined sizes) ---
   const CONTACT_WIDTH_RATIO = 0.36;
   const CONTACT_HEIGHT_RATIO = 0.42;
+  /** Snug body box for small ground creatures: a normal jump clears them (see isBodyTouching). */
+  const SMALL_CREATURE_BODY_BOX = { enemyHalfWidthRatio: 0.35, playerHalfWidthRatio: 0.25, topRatio: 0.85 };
 
   const WHITE = 0xffffff;
 
@@ -492,6 +494,11 @@
       });
     }
 
+    /** Small enough to jump over. */
+    isTouching(player) {
+      return isBodyTouching(player, this, SMALL_CREATURE_BODY_BOX);
+    }
+
     onLanded() {
       Sfx.acornCrack();
       this.particles.burst(this.x, this.y + 0.5, 6, '#5e3b1c', 1.0, 0.4);
@@ -553,6 +560,11 @@
       });
       this.cooldown = 1.0;
       this.animationTimer = 0;
+    }
+
+    /** Low enough to jump over, even mid-charge. */
+    isTouching(player) {
+      return isBodyTouching(player, this, SMALL_CREATURE_BODY_BOX);
     }
 
     onLanded() {
@@ -766,6 +778,13 @@
   /** The lightning hurts a boy standing on the grass this close to the landing spot. */
   const JELLY_SHOCK_RADIUS = 2.3;
   const MINI_JELLY_SCALE = 0.6;
+  /**
+   * A big jelly's lightning crackles high above its bell: the boy's feet must clear 1.75x its height
+   * (~1.84 units). A normal jump peaks at ~1.69, so only a double jump gets over. Small ones are hoppable.
+   */
+  const BIG_JELLY_BODY_BOX = { enemyHalfWidthRatio: 0.35, playerHalfWidthRatio: 0.25, topRatio: 1.75 };
+  /** Chance per frame of a spark flickering in the big jelly's lightning field. */
+  const JELLY_FIELD_SPARK_CHANCE = 0.25;
 
   class ThunderJelly extends SkyCreature {
     /** @param {object} options as for SkyCreature, plus `isMini` for the halves of a split jelly */
@@ -780,6 +799,18 @@
       });
       this.isMini = isMini;
       this.time = Math.random() * 10;
+    }
+
+    isTouching(player) {
+      return isBodyTouching(player, this, this.isMini ? SMALL_CREATURE_BODY_BOX : BIG_JELLY_BODY_BOX);
+    }
+
+    /** Sparks flicker above a big jelly's bell, showing how high its lightning reaches. */
+    emitFieldSparks() {
+      if (this.isMini || Math.random() > JELLY_FIELD_SPARK_CHANCE) return;
+      const sparkX = this.x + randomBetween(-0.35, 0.35) * this.width;
+      const sparkY = this.y + this.height * randomBetween(1.0, BIG_JELLY_BODY_BOX.topRatio);
+      this.particles.burst(sparkX, sparkY, 1, Math.random() < 0.5 ? '#ffe14d' : '#8ff0ff', 0.3, 0.18);
     }
 
     /** Smaller jellies have proportionally smaller jumps and shockwaves. */
@@ -801,6 +832,7 @@
     think(deltaSeconds, player) {
       this.time += deltaSeconds;
       this.applyPhysics(deltaSeconds);
+      this.emitFieldSparks();
 
       switch (this.state) {
         case CreatureState.IDLE:
@@ -903,8 +935,7 @@
    * Touch box hugging the rock body, as fractions of each one's width. Vertically the boy's feet must
    * clear the top of its head (~1.87 units): a normal jump peaks at ~1.69, so only a double jump gets over.
    */
-  const GOLEM_BODY_HALF_WIDTH_RATIO = 0.3;
-  const GOLEM_PLAYER_HALF_WIDTH_RATIO = 0.25;
+  const GOLEM_BODY_BOX = { enemyHalfWidthRatio: 0.3, playerHalfWidthRatio: 0.25, topRatio: 1 };
   const GOLEM_ENRAGED_PACE = 1.6;
   const GOLEM_ENRAGED_TINT = 0xffb0a0;
   const GOLEM_GLOW_TINT = 0xffc080;
@@ -930,10 +961,7 @@
 
     /** Too tall to hop over: touching unless the boy's feet are above its head (a double jump). */
     isTouching(player) {
-      const halfWidth = this.width * GOLEM_BODY_HALF_WIDTH_RATIO + player.width * GOLEM_PLAYER_HALF_WIDTH_RATIO;
-      const isOverlappingX = Math.abs(player.x - this.x) < halfWidth;
-      const isOverlappingY = player.y < this.y + this.height && player.y + player.height > this.y;
-      return isOverlappingX && isOverlappingY;
+      return isBodyTouching(player, this, GOLEM_BODY_BOX);
     }
 
     /** Burns through the sky like a meteor. */

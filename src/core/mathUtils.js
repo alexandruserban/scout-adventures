@@ -45,8 +45,21 @@
     };
   }
 
+  /**
+   * Touch test between the boy and a ground enemy, using boxes that hug their bodies.
+   * Both have `x` (centre), `y` (feet), `width` and `height`. The boy is safe once his feet are above
+   * `topRatio` of the enemy's height, so whether he can jump over it depends only on how tall it is.
+   */
+  function isBodyTouching(player, enemy, { enemyHalfWidthRatio, playerHalfWidthRatio, topRatio }) {
+    const halfWidth = enemy.width * enemyHalfWidthRatio + player.width * playerHalfWidthRatio;
+    const isOverlappingX = Math.abs(player.x - enemy.x) < halfWidth;
+    const isOverlappingY = player.y < enemy.y + enemy.height * topRatio && player.y + player.height > enemy.y;
+    return isOverlappingX && isOverlappingY;
+  }
+
   Forest.MathUtils = {
     clamp,
+    isBodyTouching,
     toRadians,
     randomBetween,
     randomDirection,

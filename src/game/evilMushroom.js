@@ -5,7 +5,7 @@
 (function (Forest) {
   const { PIXEL_SCALE, GROUND_Y } = Forest.Config;
   const { createSpriteMesh, setMeshSprite } = Forest.Graphics;
-  const { randomDirection, randomBetween } = Forest.MathUtils;
+  const { randomDirection, randomBetween, isBodyTouching } = Forest.MathUtils;
   const MushroomArt = Forest.MushroomSprites;
   const Sfx = Forest.SoundEffects;
 
@@ -58,8 +58,8 @@
   const DEATH_SWELL_RATE = 3;
 
   // --- Collision with the player (fractions of the combined sizes) ---
-  const CONTACT_WIDTH_RATIO = 0.38;
-  const CONTACT_HEIGHT_RATIO = 0.45;
+  /** Snug box around the cap and stem: a normal jump clears it (see Forest.MathUtils.isBodyTouching). */
+  const BODY_BOX = { enemyHalfWidthRatio: 0.35, playerHalfWidthRatio: 0.25, topRatio: 0.85 };
 
   // --- Colours ---
   const SPORE_PURPLE = '#9d4edd';
@@ -124,10 +124,7 @@
     }
 
     isTouching(player) {
-      const dx = Math.abs(player.x - this.x);
-      const dy = Math.abs((player.y + player.height / 2) - this.centerY);
-      return dx < (player.width + this.width) * CONTACT_WIDTH_RATIO
-        && dy < (player.height + this.height) * CONTACT_HEIGHT_RATIO;
+      return isBodyTouching(player, this, BODY_BOX);
     }
 
     isInsideArea({ centerX, centerY, halfWidth, halfHeight }) {
@@ -242,7 +239,9 @@
       }
 
       const isOnGround = this.y === GROUND_Y;
-      if (distanceToPlayer < HOP_RANGE && isOnGround && Math.random() < HOP_CHANCE_PER_FRAME) {
+      // No hopping up into the boy while he is jumping over it
+      const canHop = isOnGround && !player.isAboveGround;
+      if (distanceToPlayer < HOP_RANGE && canHop && Math.random() < HOP_CHANCE_PER_FRAME) {
         this.velocityY = HOP_SPEED;
       }
     }

@@ -21,6 +21,7 @@
 
   function open() {
     overlay.style.display = 'flex';
+    if (Forest.Game) Forest.Game.setPaused(true);
     if (!isPopulated) {
       populate();
       isPopulated = true;
@@ -29,6 +30,7 @@
 
   function close() {
     overlay.style.display = 'none';
+    if (Forest.Game) Forest.Game.setPaused(false);
   }
 
   function populate() {
@@ -115,7 +117,10 @@
 
       const abilities = genome.abilities.map(id => Forge.ABILITIES[id].label).join(', ') || 'No abilities';
       const { hp, damage, speed } = genome.stats;
-      box.appendChild(createElement('div', 'sprite-caption', genome.name));
+      const latinName = createElement('div', 'sprite-caption', genome.name);
+      latinName.style.cssText = "font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 11px; color: #fde68a;";
+      box.appendChild(latinName);
+      box.appendChild(createElement('div', 'sprite-caption', Forest.MonsterSpecies.forGenome(genome).common.toUpperCase()));
       box.appendChild(createElement('div', 'sprite-caption', `${genome.movement.toUpperCase()} · POWER ${power}`));
       box.appendChild(createElement('div', 'sprite-caption', `HP ${hp} · DMG ${damage} · SPD ${speed.toFixed(2)}`));
       box.appendChild(createElement('div', 'sprite-caption', abilities));

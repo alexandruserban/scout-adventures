@@ -65,6 +65,19 @@
       });
     },
 
+    /** Coin-like double blip for bonus points. */
+    bonusPoints() {
+      synth.playTone({ wave: 'square', frequency: 988, duration: 0.06, volume: 0.08 });
+      synth.playTone({ wave: 'square', frequency: 1319, duration: 0.14, volume: 0.08, delay: 0.06 });
+    },
+
+    /** Curious little rising jingle for a new scrapbook entry. */
+    newSpecies() {
+      [392.0, 523.2, 659.3, 1046.5].forEach((frequency, index) => {
+        synth.playTone({ wave: 'square', frequency, duration: 0.1, volume: 0.07, delay: index * 0.08 });
+      });
+    },
+
     // ==========================================
     // Waves
     // ==========================================

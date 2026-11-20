@@ -28,6 +28,11 @@
       <div class="hud-card">
         <div id="hud-score" class="hud-score">MUSHROOMS DEFEATED: 0 / 4</div>
       </div>
+
+      <!-- Points Card -->
+      <div class="hud-card">
+        <div id="hud-points" class="hud-points">POINTS: 0</div>
+      </div>
     </div>
 
     <!-- Live State Inspector (Visualizing multiple states of boy & mushroom) -->
@@ -70,6 +75,7 @@
     <button id="btn-sound" class="hud-btn">🔊 SOUND: ON</button>
     <button id="btn-crt" class="hud-btn" title="Retro TV scanlines">📺 CRT: ON</button>
     <button id="btn-difficulty" class="hud-btn" title="Difficulty (restarts the game)">⚔️ NORMAL</button>
+    <button id="btn-scrapbook" class="hud-btn" title="Every species you've met (pauses the game)">📖 SCRAPBOOK</button>
     <button id="btn-gallery" class="hud-btn">🎨 SPRITE GALLERY</button>
   </div>
 
@@ -89,6 +95,9 @@
   <!-- Wave announcements (fade in and out by themselves) -->
   <div id="wave-banner"></div>
 
+  <!-- "New species discovered" notes (fade in and out by themselves) -->
+  <div id="species-toast"></div>
+
   <!-- Game Over Overlay Modal -->
   <div id="game-overlay"></div>
 
@@ -100,6 +109,18 @@
         <button id="btn-gallery-close" class="pixel-btn" style="padding: 6px 12px; font-size: 8px;">[X] CLOSE</button>
       </div>
       <div class="gallery-grid" id="gallery-content"></div>
+    </div>
+  </div>
+
+  <!-- Scrapbook Modal (species the boy has met) -->
+  <div id="scrapbook-overlay">
+    <div class="gallery-card scrapbook-card">
+      <div class="gallery-header">
+        <h2 class="gallery-title">📖 THE BOY'S SCRAPBOOK</h2>
+        <button id="btn-scrapbook-close" class="pixel-btn" style="padding: 6px 12px; font-size: 8px;">[X] CLOSE</button>
+      </div>
+      <div id="scrapbook-summary" class="scrapbook-summary"></div>
+      <div class="scrapbook-grid" id="scrapbook-content"></div>
     </div>
   </div>
 
@@ -156,12 +177,20 @@
   <script src="src/game/skyCreatures.js"></script>
 
   <!-- Monster Forge: randomly generated monsters (look, stats and abilities) -->
+  <script src="src/monsters/monsterSpecies.js"></script>
   <script src="src/monsters/monsterGenome.js"></script>
   <script src="src/monsters/monsterPainter.js"></script>
   <script src="src/monsters/monsterAbilities.js"></script>
   <script src="src/monsters/monsterForge.js"></script>
 
   <script src="src/game/waveDirector.js"></script>
+
+  <!-- Points, heart drops and the scrapbook -->
+  <script src="src/game/rewards.js"></script>
+  <script src="src/game/pickups.js"></script>
+  <script src="src/game/scrapbook.js"></script>
+  <script src="src/ui/scrapbookView.js"></script>
+
   <script src="src/game/main.js"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@
  */
 (function (Forest) {
   const { createSeededRandom, clamp } = Forest.MathUtils;
+  const { MonsterSpecies } = Forest;
 
   const Movement = Object.freeze({
     /** Walks along the grass towards the boy. */
@@ -61,16 +62,6 @@
   const HEADGEAR = ['none', 'horns', 'horns', 'antennae', 'spikes', 'crest'];
   const MOUTHS = ['fangs', 'grin', 'tusks', 'teeth'];
   const EYE_COUNTS = [1, 2, 2, 2, 3, 4];
-
-  // --- Names ---
-  const NAME_STARTS = ['Gloom', 'Bramble', 'Rot', 'Thistle', 'Murk', 'Ember', 'Moss', 'Bog', 'Ash', 'Briar',
-    'Grub', 'Snarl', 'Sludge', 'Quill', 'Fen', 'Soot', 'Thorn', 'Mire', 'Grim', 'Nettle'];
-  const NAME_ENDS = ['maw', 'fang', 'back', 'eye', 'horn', 'belly', 'claw', 'snout', 'tooth', 'gut', 'hide', 'wart'];
-  const NOUNS = {
-    walker: ['Stomper', 'Crawler', 'Brute', 'Lurker', 'Trudger'],
-    hopper: ['Hopper', 'Bouncer', 'Blob', 'Squish', 'Boing'],
-    flyer: ['Flitter', 'Wisp', 'Bat', 'Glider', 'Buzzer']
-  };
 
   /** Random helpers bound to one seeded generator. */
   function createDice(seed) {
@@ -210,11 +201,6 @@
     return { hp, damage, speed: Math.round(speed * 100) / 100 };
   }
 
-  function rollName(dice, movement, power) {
-    const title = power >= 9 ? 'Ancient ' : power >= 6 ? 'Elder ' : '';
-    return `${title}${dice.pick(NAME_STARTS)}${dice.pick(NAME_ENDS)} ${dice.pick(NOUNS[movement])}`;
-  }
-
   /**
    * Create a random monster genome.
    * @param {object} [options]
@@ -222,8 +208,9 @@
    * @param {number} [options.power] how dangerous it is, roughly the wave number (1 = gentle)
    * @param {string} [options.movement] force a Movement value
    * @param {string[]} [options.abilities] force exactly these ability ids
-   * @param {string} [options.name] override the generated name
-   * @returns {object} genome (plain data, safe to JSON.stringify)
+   * @param {string} [options.name] override the scientific name
+   * @returns {object} genome (plain data, safe to JSON.stringify). `species` is an id into
+   *   Forest.MonsterSpecies; `name` is the individual's scientific name, e.g. "Boingus mohawkensis majoris".
    */
   function generate({ seed = randomSeed(), power = 1, movement, abilities, name } = {}) {
     const dice = createDice(seed);
@@ -235,32 +222,34 @@
       ? abilities.filter(id => ABILITIES[id])
       : rollAbilities(dice, chosenMovement, level);
     const stats = rollStats(dice, appearance, chosenAbilities, level);
-    const generatedName = rollName(dice, chosenMovement, level);
 
-    return {
+    const genome = {
       seed,
       power: level,
-      name: name || generatedName,
+      name: name || '',
       movement: chosenMovement,
       appearance,
       abilities: chosenAbilities,
       stats,
       isMini: false
     };
+    genome.species = MonsterSpecies.forGenome(genome).id;
+    if (!name) genome.name = MonsterSpecies.individualName(genome);
+    return genome;
   }
 
   /** The smaller, weaker offspring a Brood or Splitter monster releases. */
   function createMini(genome) {
     return {
       ...genome,
-      name: `${genome.name} Spawn`,
+      name: MonsterSpecies.individualName({ ...genome, isMini: true }),
       abilities: genome.abilities.filter(id => !NO_MINI_ABILITIES.includes(id)),
       stats: { ...genome.stats, hp: Math.max(1, Math.ceil(genome.stats.hp / 3)) },
       isMini: true
     };
   }
 
-  /** One-line summary, e.g. "Mossmaw Hopper - HP 4 / DMG 1 / SPD 1.1 - Quake Leap, Swift". */
+  /** One-line summary, e.g. "Boingus mohawkensis - HP 4 / DMG 1 / SPD 1.10 - Quake Leap, Swift". */
   function describe(genome) {
     const abilityNames = genome.abilities.map(id => ABILITIES[id].label).join(', ') || 'no abilities';
     const { hp, damage, speed } = genome.stats;

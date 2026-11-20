@@ -584,3 +584,171 @@ body, html {
 @media (max-height: 450px) {
   #wave-banner { top: 34%; }
 }
+
+/* ==========================================
+   Points, species toast and the scrapbook
+   ========================================== */
+.hud-points {
+  font-size: 9px;
+  color: #fde047;
+  letter-spacing: 1px;
+}
+
+#species-toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(46vw, 420px);
+  padding: 10px 14px;
+  text-align: center;
+  background: rgba(20, 33, 30, 0.94);
+  border: 3px solid #38bdf8;
+  border-radius: 6px;
+  box-shadow: 0 4px 0 #0c4a6e, 0 8px 16px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 23;
+  opacity: 0;
+}
+
+#species-toast.show {
+  animation: toast-in-out 3s ease forwards;
+}
+
+.toast-title {
+  font-size: 9px;
+  color: #38bdf8;
+  margin-bottom: 8px;
+}
+
+.toast-detail {
+  font-size: 7px;
+  line-height: 1.8;
+  color: #f1f5f9;
+}
+
+.toast-detail i,
+.scrap-latin {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 13px;
+  color: #fde68a;
+}
+
+@keyframes toast-in-out {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  8% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+#scrapbook-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(10, 18, 16, 0.94);
+  backdrop-filter: blur(6px);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 40;
+  padding: 20px;
+}
+
+.scrapbook-card {
+  border-color: #b08850;
+  background: #1f1a12;
+}
+
+.scrapbook-card .gallery-header { border-bottom-color: #6b5530; }
+.scrapbook-card .gallery-title { color: #fde68a; }
+
+.scrapbook-summary {
+  font-size: 9px;
+  color: #e7d7b5;
+  margin-bottom: 16px;
+}
+
+.scrapbook-progress {
+  height: 10px;
+  margin-top: 8px;
+  background: #0f0c08;
+  border: 2px solid #6b5530;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.scrapbook-progress > div {
+  height: 100%;
+  background: #a3e635;
+}
+
+.scrapbook-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.scrap-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  text-align: center;
+  background: #efe3c6;
+  color: #3b2a14;
+  border: 2px solid #b08850;
+  border-radius: 3px;
+  box-shadow: 2px 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.scrap-card:nth-child(odd) { transform: rotate(-0.6deg); }
+.scrap-card:nth-child(even) { transform: rotate(0.5deg); }
+
+.scrap-portrait {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 80px;
+  width: 100%;
+  background: #d9c9a3;
+  border: 1px dashed #a08050;
+  padding: 6px;
+}
+
+.scrap-portrait canvas {
+  max-width: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.scrap-card .scrap-latin { color: #5b3a0f; }
+.scrap-common { font-size: 7px; color: #6b4a22; }
+.scrap-stats { font-size: 6px; line-height: 1.8; color: #2d4b1e; }
+.scrap-note { font-family: Georgia, 'Times New Roman', serif; font-size: 11px; line-height: 1.35; color: #4a3a22; }
+
+.scrap-card.undiscovered {
+  background: #2a2418;
+  border-style: dashed;
+  border-color: #5a4a30;
+  color: #7a6a50;
+}
+
+.scrap-card.undiscovered .scrap-portrait {
+  align-items: center;
+  background: #1f1a12;
+  border-color: #5a4a30;
+  font-size: 28px;
+  color: #5a4a30;
+}
+
+.scrap-card.undiscovered .scrap-latin,
+.scrap-card.undiscovered .scrap-common { color: #7a6a50; }
+
+@media (max-width: 768px) {
+  #species-toast { top: 38%; width: min(88vw, 420px); }
+  .scrapbook-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}

@@ -19,6 +19,7 @@ const SCRIPTS = [
   'src/game/evilMushroom.js',
   'src/art/skyCreatureSprites.js',
   'src/game/skyCreatures.js',
+  'src/monsters/monsterSpecies.js',
   'src/monsters/monsterGenome.js',
   'src/monsters/monsterPainter.js',
   'src/monsters/monsterAbilities.js',

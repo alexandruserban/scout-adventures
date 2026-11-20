@@ -7,9 +7,10 @@
 (function (Forest) {
   const { Config, LevelData } = Forest;
   const Sfx = Forest.SoundEffects;
-  const { Difficulty } = Forest;
+  const { Difficulty, Rewards, Scrapbook } = Forest;
 
   const BEST_WAVE_STORAGE_KEY = 'forest-pixel-adventure.bestWave';
+  const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
 
   // ==========================================
   // World setup
@@ -34,8 +35,8 @@
 
   const input = new Forest.InputController({
     onPress: {
-      jump: () => player.tryJump(),
-      attack: () => player.startAttack(),
+      jump: () => { if (!isPaused) player.tryJump(); },
+      attack: () => { if (!isPaused) player.startAttack(); },
       restart: restartGame,
       toggleSound: Forest.AudioControls.toggleSound,
       toggleMusic: Forest.AudioControls.toggleMusic
@@ -56,9 +57,11 @@
     hitStop,
     cameraController,
     /** Adds an enemy created mid-fight (e.g. the halves of a split Thunder Jelly). */
-    spawnEnemy: enemy => enemies.push(enemy)
+    spawnEnemy: enemy => addEnemy(enemy)
   };
   world.projectiles = new Forest.ProjectileSystem(world);
+  const hearts = new Forest.HeartPickups(world, collectHeart);
+  const floatingText = new Forest.FloatingText(stage.scene);
 
   const player = new Forest.Player(world, {
     onHealthChanged: refreshHealth,
@@ -70,12 +73,17 @@
   let enemies = [];
   let mushroomsDefeated = 0;
   let foesDefeated = 0;
+  let points = 0;
+  /** High score for this difficulty, read once per run (not every frame). */
+  let bestPointsBeforeRun = 0;
+  /** True while a menu (scrapbook, gallery) covers the game. */
+  let isPaused = false;
   const totalMushrooms = LevelData.mushroomSpawns.length;
 
   const waves = new Forest.WaveDirector({
     spawnCreature: ({ kind, stats, genome }, x) => {
       const options = { x, stats, onDefeated: onEnemyDefeated };
-      enemies.push(genome
+      addEnemy(genome
         ? Forest.MonsterForge.create(world, { ...options, genome })
         : new Forest.SkyCreatures[kind](world, options));
     },
@@ -87,15 +95,37 @@
 
   function spawnMushrooms() {
     LevelData.mushroomSpawns.forEach(spawn => {
-      enemies.push(new Forest.EvilMushroom(world, spawn, onEnemyDefeated));
+      addEnemy(new Forest.EvilMushroom(world, spawn, onEnemyDefeated));
     });
+  }
+
+  /** Every enemy enters play through here, so the scrapbook hears about it. */
+  function addEnemy(enemy) {
+    enemies.push(enemy);
+    const { species, isNew } = Scrapbook.recordEncounter(enemy, waves.waveNumber);
+    if (isNew) {
+      points += Rewards.NEW_SPECIES_POINTS;
+      Sfx.newSpecies();
+      hud.showToast(
+        '📖 NEW SPECIES FOR THE SCRAPBOOK!',
+        `<i>${species.latin}</i><br>${species.common.toUpperCase()} &middot; +${Rewards.NEW_SPECIES_POINTS} POINTS`,
+        3.5
+      );
+    }
   }
 
   // ==========================================
   // Game rules
   // ==========================================
+  /** Points, a possible heart, and a tick in the scrapbook. */
   function onEnemyDefeated(enemy) {
     foesDefeated++;
+    const reward = Rewards.pointsFor(enemy);
+    points += reward;
+    floatingText.spawn(`+${reward}`, enemy.x, enemy.centerY + 0.5);
+    Scrapbook.recordDefeat(enemy);
+    if (Math.random() < Rewards.heartDropChance(enemy)) hearts.spawn(enemy.x, enemy.centerY);
+
     if (enemy instanceof Forest.EvilMushroom) {
       mushroomsDefeated++;
       // The last mushroom angers the sky itself
@@ -127,16 +157,34 @@
       reward = player.hp < player.maxHp ? `+${heartsPerWaveCleared} HEART${heartsPerWaveCleared > 1 ? 'S' : ''}` : 'FULL HEALTH!';
       player.heal(heartsPerWaveCleared);
     }
+    const bonus = Rewards.WAVE_CLEARED_POINTS_PER_WAVE * wave.number;
+    points += bonus;
     hud.showBanner({
       title: `WAVE ${wave.number} CLEARED!`,
-      subtitle: `${reward} The sky is rumbling again...`,
+      subtitle: `${reward} +${bonus} POINTS. The sky is rumbling again...`,
       variant: 'cleared',
       seconds: 2.4
     });
   }
 
+  /** A dropped heart heals one heart; with full health it's worth points instead. */
+  function collectHeart(heart) {
+    if (player.hp < player.maxHp) {
+      player.heal(1);
+      floatingText.spawn('+1 HEART', heart.x, heart.y + 0.8, '#ff6b6b');
+    } else {
+      points += Rewards.SPARE_HEART_POINTS;
+      Sfx.bonusPoints();
+      floatingText.spawn(`+${Rewards.SPARE_HEART_POINTS}`, heart.x, heart.y + 0.8);
+    }
+  }
+
   function refreshHealth() {
     hud.showHealth(player.hp, player.maxHp);
+  }
+
+  function refreshPoints() {
+    hud.showPoints(points, Math.max(points, bestPointsBeforeRun));
   }
 
   function refreshScore() {
@@ -148,33 +196,41 @@
   }
 
   function showGameOver() {
-    const previousBest = loadBestWave();
-    const isNewBest = waves.waveNumber > previousBest;
-    if (isNewBest) saveBestWave(waves.waveNumber);
+    const previousBestWave = loadBest(BEST_WAVE_STORAGE_KEY);
+    const isNewBest = waves.waveNumber > previousBestWave;
+    if (isNewBest) saveBest(BEST_WAVE_STORAGE_KEY, waves.waveNumber);
+
+    const previousBestPoints = loadBest(BEST_POINTS_STORAGE_KEY);
+    const isNewBestPoints = points > previousBestPoints;
+    if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, points);
+
     hud.showGameOver(restartGame, {
       wave: waves.waveNumber,
       foesDefeated,
-      bestWave: Math.max(previousBest, waves.waveNumber),
-      isNewBest
+      bestWave: Math.max(previousBestWave, waves.waveNumber),
+      isNewBest,
+      points,
+      bestPoints: Math.max(previousBestPoints, points),
+      isNewBestPoints
     });
   }
 
-  /** Best wave is tracked separately for each difficulty. */
-  function bestWaveKey() {
-    return `${BEST_WAVE_STORAGE_KEY}.${Difficulty.current.id}`;
+  /** Bests (wave, points) are tracked separately for each difficulty. */
+  function bestKey(baseKey) {
+    return `${baseKey}.${Difficulty.current.id}`;
   }
 
-  function loadBestWave() {
+  function loadBest(baseKey) {
     try {
-      return Number(localStorage.getItem(bestWaveKey())) || 0;
+      return Number(localStorage.getItem(bestKey(baseKey))) || 0;
     } catch (error) {
       return 0;
     }
   }
 
-  function saveBestWave(wave) {
+  function saveBest(baseKey, value) {
     try {
-      localStorage.setItem(bestWaveKey(), String(wave));
+      localStorage.setItem(bestKey(baseKey), String(value));
     } catch (error) {
       // Storage unavailable (private mode, blocked): the best score just isn't remembered
     }
@@ -211,17 +267,23 @@
     player.reset(LevelData.playerStartX, Difficulty.current.startHearts);
     effects.clear();
     world.projectiles.clear();
+    hearts.clear();
+    floatingText.clear();
     hitStop.reset();
     cameraController.stopShake();
+    hud.hideToast();
 
     enemies.forEach(enemy => enemy.remove());
     enemies = [];
     waves.reset();
-    spawnMushrooms();
     mushroomsDefeated = 0;
     foesDefeated = 0;
+    points = 0;
+    bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
+    spawnMushrooms();
     refreshHealth();
     refreshScore();
+    refreshPoints();
   }
 
   // A new difficulty starts a fresh run with that many hearts
@@ -245,6 +307,10 @@
 
     const realDeltaSeconds = Math.min((timestamp - lastTimestamp) / 1000, Config.MAX_FRAME_SECONDS);
     lastTimestamp = timestamp;
+    if (isPaused) {
+      stage.render();
+      return;
+    }
     // Gameplay freezes during hit-stop, but the camera keeps shaking
     const gameDeltaSeconds = hitStop.consume(realDeltaSeconds);
 
@@ -252,6 +318,8 @@
     if (!player.isDefeated) waves.update(gameDeltaSeconds);
     updateEnemies(gameDeltaSeconds);
     world.projectiles.update(gameDeltaSeconds, player);
+    hearts.update(gameDeltaSeconds, player);
+    floatingText.update(gameDeltaSeconds);
     particles.update(gameDeltaSeconds);
     ambientLeaves.update(gameDeltaSeconds);
     effects.update(gameDeltaSeconds);
@@ -260,6 +328,7 @@
     background.update(stage.camera.position.x, stage.camera.position.y, realDeltaSeconds);
     hud.showInspector(player, enemies);
     refreshScore();
+    refreshPoints();
 
     stage.render();
   }
@@ -283,8 +352,28 @@
       const offset = MathUtils.randomDirection() * MathUtils.randomBetween(...SUMMON_DISTANCE);
       const x = MathUtils.clamp(player.x + offset, Config.LEVEL_START_X + 1, Config.LEVEL_END_X - 1);
       const monster = MonsterForge.create(world, { genome, x, onDefeated: onEnemyDefeated });
-      enemies.push(monster);
+      addEnemy(monster);
       return monster;
+    },
+
+    /** Freeze gameplay while a menu (e.g. the scrapbook) covers the game. */
+    setPaused(paused) {
+      isPaused = Boolean(paused);
+      // Don't let a key held when the menu opened stay "held" after it closes
+      if (isPaused) ['left', 'right'].forEach(action => input.release(action));
+    },
+
+    get isPaused() {
+      return isPaused;
+    },
+
+    /** The boy (read-only access for the console and tests). */
+    get player() {
+      return player;
+    },
+
+    get points() {
+      return points;
     }
   };
 

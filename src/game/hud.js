@@ -8,7 +8,37 @@
       this.mushroomStateBadge = document.getElementById('inspector-mushroom-state');
       this.overlayElement = document.getElementById('game-overlay');
       this.bannerElement = document.getElementById('wave-banner');
+      this.pointsElement = document.getElementById('hud-points');
+      this.toastElement = document.getElementById('species-toast');
       this.lastScoreHtml = null;
+      this.lastPointsHtml = null;
+    }
+
+    /** Points this run, plus the best for this difficulty. Cheap to call every frame. */
+    showPoints(points, bestPoints) {
+      const html = `POINTS: ${points.toLocaleString()}<span class="hud-score-detail">BEST: ${bestPoints.toLocaleString()}</span>`;
+      if (html === this.lastPointsHtml) return;
+      this.lastPointsHtml = html;
+      this.pointsElement.innerHTML = html;
+    }
+
+    /**
+     * Small note at the top of the screen that fades out by itself (e.g. a new scrapbook species).
+     * @param {string} title
+     * @param {string} detail may contain HTML
+     * @param {number} seconds
+     */
+    showToast(title, detail, seconds) {
+      const toast = this.toastElement;
+      toast.innerHTML = `<div class="toast-title">${title}</div><div class="toast-detail">${detail}</div>`;
+      toast.className = '';
+      void toast.offsetWidth; // restart the CSS animation
+      toast.style.animationDuration = `${seconds}s`;
+      toast.className = 'show';
+    }
+
+    hideToast() {
+      this.toastElement.className = '';
     }
 
     showHealth(hp, maxHp) {
@@ -69,13 +99,17 @@
 
     /**
      * @param {() => void} onRestart
-     * @param {{wave:number, foesDefeated:number, bestWave:number, isNewBest:boolean}} run
+     * @param {{wave:number, foesDefeated:number, bestWave:number, isNewBest:boolean,
+     *   points:number, bestPoints:number, isNewBestPoints:boolean}} run
      */
-    showGameOver(onRestart, { wave, foesDefeated, bestWave, isNewBest }) {
-      const message = wave === 0
+    showGameOver(onRestart, { wave, foesDefeated, bestWave, isNewBest, points, bestPoints, isNewBestPoints }) {
+      const pointsLine = `<br><br>POINTS: ${points.toLocaleString()}<br>`
+        + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
+      const message = (wave === 0
         ? 'The evil forest mushrooms overwhelmed the boy...'
         : `The boy fell on WAVE ${wave} after defeating ${foesDefeated} foes.<br><br>`
-          + (isNewBest ? '&#9733; NEW BEST WAVE! &#9733;' : `BEST: WAVE ${bestWave}`);
+          + (isNewBest ? '&#9733; NEW BEST WAVE! &#9733;' : `BEST: WAVE ${bestWave}`))
+        + pointsLine;
       this.showOverlay({
         variant: 'game-over',
         titleClass: 'text-red',

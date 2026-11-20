@@ -125,6 +125,8 @@
       this.onDefeated = onDefeated;
       this.colors = colors;
 
+      /** Which creature this is (nutling, thornback, ...); also its species id in the scrapbook. */
+      this.kind = kind;
       this.frames = frames || world.sprites.skyCreatures[kind];
       this.unitsPerPixel = PIXEL_SCALE * spriteScale;
       const firstSprite = this.frames[fallFrame].normal;

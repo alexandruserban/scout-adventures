@@ -79,6 +79,8 @@
       this.hitStop = world.hitStop;
       this.cameraController = world.cameraController;
       this.onDefeated = onDefeated;
+      /** Species id in the scrapbook. */
+      this.kind = 'mushroom';
 
       this.spawnX = spawn.x;
       this.patrolDistance = spawn.patrolDistance;

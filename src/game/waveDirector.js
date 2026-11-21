@@ -25,6 +25,7 @@
 
   /** Kinds that can appear as random escorts in later cycles (the golem is only ever the boss). */
   const ESCORT_KINDS = ['nutling', 'thornback', 'gloomwing', 'jelly'];
+  const FLYING_KINDS = ['gloomwing'];
 
   const BOSS_KIND = 'golem';
 
@@ -63,7 +64,9 @@
       flavor: 'Jump as they land - lightning runs along the grass. They split, too!',
       main: { kind: 'jelly', count: 3 },
       escorts: [{ kind: 'thornback', count: 1 }],
-      spawnInterval: 2.2
+      spawnInterval: 2.2,
+      // Jellies send the boy into the air, so nothing flying joins them (no gloomwings, no winged mutants)
+      groundOnly: true
     },
     {
       name: 'THE CINDER GOLEM',
@@ -121,8 +124,11 @@
     const mainKinds = repeat(definition.main.kind, mainCount);
 
     const escortKinds = definition.escorts.flatMap(escort => repeat(escort.kind, escort.count));
+    const randomEscortKinds = definition.groundOnly
+      ? ESCORT_KINDS.filter(kind => !FLYING_KINDS.includes(kind))
+      : ESCORT_KINDS;
     for (let i = 0; i < cycle * 2; i++) {
-      escortKinds.push(ESCORT_KINDS[Math.floor(Math.random() * ESCORT_KINDS.length)]);
+      escortKinds.push(randomEscortKinds[Math.floor(Math.random() * randomEscortKinds.length)]);
     }
 
     // The minimum grows every cycle too, so a negative bonus (Easy) can't keep a creature
@@ -136,7 +142,7 @@
     });
     const toEntry = kind => ({ kind, stats: statsFor(kind) });
 
-    const mutants = buildMutants(number, difficulty);
+    const mutants = buildMutants(number, difficulty, Boolean(definition.groundOnly));
 
     // The boss always arrives first; otherwise everything falls in a random order
     const mainEntries = mainKinds.map(toEntry);
@@ -162,13 +168,15 @@
 
   /**
    * Randomly generated monsters (see Forest.MonsterForge) join from wave 2 on: one at first,
-   * one more every few waves, each as strong as the wave number.
+   * one more every few waves, each as strong as the wave number. With `groundOnly`, none of them fly.
    */
-  function buildMutants(number, difficulty) {
+  function buildMutants(number, difficulty, groundOnly) {
     if (number < FIRST_MUTANT_WAVE) return [];
     const count = Math.min(MAX_MUTANTS_PER_WAVE, 1 + Math.floor((number - FIRST_MUTANT_WAVE) / WAVES_PER_EXTRA_MUTANT));
+    const { WALKER, HOPPER } = Forest.MonsterGenome.Movement;
     return Array.from({ length: count }, () => {
-      const genome = Forest.MonsterForge.generate({ power: number });
+      const movement = groundOnly ? (Math.random() < 0.5 ? WALKER : HOPPER) : undefined;
+      const genome = Forest.MonsterForge.generate({ power: number, movement });
       return { kind: MUTANT_KIND, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) };
     });
   }

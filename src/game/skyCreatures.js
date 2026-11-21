@@ -812,18 +812,19 @@
   // ==========================================
   // Tier 4: Thunder Jelly
   // ==========================================
-  const JELLY_REST_SECONDS = 1.1;
+  const JELLY_REST_SECONDS = 1.6;
   const JELLY_WINDUP_SECONDS = 0.3;
   const JELLY_JUMP_SPEED = 8.5;
   const JELLY_MAX_JUMP_SPEED_X = 5;
   /** The lightning hurts a boy standing on the grass this close to the landing spot. */
-  const JELLY_SHOCK_RADIUS = 2.3;
+  const JELLY_SHOCK_RADIUS = 1.9;
   const MINI_JELLY_SCALE = 0.6;
   /**
-   * A big jelly's lightning crackles high above its bell: the boy's feet must clear 1.75x its height
-   * (~1.84 units). A normal jump peaks at ~1.69, so only a double jump gets over. Small ones are hoppable.
+   * A big jelly's lightning crackles above its bell: the boy's feet must clear 1.4x its height
+   * (~1.47 units). A normal jump peaks at ~1.69, so a well-timed single jump gets over (a double jump
+   * gives room to spare). Small ones are easily hoppable.
    */
-  const BIG_JELLY_BODY_BOX = { enemyHalfWidthRatio: 0.35, playerHalfWidthRatio: 0.25, topRatio: 1.75 };
+  const BIG_JELLY_BODY_BOX = { enemyHalfWidthRatio: 0.35, playerHalfWidthRatio: 0.25, topRatio: 1.4 };
   /** Chance per frame of a spark flickering in the big jelly's lightning field. */
   const JELLY_FIELD_SPARK_CHANCE = 0.25;
 

@@ -48,7 +48,9 @@ check('1 random monster', ofKind('mutant').length === 1);
 const hardThornback = WaveDirector.creatureStats('thornback', LEVELS.HARD);
 check('thornback uses Hard stats', ofKind('thornback').every(entry =>
   entry.stats.hp === hardThornback.hp && entry.stats.speed === hardThornback.speed), JSON.stringify(ofKind('thornback')[0].stats));
-check('Hard thornback tougher than Easy', hardThornback.hp > WaveDirector.creatureStats('thornback', LEVELS.EASY).hp);
+check('first-round thornback falls to one blow, even on Hard', hardThornback.hp === 1);
+check('Hard thornback faster than Easy', hardThornback.speed > WaveDirector.creatureStats('thornback', LEVELS.EASY).speed);
+check('training golem keeps boss health', WaveDirector.creatureStats('golem', LEVELS.EASY).hp > 1);
 check('Easy mushrooms: 1 hp, slower', ofKind('mushroom').every(entry =>
   entry.stats.hp === 1 && entry.stats.speed === LEVELS.EASY.creatureSpeed));
 
@@ -72,7 +74,7 @@ const world = createWorld();
 const mushroom = new Forest.EvilMushroom(world, { x: 0, patrolDistance: 3, stats: { hp: 3, speed: 1.25, damage: 1 } }, noop);
 check('training mushroom health', mushroom.hp === 3);
 check('training mushroom speed scale', mushroom.speedScale === 1.25);
-check('normal mushroom unchanged', new Forest.EvilMushroom(world, { x: 0, patrolDistance: 3 }, noop).hp === 2);
+check('adventure mushroom falls to one blow', new Forest.EvilMushroom(world, { x: 0, patrolDistance: 3 }, noop).hp === 1);
 
 // --- The WaveDirector runs it once, then stops ---
 Training.clearSelection();

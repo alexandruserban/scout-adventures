@@ -72,9 +72,9 @@ LEVEL_ORDER.forEach(id => {
 // ---------- 1. Exact starting health for the first two cycles (the designed values) ----------
 const EXPECTED = {
   //            nutling thornback gloomwing jelly golem
-  NORMAL: { 1: [1, 2, 2, 3, 10], 2: [2, 3, 3, 5, 14], 3: [3, 4, 4, 7, 18] },
-  EASY: { 1: [1, 1, 1, 2, 7], 2: [2, 2, 2, 4, 11], 3: [3, 3, 3, 6, 15] },
-  HARD: { 1: [2, 3, 3, 4, 13], 2: [3, 4, 4, 6, 17], 3: [4, 5, 5, 8, 21] }
+  NORMAL: { 1: [1, 1, 1, 1, 10], 2: [2, 3, 3, 5, 14], 3: [3, 4, 4, 7, 18] },
+  EASY: { 1: [1, 1, 1, 1, 7], 2: [2, 2, 2, 4, 11], 3: [3, 3, 3, 6, 15] },
+  HARD: { 1: [1, 1, 1, 1, 13], 2: [3, 4, 4, 6, 17], 3: [4, 5, 5, 8, 21] }
 };
 LEVEL_ORDER.forEach(id => {
   Object.entries(EXPECTED[id]).forEach(([cycleNumber, hps]) => {
@@ -144,11 +144,11 @@ playWaves(WAVE_COUNT).forEach(wave => {
   check('small jellies do not split again', world.spawned.length === before);
 });
 
-// Mushrooms (before the waves) always start with 2 hp, on every difficulty
+// Mushrooms (before the waves) fall to one blow, on every difficulty
 LEVEL_ORDER.forEach(id => {
   setDifficulty(id);
   const mushroom = new Forest.EvilMushroom(createWorld(), { x: 0, patrolDistance: 2 }, noop);
-  check(`${id}: mushrooms start with 2 hp`, mushroom.hp === 2, `got ${mushroom.hp}`);
+  check(`${id}: mushrooms start with 1 hp`, mushroom.hp === 1, `got ${mushroom.hp}`);
 });
 
 // ---------- 4. Mutants (randomly generated Monster Forge monsters) ----------

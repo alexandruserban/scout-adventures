@@ -121,8 +121,10 @@
     // stuck at 1 hp forever.
     const extraHp = Math.round(HP_PER_CYCLE[kind] * ramp);
     const hpBonus = difficulty.creatureHpBonus * (kind === BOSS_KIND ? BOSS_HP_BONUS_SCALE : 1);
+    // During the first cycle every creature but the boss falls to a single blow, on any difficulty
+    const isOneHit = ramp === 0 && kind !== BOSS_KIND;
     return {
-      hp: Math.max(1 + extraHp, BASE_STATS[kind].hp + extraHp + hpBonus),
+      hp: isOneHit ? 1 : Math.max(1 + extraHp, BASE_STATS[kind].hp + extraHp + hpBonus),
       damage: BASE_STATS[kind].damage,
       speed: Math.min(1.6, 1 + 0.12 * ramp) * difficulty.creatureSpeed
     };

@@ -22,7 +22,7 @@
   const SPAWN_INTERVAL = 1.4;
   /** How strong freshly generated monsters of a random species are, by difficulty. */
   const MONSTER_POWER = { EASY: 2, NORMAL: 4, HARD: 7 };
-  /** Evil mushrooms normally have 2 hp. */
+  /** Evil mushrooms normally fall to one blow; training can make them tougher. */
   const MUSHROOM_HP = { EASY: 1, NORMAL: 2, HARD: 3 };
   const MUSHROOM_DAMAGE = 1;
   /** Tries at rolling a monster of the wanted species (each try hits it about 1 time in 20). */

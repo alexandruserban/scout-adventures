@@ -27,7 +27,8 @@
   const GROUND_FRICTION = 0.82;
 
   // --- Behaviour ---
-  const START_HP = 2;
+  /** One blow is enough, like every first-round creature. */
+  const START_HP = 1;
   const PATROL_SPEED = 1.3;
   const CHASE_SPEED = 2.4;
   /** Starts chasing when the player comes this close... */

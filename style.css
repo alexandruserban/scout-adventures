@@ -344,12 +344,17 @@ body, html {
 /* Mobile / On-Screen Touch Controls */
 :root {
   --touch-size: clamp(44px, min(11vw, 14vh), 58px);
-  --touch-gap: clamp(18px, 4.5vw, 36px);
+  /* Wide gaps also widen the invisible hit strips (each takes half the gap next to it) */
+  --touch-gap: clamp(28px, 8vw, 60px);
+  /* Lift off the bottom edge so thumbs don't have to reach into the screen corner */
+  --touch-bottom: 30px;
+  /* Extra space between ⚔ and ▲ on top of the normal gap */
+  --atk-extra-gap: clamp(16px, 6vw, 40px);
 }
 
 #touch-controls {
   position: absolute;
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--touch-bottom) + env(safe-area-inset-bottom, 0px));
   align-items: flex-end;
   left: calc(24px + env(safe-area-inset-left, 0px));
   right: calc(24px + env(safe-area-inset-right, 0px));
@@ -360,6 +365,9 @@ body, html {
 }
 
 .menu-toggle {
+  /* Above the ▶ hit strip, which can reach under it on narrow phones */
+  position: relative;
+  z-index: 1;
   width: 40px;
   height: 40px;
   pointer-events: auto;
@@ -423,21 +431,25 @@ body, html {
   bottom: -60px;
 }
 
-/* Left: from the screen's left edge to halfway into the gap before ▶ */
+/* Left: from the screen's left edge across the gap to just short of ▶ */
 #btn-touch-left::before {
   left: -100px;
-  right: calc(var(--touch-gap) / -2 - 4px);
+  right: calc((var(--touch-gap) - 6px) * -1 - 4px);
 }
 
-/* Right: from halfway into the gap after ◀, a little past its own edge (stops short of ☰) */
+/* Right: from just left of its own edge to a full gap past it (☰ stays on top) */
 #btn-touch-right::before {
-  left: calc(var(--touch-gap) / -2 - 4px);
-  right: calc(var(--touch-gap) / -2 - 4px);
+  left: -10px;
+  right: calc(var(--touch-gap) * -1 - 4px);
 }
 
-/* Jump: from halfway into the gap after ⚔ to the screen's right edge */
+#btn-touch-atk {
+  margin-right: var(--atk-extra-gap);
+}
+
+/* Jump: from just left of its own edge to the screen's right edge */
 #btn-touch-jump::before {
-  left: calc(var(--touch-gap) / -2 - 4px);
+  left: -10px;
   right: -100px;
 }
 
@@ -546,7 +558,7 @@ body, html {
   /* The menu bar is hidden until the ☰ toggle opens it; it then pops up above the touch buttons */
   #controls-bar {
     display: none;
-    bottom: calc(var(--touch-size) + 28px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--touch-size) + var(--touch-bottom) + 16px + env(safe-area-inset-bottom, 0px));
     flex-wrap: wrap;
     justify-content: center;
     width: max-content;

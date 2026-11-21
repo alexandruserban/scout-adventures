@@ -447,9 +447,9 @@ body, html {
   margin-right: var(--atk-extra-gap);
 }
 
-/* Jump: from just left of its own edge to the screen's right edge */
+/* Jump: from a bit left of its own edge to the screen's right edge */
 #btn-touch-jump::before {
-  left: -10px;
+  left: -24px;
   right: -100px;
 }
 

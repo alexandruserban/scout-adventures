@@ -118,24 +118,28 @@
   function buildWave(number, difficulty) {
     const definition = WAVES[(number - 1) % WAVES.length];
     const cycle = Math.floor((number - 1) / WAVES.length);
-    const speed = Math.min(1.6, 1 + 0.12 * cycle) * difficulty.creatureSpeed;
+    // How far the cycles have ramped things up: slower on easier difficulties
+    const ramp = cycle * difficulty.cycleRamp;
+    const speed = Math.min(1.6, 1 + 0.12 * ramp) * difficulty.creatureSpeed;
 
-    const mainCount = definition.main.count + (definition.isBoss ? Math.floor(cycle / 2) : cycle);
+    const mainCount = definition.main.count + Math.round(definition.isBoss ? ramp / 2 : ramp);
     const mainKinds = repeat(definition.main.kind, mainCount);
 
     const escortKinds = definition.escorts.flatMap(escort => repeat(escort.kind, escort.count));
     const randomEscortKinds = definition.groundOnly
       ? ESCORT_KINDS.filter(kind => !FLYING_KINDS.includes(kind))
       : ESCORT_KINDS;
-    for (let i = 0; i < cycle * 2; i++) {
+    const randomEscortCount = Math.round(ramp * 2);
+    for (let i = 0; i < randomEscortCount; i++) {
       escortKinds.push(randomEscortKinds[Math.floor(Math.random() * randomEscortKinds.length)]);
     }
 
-    // The minimum grows every cycle too, so a negative bonus (Easy) can't keep a creature
-    // stuck at 1 hp: Easy Nutlings go 1 -> 2 -> 3 like everything else.
-    const minimumHp = kind => 1 + HP_PER_CYCLE[kind] * cycle;
+    // The minimum grows with the cycles too, so a negative bonus (Easy) can't keep a creature
+    // stuck at 1 hp forever.
+    const extraHp = kind => Math.round(HP_PER_CYCLE[kind] * ramp);
+    const minimumHp = kind => 1 + extraHp(kind);
     const statsFor = kind => ({
-      hp: Math.max(minimumHp(kind), BASE_STATS[kind].hp + HP_PER_CYCLE[kind] * cycle
+      hp: Math.max(minimumHp(kind), BASE_STATS[kind].hp + extraHp(kind)
         + difficulty.creatureHpBonus * (kind === BOSS_KIND ? BOSS_HP_BONUS_SCALE : 1)),
       damage: BASE_STATS[kind].damage,
       speed
@@ -161,22 +165,27 @@
       name: cycle > 0 ? `${definition.name} +${cycle}` : definition.name,
       flavor: definition.flavor + mutantWarning,
       isBoss: Boolean(definition.isBoss),
-      spawnInterval: definition.spawnInterval * Math.max(0.55, 1 - 0.1 * cycle) * difficulty.spawnIntervalScale,
+      spawnInterval: definition.spawnInterval * Math.max(0.55, 1 - 0.1 * ramp) * difficulty.spawnIntervalScale,
       queue
     };
   }
 
   /**
    * Randomly generated monsters (see Forest.MonsterForge) join from wave 2 on: one at first,
-   * one more every few waves, each as strong as the wave number. With `groundOnly`, none of them fly.
+   * one more every few waves, each as strong as the wave number during the first cycle; after that
+   * their strength (and number) grows only as fast as the difficulty's cycle ramp allows.
+   * With `groundOnly`, none of them fly.
    */
   function buildMutants(number, difficulty, groundOnly) {
     if (number < FIRST_MUTANT_WAVE) return [];
-    const count = Math.min(MAX_MUTANTS_PER_WAVE, 1 + Math.floor((number - FIRST_MUTANT_WAVE) / WAVES_PER_EXTRA_MUTANT));
+    const power = number <= WAVES.length
+      ? number
+      : Math.round(WAVES.length + (number - WAVES.length) * difficulty.cycleRamp);
+    const count = Math.min(MAX_MUTANTS_PER_WAVE, 1 + Math.floor((power - FIRST_MUTANT_WAVE) / WAVES_PER_EXTRA_MUTANT));
     const { WALKER, HOPPER } = Forest.MonsterGenome.Movement;
     return Array.from({ length: count }, () => {
       const movement = groundOnly ? (Math.random() < 0.5 ? WALKER : HOPPER) : undefined;
-      const genome = Forest.MonsterForge.generate({ power: number, movement });
+      const genome = Forest.MonsterForge.generate({ power, movement });
       return { kind: MUTANT_KIND, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) };
     });
   }

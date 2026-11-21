@@ -20,7 +20,12 @@
       /** Added to every sky creature's health (never below 1). */
       creatureHpBonus: -1,
       /** Multiplies the time between creatures falling. */
-      spawnIntervalScale: 1.3
+      spawnIntervalScale: 1.3,
+      /**
+       * How much tougher each repeat of the five waves gets (1 = full ramp). Scales the extra
+       * health, speed, numbers and mutant strength that later cycles add.
+       */
+      cycleRamp: 0.4
     }),
     NORMAL: Object.freeze({
       id: 'NORMAL',
@@ -31,7 +36,8 @@
       heartDropScale: 1.5,
       creatureSpeed: 1,
       creatureHpBonus: 0,
-      spawnIntervalScale: 1
+      spawnIntervalScale: 1,
+      cycleRamp: 0.7
     }),
     HARD: Object.freeze({
       id: 'HARD',
@@ -43,7 +49,8 @@
       heartDropScale: 1,
       creatureSpeed: 1.25,
       creatureHpBonus: 1,
-      spawnIntervalScale: 0.8
+      spawnIntervalScale: 0.8,
+      cycleRamp: 1
     })
   });
 

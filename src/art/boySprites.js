@@ -390,7 +390,8 @@
   ];
 
   /**
-   * Keyframes of the slam: lift -> raise -> wind-up hold -> fast downswing -> IMPACT -> recover.
+   * Keyframes of the slam: snap up -> brief wind-up -> fast downswing -> IMPACT -> recover.
+   * Timed like the air slash: the blade lands 0.07s after the press and the whole swing takes 0.27s.
    *  bladeAngle   blade direction in degrees (0 = forward, 90 = straight up, 180 = behind)
    *  handAngle    where the hands sit around the near shoulder (0 = forward, 90 = up)
    *  handReach    distance from shoulder to hands, in pixels
@@ -401,13 +402,10 @@
    *  isImpact     the blade hits the ground: deal damage on this frame
    */
   const SLAM_KEYFRAMES = [
-    { name: 'Lift', bladeAngle: 15, handAngle: -25, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.025 },
-    { name: 'Raise', bladeAngle: 60, handAngle: 10, handReach: 7, bodyShiftX: 0, stance: 'stand', duration: 0.025 },
-    { name: 'Raise', bladeAngle: 100, handAngle: 40, handReach: 9, bodyShiftX: -1, stance: 'stand', duration: 0.03 },
-    { name: 'Overhead', bladeAngle: 125, handAngle: 45, handReach: 12, bodyShiftX: -1, stance: 'stand', duration: 0.035 },
-    { name: 'Wind-up', bladeAngle: 140, handAngle: 48, handReach: 12, bodyShiftX: -1, stance: 'stand', duration: 0.05 },
-    { name: 'Downswing', bladeAngle: 85, handAngle: 35, handReach: 10, bodyShiftX: 0, stance: 'stand', duration: 0.025, smearFrom: 140, playsSwoosh: true },
-    { name: 'Downswing', bladeAngle: 30, handAngle: 5, handReach: 8, bodyShiftX: 1, stance: 'lunge', duration: 0.025, smearFrom: 85 },
+    { name: 'Raise', bladeAngle: 100, handAngle: 40, handReach: 9, bodyShiftX: -1, stance: 'stand', duration: 0.015 },
+    { name: 'Wind-up', bladeAngle: 140, handAngle: 48, handReach: 12, bodyShiftX: -1, stance: 'stand', duration: 0.02 },
+    { name: 'Downswing', bladeAngle: 85, handAngle: 35, handReach: 10, bodyShiftX: 0, stance: 'stand', duration: 0.02, smearFrom: 140, playsSwoosh: true },
+    { name: 'Downswing', bladeAngle: 30, handAngle: 5, handReach: 8, bodyShiftX: 1, stance: 'lunge', duration: 0.015, smearFrom: 85 },
     { name: 'IMPACT', bladeAngle: -30, handAngle: -35, handReach: 7, bodyShiftX: 1, stance: 'lunge', duration: 0.08, smearFrom: 30, isImpact: true },
     { name: 'Settle', bladeAngle: -32, handAngle: -38, handReach: 7, bodyShiftX: 1, stance: 'lunge', duration: 0.05 },
     { name: 'Recover', bladeAngle: -5, handAngle: -30, handReach: 6, bodyShiftX: 0, stance: 'stand', duration: 0.04 },

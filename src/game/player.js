@@ -479,7 +479,7 @@
       }
     }
 
-    /** Overhead slam: lift -> raise -> wind-up hold -> fast downswing -> IMPACT -> recover. */
+    /** Overhead slam: snap up -> brief wind-up -> fast downswing -> IMPACT -> recover. */
     updateAttack(deltaSeconds) {
       this.velocityX = 0; // feet stay planted: the sword is heavy
       this.advanceAttackAnimation(deltaSeconds, frame => this.landSlam(frame));

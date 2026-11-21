@@ -161,6 +161,8 @@
       this.isFlying = false;
       /** 0 = knocked back and stunned by every hit, 1 = shrugs hits off entirely. */
       this.knockbackResistance = 0;
+      /** Shrinks (below 1) the box in which touching it hurts the boy. Hitting it is unaffected. */
+      this.contactScale = 1;
       /** The player, remembered from the last update (for landing shockwaves). */
       this.target = null;
       /** True once it has exploded and left the scene. */
@@ -203,8 +205,8 @@
     isTouching(player) {
       const dx = Math.abs(player.x - this.x);
       const dy = Math.abs((player.y + player.height / 2) - this.centerY);
-      return dx < (player.width + this.width) * CONTACT_WIDTH_RATIO
-        && dy < (player.height + this.height) * CONTACT_HEIGHT_RATIO;
+      return dx < (player.width + this.width) * CONTACT_WIDTH_RATIO * this.contactScale
+        && dy < (player.height + this.height) * CONTACT_HEIGHT_RATIO * this.contactScale;
     }
 
     isInsideArea({ centerX, centerY, halfWidth, halfHeight }) {
@@ -657,14 +659,22 @@
   // ==========================================
   const MOTH_HOVER_HEIGHT = 2.5;
   const MOTH_SIDE_DISTANCE = 2.6;
-  const MOTH_HOVER_SECONDS = [1.4, 2.4];
-  const MOTH_SWOOP_SECONDS = 1.0;
+  const MOTH_HOVER_SECONDS = [2.2, 3.4];
+  const MOTH_SWOOP_SECONDS = 1.3;
+  /** Before diving it stops and glows for this long, so the boy can see the dive coming. */
+  const MOTH_WARNING_SECONDS = 0.5;
+  /** If another moth is already diving, wait this long and check again: only one dives at a time. */
+  const MOTH_DIVE_RETRY_SECONDS = 0.6;
+  /** Moths that have started a dive (finished ones are filtered out by state). */
+  const divingMoths = new Set();
   const MOTH_FLAP_SECONDS = 0.11;
   /** How quickly it drifts towards its hover spot. */
   const MOTH_FOLLOW_RATE = 2.5;
   /** Lowest point of a dive (its feet), just above the grass. */
   const MOTH_DIVE_BOTTOM = 0.3;
   const MOTH_DIVE_TINT = 0xffc0ff;
+  /** Its hurt box is this fraction of the usual size: only its body hurts, not its wingtips. */
+  const MOTH_CONTACT_SCALE = 0.6;
 
   class Gloomwing extends SkyCreature {
     constructor(world, options) {
@@ -675,6 +685,7 @@
         fallFrame: 'down',
         colors: { main: '#6a35a0', accent: '#ff9de2' }
       });
+      this.contactScale = MOTH_CONTACT_SCALE;
       this.hoverY = GROUND_Y + MOTH_HOVER_HEIGHT + randomBetween(-0.2, 0.5);
       this.side = randomDirection();
       this.flapTimer = 0;
@@ -706,11 +717,23 @@
     /** Drift to one side of the boy, bobbing up and down. */
     updateHover(deltaSeconds, player) {
       this.flapWings(deltaSeconds);
+      this.facing = directionTowards(this.x, player.x);
+
+      // Warning: hold still and glow just before diving
+      if (this.stateTimer <= MOTH_WARNING_SECONDS && (this.isWarning || !this.anotherMothIsDiving())) {
+        if (!this.isWarning) {
+          this.isWarning = true;
+          divingMoths.add(this);
+          this.tint = MOTH_DIVE_TINT;
+        }
+        if (this.stateTimer <= 0 && !player.isDefeated) this.startSwoop(player);
+        return;
+      }
+
       const targetX = player.x + this.side * MOTH_SIDE_DISTANCE;
       const targetY = this.hoverY + Math.sin(this.time * 3) * 0.3;
       this.x += (targetX - this.x) * Math.min(1, MOTH_FOLLOW_RATE * deltaSeconds);
       this.y += (targetY - this.y) * Math.min(1, 3 * deltaSeconds);
-      this.facing = directionTowards(this.x, player.x);
       this.keepInsideLevel();
 
       // Drifting spores
@@ -718,12 +741,25 @@
         this.particles.burst(this.x, this.y, 1, '#ffe066', 0.3, 0.8);
       }
 
-      if (this.stateTimer <= 0 && !player.isDefeated) this.startSwoop(player);
+      // Its turn came while another moth was diving: wait a little and try again
+      if (this.stateTimer <= 0) this.stateTimer = MOTH_WARNING_SECONDS + MOTH_DIVE_RETRY_SECONDS;
+    }
+
+    anotherMothIsDiving() {
+      for (const moth of divingMoths) {
+        const stillDiving = !moth.isGone
+          && (moth.state === CreatureState.SWOOP || (moth.state === CreatureState.HOVER && moth.isWarning));
+        if (!stillDiving) divingMoths.delete(moth);
+        else if (moth !== this) return true;
+      }
+      return false;
     }
 
     /** Dive in a U-shaped arc through the boy's position and back up on the other side. */
     startSwoop(player) {
       this.state = CreatureState.SWOOP;
+      this.isWarning = false;
+      divingMoths.add(this);
       this.swoopSeconds = MOTH_SWOOP_SECONDS / this.speed;
       this.stateTimer = this.swoopSeconds;
       this.swoopStartX = this.x;
@@ -748,6 +784,7 @@
     }
 
     finishSwoop() {
+      divingMoths.delete(this);
       this.state = CreatureState.HOVER;
       this.stateTimer = randomBetween(...MOTH_HOVER_SECONDS) / this.speed;
       this.side = -this.side;
@@ -764,6 +801,7 @@
 
     recover() {
       // Also takes off again if it was knocked down before it finished falling
+      this.isWarning = false;
       this.isFlying = true;
       this.state = CreatureState.HOVER;
       this.stateTimer = 1.0;

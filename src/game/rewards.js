@@ -50,8 +50,12 @@
     return NATIVE_POINTS[enemy.kind] || 10;
   }
 
-  /** Chance (0..1) that the enemy drops a heart when defeated. */
+  /** Chance (0..1) that the enemy drops a heart when defeated, raised on easier difficulties. */
   function heartDropChance(enemy) {
+    return Math.min(1, baseHeartDropChance(enemy) * Forest.Difficulty.current.heartDropScale);
+  }
+
+  function baseHeartDropChance(enemy) {
     const genome = enemy.genome;
     if (genome) {
       if (genome.isMini) return MINI_HEART_CHANCE;

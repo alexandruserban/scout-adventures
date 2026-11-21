@@ -54,9 +54,9 @@
     {
       name: 'GLOOMWING SWARM',
       flavor: 'Spore moths circle overhead. Jump and strike as they dive!',
-      main: { kind: 'gloomwing', count: 5 },
-      escorts: [{ kind: 'nutling', count: 2 }],
-      spawnInterval: 1.2
+      main: { kind: 'gloomwing', count: 4 },
+      escorts: [{ kind: 'nutling', count: 1 }],
+      spawnInterval: 1.8
     },
     {
       name: 'THUNDER JELLY STORM',

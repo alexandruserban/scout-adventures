@@ -13,6 +13,8 @@
       /** Boss rewards can raise the hearts up to this many. */
       maxHearts: 9,
       heartsPerWaveCleared: 2,
+      /** Multiplies the chance of a defeated foe dropping a heart. */
+      heartDropScale: 2,
       /** Multiplies how fast sky creatures move and attack. */
       creatureSpeed: 0.8,
       /** Added to every sky creature's health (never below 1). */
@@ -26,6 +28,7 @@
       startHearts: 5,
       maxHearts: 8,
       heartsPerWaveCleared: 1,
+      heartDropScale: 1.5,
       creatureSpeed: 1,
       creatureHpBonus: 0,
       spawnIntervalScale: 1
@@ -37,6 +40,7 @@
       maxHearts: 6,
       /** No healing between waves; only beating a boss restores hearts. */
       heartsPerWaveCleared: 0,
+      heartDropScale: 1,
       creatureSpeed: 1.25,
       creatureHpBonus: 1,
       spawnIntervalScale: 0.8

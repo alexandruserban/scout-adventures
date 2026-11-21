@@ -45,7 +45,7 @@
 
       // Clicking anywhere on the game (but not on buttons or the HUD) attacks
       window.addEventListener('mousedown', event => {
-        if (event.target.tagName === 'BUTTON' || event.target.closest('#hud')) return;
+        if (event.target.closest('button') || event.target.closest('#hud')) return;
         this.trigger('attack');
       });
     }

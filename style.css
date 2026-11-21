@@ -344,6 +344,7 @@ body, html {
 /* Mobile / On-Screen Touch Controls */
 :root {
   --touch-size: clamp(44px, min(11vw, 14vh), 58px);
+  --touch-gap: clamp(18px, 4.5vw, 36px);
 }
 
 #touch-controls {
@@ -380,7 +381,7 @@ body, html {
 .touch-cluster {
   display: flex;
   /* Enough spacing that thumbs don't hit the neighbouring button */
-  gap: clamp(18px, 4.5vw, 36px);
+  gap: var(--touch-gap);
   pointer-events: auto;
 }
 
@@ -399,6 +400,45 @@ body, html {
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 0 #1b4d1b;
+}
+
+/*
+ * Invisible hit strips: left, right and jump react to touches anywhere in a column that runs from
+ * the top of the screen to the bottom, without making the visible buttons any bigger. Touches on a
+ * pseudo-element count as touches on its button. The attack button keeps its normal area, since
+ * tapping anywhere else on the game attacks anyway.
+ */
+#btn-touch-left,
+#btn-touch-right,
+#btn-touch-jump {
+  position: relative;
+}
+
+#btn-touch-left::before,
+#btn-touch-right::before,
+#btn-touch-jump::before {
+  content: '';
+  position: absolute;
+  top: -100vh;
+  bottom: -60px;
+}
+
+/* Left: from the screen's left edge to halfway into the gap before ▶ */
+#btn-touch-left::before {
+  left: -100px;
+  right: calc(var(--touch-gap) / -2 - 4px);
+}
+
+/* Right: from halfway into the gap after ◀, a little past its own edge (stops short of ☰) */
+#btn-touch-right::before {
+  left: calc(var(--touch-gap) / -2 - 4px);
+  right: calc(var(--touch-gap) / -2 - 4px);
+}
+
+/* Jump: from halfway into the gap after ⚔ to the screen's right edge */
+#btn-touch-jump::before {
+  left: calc(var(--touch-gap) / -2 - 4px);
+  right: -100px;
 }
 
 .touch-btn:active {

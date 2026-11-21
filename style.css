@@ -12,6 +12,7 @@ body, html {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  -webkit-touch-callout: none;
   background-color: #0d1615;
   font-family: 'Press Start 2P', monospace, sans-serif;
   color: #f7fff7;
@@ -23,6 +24,8 @@ body, html {
   position: absolute;
   top: 0;
   left: 0;
+  /* No browser pinch/pan gestures over the game: they would cancel fingers held on the touch buttons */
+  touch-action: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
@@ -361,6 +364,7 @@ body, html {
   display: none;
   justify-content: space-between;
   pointer-events: none;
+  touch-action: none;
   z-index: 25;
 }
 

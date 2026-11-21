@@ -7,7 +7,10 @@
 (function (Forest) {
   const { Config, LevelData } = Forest;
   const Sfx = Forest.SoundEffects;
-  const { Difficulty, Rewards, Scrapbook } = Forest;
+  const { Difficulty, Rewards, Scrapbook, Training } = Forest;
+
+  /** Training mushrooms patrol this far either side of where they appear. */
+  const TRAINING_PATROL_DISTANCE = 3.5;
 
   const BEST_WAVE_STORAGE_KEY = 'forest-pixel-adventure.bestWave';
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
@@ -103,9 +106,20 @@
   /** Names of the menus currently pausing the game (see Forest.Game.setPaused). */
   const pauseReasons = new Set();
   const totalMushrooms = LevelData.mushroomSpawns.length;
+  /**
+   * True while practising against creatures picked in the scrapbook (see Forest.Training)
+   * instead of playing the adventure. Training doesn't touch the scrapbook or the high scores.
+   */
+  let isTraining = false;
+  /** How many creatures the current training session started with. */
+  let trainingTotal = 0;
 
   const waves = new Forest.WaveDirector({
     spawnCreature: ({ kind, stats, genome }, x) => {
+      if (kind === 'mushroom') {
+        addEnemy(new Forest.EvilMushroom(world, { x, patrolDistance: TRAINING_PATROL_DISTANCE, stats }, onEnemyDefeated));
+        return;
+      }
       const options = { x, stats, onDefeated: onEnemyDefeated };
       addEnemy(genome
         ? Forest.MonsterForge.create(world, { ...options, genome })
@@ -126,6 +140,7 @@
   /** Every enemy enters play through here, so the scrapbook hears about it. */
   function addEnemy(enemy) {
     enemies.push(enemy);
+    if (isTraining) return;
     const { species, isNew } = Scrapbook.recordEncounter(enemy, waves.waveNumber);
     if (isNew) {
       points += Rewards.NEW_SPECIES_POINTS;
@@ -147,9 +162,10 @@
     const reward = Rewards.pointsFor(enemy);
     points += reward;
     floatingText.spawn(`+${reward}`, enemy.x, enemy.centerY + 0.5);
-    Scrapbook.recordDefeat(enemy);
     if (Math.random() < Rewards.heartDropChance(enemy)) hearts.spawn(enemy.x, enemy.centerY);
+    if (isTraining) return;
 
+    Scrapbook.recordDefeat(enemy);
     if (enemy instanceof Forest.EvilMushroom) {
       mushroomsDefeated++;
       // The last mushroom angers the sky itself
@@ -159,6 +175,10 @@
 
   function announceWave(wave) {
     Sfx.waveStart();
+    if (isTraining) {
+      hud.showBanner({ title: '🎯 TRAINING', subtitle: wave.flavor, variant: 'cleared', seconds: 3.2 });
+      return;
+    }
     hud.showBanner({
       title: `WAVE ${wave.number}: ${wave.name}`,
       subtitle: wave.flavor,
@@ -170,6 +190,10 @@
   /** Hearts back after every wave (depending on difficulty); an extra heart container after each boss. */
   function rewardWaveCleared(wave) {
     Sfx.waveCleared();
+    if (isTraining) {
+      showTrainingResult(true);
+      return;
+    }
     const { heartsPerWaveCleared, maxHearts } = Difficulty.current;
     let reward;
     if (wave.isBoss) {
@@ -212,11 +236,32 @@
   }
 
   function refreshScore() {
+    if (isTraining) {
+      hud.showScore(`🎯 TRAINING: ${waves.remainingFoes} LEFT`);
+      return;
+    }
     // No defeated-enemy counts; just the wave number once the sky waves begin
     hud.showScore(waves.isActive ? `WAVE ${waves.waveNumber}` : '');
   }
 
+  /** End of a training session, won (everything defeated) or lost (the boy fell). */
+  function showTrainingResult(won) {
+    const defeated = trainingTotal - waves.remainingFoes;
+    hud.showTrainingResult({
+      won,
+      defeated: won ? trainingTotal : defeated,
+      total: trainingTotal,
+      points,
+      onRetry: restartGame,
+      onLeave: () => Forest.Game.endTraining()
+    });
+  }
+
   function showGameOver() {
+    if (isTraining) {
+      showTrainingResult(false);
+      return;
+    }
     const previousBestWave = loadBest(BEST_WAVE_STORAGE_KEY);
     const isNewBest = waves.waveNumber > previousBestWave;
     if (isNewBest) saveBest(BEST_WAVE_STORAGE_KEY, waves.waveNumber);
@@ -301,7 +346,16 @@
     foesDefeated = 0;
     points = 0;
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
-    spawnMushrooms();
+
+    const session = isTraining ? Training.buildSession() : null;
+    // Nothing left to train against (e.g. every pick was unticked): back to the adventure
+    if (!session) isTraining = false;
+    if (session) {
+      trainingTotal = session.total;
+      waves.startCustom(session);
+    } else {
+      spawnMushrooms();
+    }
     refreshHealth();
     refreshScore();
     refreshPoints();
@@ -312,7 +366,7 @@
     restartGame();
     hud.showBanner({
       title: `DIFFICULTY: ${level.label}`,
-      subtitle: `${level.startHearts} hearts. A fresh adventure begins!`,
+      subtitle: `${level.startHearts} hearts. ${isTraining ? 'Training starts over!' : 'A fresh adventure begins!'}`,
       variant: level.id === 'HARD' ? 'boss' : 'cleared',
       seconds: 2.2
     });
@@ -357,6 +411,11 @@
   // Hooks for the sprite gallery and the browser console
   // ==========================================
   const SUMMON_DISTANCE = [2.5, 4];
+  const modeListeners = [];
+
+  function notifyModeChanged() {
+    modeListeners.forEach(listener => listener(isTraining));
+  }
 
   Forest.Game = {
     /**
@@ -391,6 +450,34 @@
 
     get isPaused() {
       return isPaused;
+    },
+
+    /**
+     * Start (or restart) a training session with the creatures picked in the scrapbook.
+     * @returns {boolean} false when nothing is picked (the game carries on as before)
+     */
+    startTraining() {
+      if (Training.selectedCreatureCount === 0) return false;
+      isTraining = true;
+      restartGame();
+      notifyModeChanged();
+      return true;
+    },
+
+    /** Leave training and start a fresh adventure. */
+    endTraining() {
+      isTraining = false;
+      restartGame();
+      notifyModeChanged();
+    },
+
+    get isTraining() {
+      return isTraining;
+    },
+
+    /** @param {(isTraining: boolean) => void} listener called when training starts or ends */
+    onModeChange(listener) {
+      modeListeners.push(listener);
     },
 
     /** The boy (read-only access for the console and tests). */

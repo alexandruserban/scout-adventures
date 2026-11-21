@@ -46,11 +46,21 @@
     const bar = document.getElementById('controls-bar');
     if (!toggle || !bar) return;
 
-    toggle.addEventListener('click', () => {
-      const open = bar.classList.toggle('open');
-      toggle.setAttribute('aria-expanded', String(open));
-      if (Forest.Game) Forest.Game.setPaused(open, 'menu');
-    });
+    toggle.addEventListener('click', () => setMenuOpen(!bar.classList.contains('open')));
+  }
+
+  function setMenuOpen(open) {
+    const toggle = document.getElementById('btn-menu-toggle');
+    const bar = document.getElementById('controls-bar');
+    if (!toggle || !bar) return;
+    bar.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    if (Forest.Game) Forest.Game.setPaused(open, 'menu');
+  }
+
+  /** Hide the ☰ settings bar (e.g. when a menu item starts something), resuming the game. */
+  function closeMenu() {
+    setMenuOpen(false);
   }
 
   /** Height in CSS pixels, from the bottom of the window, that the touch buttons cover (0 when hidden). */
@@ -60,5 +70,5 @@
     return window.innerHeight - panel.getBoundingClientRect().top;
   }
 
-  Forest.TouchControls = { bind, coveredBottomPixels };
+  Forest.TouchControls = { bind, coveredBottomPixels, closeMenu };
 })(window.Forest);

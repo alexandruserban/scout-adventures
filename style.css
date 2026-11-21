@@ -749,6 +749,82 @@ body, html {
 .scrap-card.undiscovered .scrap-latin,
 .scrap-card.undiscovered .scrap-common { color: #7a6a50; }
 
+/* --- Training picks --- */
+.overlay-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.pixel-btn.small-btn { padding: 6px 12px; font-size: 8px; }
+.pixel-btn:disabled,
+.pixel-btn:disabled:hover {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 4px 0 #1b4d1b;
+}
+
+.training-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: #2a2418;
+  border: 2px dashed #b08850;
+  border-radius: 4px;
+}
+
+.training-bar-text { font-size: 8px; line-height: 1.8; color: #e7d7b5; }
+.training-bar-text b { color: #a3e635; }
+.training-bar-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.scrap-card.training-picked {
+  border-color: #4d7c0f;
+  box-shadow: 0 0 0 3px #a3e635, 2px 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.train-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px dashed #a08050;
+}
+
+.train-box button {
+  font-family: inherit;
+  cursor: pointer;
+  color: #3b2a14;
+  background: #d9c9a3;
+  border: 2px solid #a08050;
+  border-radius: 3px;
+}
+
+.train-box button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.train-toggle { font-size: 8px; padding: 8px 10px; min-width: 110px; }
+.scrap-card.training-picked .train-toggle { background: #4d7c0f; border-color: #365314; color: #f7fee7; }
+
+.train-stepper { display: flex; align-items: center; gap: 8px; }
+.train-step { width: 32px; height: 32px; font-size: 14px; }
+.train-count { min-width: 34px; font-size: 10px; color: #3b2a14; }
+
+.train-levels { display: flex; gap: 6px; }
+.train-levels .train-level { width: 36px; height: 32px; font-size: 14px; padding: 0; opacity: 0.55; }
+.train-levels .train-level.active { opacity: 1; }
+.train-level.active[data-level="EASY"] { background: #bbf7d0; border-color: #15803d; }
+.train-level.active[data-level="NORMAL"] { background: #fde68a; border-color: #a16207; }
+.train-level.active[data-level="HARD"] { background: #fecaca; border-color: #b91c1c; }
+.train-level-name { font-size: 6px; color: #6b4a22; }
+
 @media (max-width: 768px) {
   #species-toast { top: 38%; width: min(88vw, 420px); }
   .scrapbook-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }

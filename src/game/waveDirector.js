@@ -85,7 +85,9 @@
     INTRO: 'INTRO',
     SPAWNING: 'SPAWNING',
     /** Short breather after a wave is wiped out. */
-    CLEARED: 'CLEARED'
+    CLEARED: 'CLEARED',
+    /** A one-off custom wave (e.g. training) is over; nothing more comes. */
+    FINISHED: 'FINISHED'
   });
 
   const INTRO_SECONDS = 2.8;
@@ -109,6 +111,24 @@
   }
 
   /**
+   * Health, damage and speed of a hand-made sky creature at a difficulty level.
+   * @param {string} kind a Forest.SkyCreatures kind
+   * @param {object} difficulty a Forest.Difficulty level
+   * @param {number} [ramp] how far repeated cycles have ramped things up (0 = first cycle)
+   */
+  function creatureStats(kind, difficulty, ramp = 0) {
+    // The minimum grows with the cycles too, so a negative bonus (Easy) can't keep a creature
+    // stuck at 1 hp forever.
+    const extraHp = Math.round(HP_PER_CYCLE[kind] * ramp);
+    const hpBonus = difficulty.creatureHpBonus * (kind === BOSS_KIND ? BOSS_HP_BONUS_SCALE : 1);
+    return {
+      hp: Math.max(1 + extraHp, BASE_STATS[kind].hp + extraHp + hpBonus),
+      damage: BASE_STATS[kind].damage,
+      speed: Math.min(1.6, 1 + 0.12 * ramp) * difficulty.creatureSpeed
+    };
+  }
+
+  /**
    * Work out what wave `number` (1, 2, 3, ...) contains at the given difficulty level.
    * @param {number} number
    * @param {object} difficulty a Forest.Difficulty level
@@ -120,7 +140,6 @@
     const cycle = Math.floor((number - 1) / WAVES.length);
     // How far the cycles have ramped things up: slower on easier difficulties
     const ramp = cycle * difficulty.cycleRamp;
-    const speed = Math.min(1.6, 1 + 0.12 * ramp) * difficulty.creatureSpeed;
 
     const mainCount = definition.main.count + Math.round(definition.isBoss ? ramp / 2 : ramp);
     const mainKinds = repeat(definition.main.kind, mainCount);
@@ -134,17 +153,7 @@
       escortKinds.push(randomEscortKinds[Math.floor(Math.random() * randomEscortKinds.length)]);
     }
 
-    // The minimum grows with the cycles too, so a negative bonus (Easy) can't keep a creature
-    // stuck at 1 hp forever.
-    const extraHp = kind => Math.round(HP_PER_CYCLE[kind] * ramp);
-    const minimumHp = kind => 1 + extraHp(kind);
-    const statsFor = kind => ({
-      hp: Math.max(minimumHp(kind), BASE_STATS[kind].hp + extraHp(kind)
-        + difficulty.creatureHpBonus * (kind === BOSS_KIND ? BOSS_HP_BONUS_SCALE : 1)),
-      damage: BASE_STATS[kind].damage,
-      speed
-    });
-    const toEntry = kind => ({ kind, stats: statsFor(kind) });
+    const toEntry = kind => ({ kind, stats: creatureStats(kind, difficulty, ramp) });
 
     const mutants = buildMutants(number, difficulty, Boolean(definition.groundOnly));
 
@@ -212,6 +221,8 @@
       this.queue = [];
       this.phaseTimer = 0;
       this.spawnTimer = 0;
+      /** True while running a one-off custom wave instead of the endless ones. */
+      this.isCustom = false;
     }
 
     get isActive() {
@@ -227,6 +238,22 @@
     start() {
       if (this.isActive) return;
       this.announceNextWave();
+    }
+
+    /**
+     * Run one custom wave instead of the endless ones (e.g. a training session). It is announced
+     * and cleared like any wave, then the director stops.
+     * @param {{name:string, flavor:string, spawnInterval:number,
+     *   queue:{kind:string, stats:object, genome?:object}[]}} wave
+     */
+    startCustom(wave) {
+      this.reset();
+      this.isCustom = true;
+      this.currentWave = { number: 0, cycle: 0, isBoss: false, ...wave };
+      this.queue = [...wave.queue];
+      this.phase = Phase.INTRO;
+      this.phaseTimer = INTRO_SECONDS;
+      this.hooks.onWaveAnnounced(this.currentWave);
     }
 
     announceNextWave() {
@@ -263,7 +290,9 @@
 
         case Phase.CLEARED:
           this.phaseTimer -= deltaSeconds;
-          if (this.phaseTimer <= 0) this.announceNextWave();
+          if (this.phaseTimer > 0) break;
+          if (this.isCustom) this.phase = Phase.FINISHED;
+          else this.announceNextWave();
           break;
       }
     }
@@ -280,5 +309,6 @@
     }
   }
 
+  WaveDirector.creatureStats = creatureStats;
   Forest.WaveDirector = WaveDirector;
 })(window.Forest);

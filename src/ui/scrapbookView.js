@@ -1,18 +1,25 @@
 /**
  * The "Scrapbook" modal: a page for every species, filled in once the boy has met one.
  * The game is paused while it's open.
+ *
+ * Every discovered page can also be ticked for training, with how many to fight and at which
+ * difficulty; the bar at the top starts a training session with everything ticked.
  */
 (function (Forest) {
   const { asciiToCanvas } = Forest.PixelCanvas;
-  const { MonsterSpecies, Scrapbook } = Forest;
+  const { MonsterSpecies, Scrapbook, Training, Difficulty } = Forest;
   const SkyArt = Forest.SkyCreatureSprites;
   const MushroomArt = Forest.MushroomSprites;
 
   const overlay = document.getElementById('scrapbook-overlay');
   const content = document.getElementById('scrapbook-content');
   const summary = document.getElementById('scrapbook-summary');
+  const trainingBar = document.getElementById('training-bar');
   const openButton = document.getElementById('btn-scrapbook');
   const closeButton = document.getElementById('btn-scrapbook-close');
+
+  /** Same icons as the toolbar's difficulty button. */
+  const LEVEL_ICONS = { EASY: '🌱', NORMAL: '⚔️', HARD: '💀' };
 
   const ZOOM = 3;
   /** The golem is much bigger than everyone else. */
@@ -41,6 +48,7 @@
     summary.innerHTML = `
       <div>SPECIES FOUND: <b>${found} / ${total}</b></div>
       <div class="scrapbook-progress"><div style="width:${(found / total) * 100}%"></div></div>`;
+    renderTrainingBar();
 
     content.innerHTML = '';
     MonsterSpecies.ALL.forEach(species => {
@@ -67,7 +75,107 @@
       const text = abilities.length ? `Specimen could: ${abilities.join(', ')}.` : 'Specimen had no special tricks.';
       page.appendChild(createElement('div', 'scrap-note', text));
     }
+    page.appendChild(createTrainingControls(species, page));
     return page;
+  }
+
+  // ==========================================
+  // Training
+  // ==========================================
+
+  /** TRAIN tick box, plus how many and how hard once ticked. Redraws itself in place. */
+  function createTrainingControls(species, page) {
+    const box = createElement('div', 'train-box');
+
+    const draw = () => {
+      const pick = Training.pickFor(species.id);
+      page.classList.toggle('training-picked', pick.selected);
+      box.innerHTML = '';
+      box.appendChild(createButton(pick.selected ? '☑ TRAINING' : '☐ TRAIN', 'train-toggle',
+        () => change(() => Training.setSelected(species.id, !pick.selected))));
+      if (!pick.selected) return;
+
+      const stepper = createElement('div', 'train-stepper');
+      stepper.appendChild(createButton('−', 'train-step', () => change(() => Training.setCount(species.id, pick.count - 1)),
+        { disabled: pick.count <= Training.MIN_COUNT, title: 'Fewer' }));
+      stepper.appendChild(createElement('span', 'train-count', `×${pick.count}`));
+      stepper.appendChild(createButton('+', 'train-step', () => change(() => Training.setCount(species.id, pick.count + 1)),
+        { disabled: pick.count >= Training.MAX_COUNT, title: 'More' }));
+      box.appendChild(stepper);
+
+      const levels = createElement('div', 'train-levels');
+      Training.LEVEL_IDS.forEach(levelId => {
+        const label = Difficulty.LEVELS[levelId].label;
+        levels.appendChild(createButton(LEVEL_ICONS[levelId], `train-level${pick.level === levelId ? ' active' : ''}`,
+          () => change(() => Training.setLevel(species.id, levelId)), { title: label, level: levelId }));
+      });
+      box.appendChild(levels);
+      box.appendChild(createElement('div', 'train-level-name', Difficulty.LEVELS[pick.level].label));
+    };
+
+    const change = update => {
+      update();
+      draw();
+    };
+
+    draw();
+    return box;
+  }
+
+  /** Summary of what's ticked, with START / CLEAR (and END while training). */
+  function renderTrainingBar() {
+    const speciesCount = Training.selectedSpeciesCount;
+    const creatureCount = Training.selectedCreatureCount;
+    const isTraining = Boolean(Forest.Game && Forest.Game.isTraining);
+
+    trainingBar.innerHTML = '';
+    trainingBar.appendChild(createElement('div', 'training-bar-text', speciesCount
+      ? `🎯 TRAINING: <b>${creatureCount}</b> ${creatureCount === 1 ? 'CREATURE' : 'CREATURES'} FROM <b>${speciesCount}</b> SPECIES`
+      : '🎯 TRAINING: tick <b>☐ TRAIN</b> on any page you have found to practise against it.', true));
+
+    const buttons = createElement('div', 'training-bar-buttons');
+    buttons.appendChild(createButton(isTraining ? '▶ RESTART TRAINING' : '▶ START TRAINING', 'pixel-btn small-btn start-training',
+      startTraining, { disabled: creatureCount === 0 }));
+    if (speciesCount > 0) {
+      buttons.appendChild(createButton('CLEAR', 'pixel-btn small-btn', () => {
+        Training.clearSelection();
+        render();
+      }));
+    }
+    if (isTraining) {
+      buttons.appendChild(createButton('🌲 END TRAINING', 'pixel-btn small-btn', () => {
+        close();
+        Forest.Game.endTraining();
+      }));
+    }
+    trainingBar.appendChild(buttons);
+  }
+
+  function startTraining() {
+    if (!Forest.Game) return;
+    close();
+    if (Forest.TouchControls && Forest.TouchControls.closeMenu) Forest.TouchControls.closeMenu();
+    Forest.Game.startTraining();
+  }
+
+  /**
+   * @param {string} text
+   * @param {string} className
+   * @param {() => void} onClick
+   * @param {{disabled?:boolean, title?:string, level?:string}} [options]
+   */
+  function createButton(text, className, onClick, { disabled = false, title, level } = {}) {
+    const button = createElement('button', className, text);
+    button.type = 'button';
+    button.disabled = disabled;
+    if (title) button.title = title;
+    if (level) button.dataset.level = level;
+    button.addEventListener('click', event => {
+      // Don't leave focus on a menu button: SPACE (jump) would press it again after closing
+      event.currentTarget.blur();
+      onClick();
+    });
+    return button;
   }
 
   function createBlankPage() {
@@ -105,6 +213,9 @@
   // Refresh live if something is discovered while it's open
   Scrapbook.onChange(() => {
     if (isOpen()) render();
+  });
+  Training.onChange(() => {
+    if (isOpen()) renderTrainingBar();
   });
 
   Forest.ScrapbookView = { open, close };

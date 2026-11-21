@@ -67,7 +67,8 @@
   class EvilMushroom {
     /**
      * @param {object} world shared game systems (scene, sprites, particles, effects, hitStop, cameraController)
-     * @param {{x:number, patrolDistance:number}} spawn
+     * @param {{x:number, patrolDistance:number, stats?:{hp:number, speed:number}}} spawn
+     *   `stats` replaces the usual health and scales its speed (used by training)
      * @param {(mushroom: EvilMushroom) => void} onDefeated called the moment its health hits zero
      */
     constructor(world, spawn, onDefeated) {
@@ -101,7 +102,9 @@
       this.animationTimer = 0;
       this.shudderOffset = 0;
 
-      this.hp = START_HP;
+      this.hp = spawn.stats ? spawn.stats.hp : START_HP;
+      /** Multiplies its patrol and chase speed. */
+      this.speedScale = spawn.stats ? spawn.stats.speed : 1;
       /** True once it has exploded and left the scene. */
       this.isGone = false;
     }
@@ -204,7 +207,7 @@
       }
 
       // Walk back and forth around the spawn point
-      this.velocityX = this.facing * PATROL_SPEED;
+      this.velocityX = this.facing * PATROL_SPEED * this.speedScale;
       if (this.x > this.spawnX + this.patrolDistance) {
         this.facing = -1;
       } else if (this.x < this.spawnX - this.patrolDistance) {
@@ -228,7 +231,7 @@
       }
 
       this.facing = player.x > this.x ? 1 : -1;
-      this.velocityX = this.facing * CHASE_SPEED;
+      this.velocityX = this.facing * CHASE_SPEED * this.speedScale;
 
       // Hopping animation that alternates with the angry face
       this.animationTimer += deltaSeconds;

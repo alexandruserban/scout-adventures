@@ -108,19 +108,54 @@
       });
     }
 
+    /**
+     * End of a training session.
+     * @param {{won:boolean, defeated:number, total:number, points:number,
+     *   onRetry:() => void, onLeave:() => void}} result
+     */
+    showTrainingResult({ won, defeated, total, points, onRetry, onLeave }) {
+      const message = (won
+        ? `All ${total} training foes defeated!`
+        : `The boy fell after defeating ${defeated} of ${total} training foes.`)
+        + `<br><br>POINTS: ${points.toLocaleString()}<br>(Training doesn't count towards high scores.)`;
+      this.showOverlay({
+        variant: won ? 'victory' : 'game-over',
+        titleClass: won ? 'text-green' : 'text-red',
+        title: won ? 'TRAINING COMPLETE!' : 'TRAINING OVER',
+        message,
+        buttons: [
+          { label: '[ R ] TRAIN AGAIN', onClick: onRetry },
+          { label: '🌲 BACK TO ADVENTURE', onClick: onLeave }
+        ]
+      });
+    }
+
     hideOverlay() {
       this.overlayElement.style.display = 'none';
     }
 
-    showOverlay({ variant, titleClass, title, message, buttonLabel, onRestart }) {
+    /**
+     * Pass either `buttonLabel` + `onRestart` for a single button, or `buttons` for several.
+     * @param {{variant:string, titleClass:string, title:string, message:string, buttonLabel?:string,
+     *   onRestart?:() => void, buttons?:{label:string, onClick:() => void}[]}} overlay
+     */
+    showOverlay({ variant, titleClass, title, message, buttonLabel, onRestart, buttons }) {
+      const buttonList = buttons || [{ label: buttonLabel, onClick: onRestart }];
       this.overlayElement.innerHTML = `
         <div class="overlay-card ${variant}">
           <h1 class="pixel-title ${titleClass}">${title}</h1>
           <p class="pixel-subtitle">${message}</p>
-          <button class="pixel-btn">${buttonLabel}</button>
+          <div class="overlay-buttons">
+            ${buttonList.map(button => `<button class="pixel-btn">${button.label}</button>`).join('')}
+          </div>
         </div>
       `;
-      this.overlayElement.querySelector('button').addEventListener('click', onRestart);
+      this.overlayElement.querySelectorAll('button').forEach((element, index) => {
+        element.addEventListener('click', () => {
+          element.blur();
+          buttonList[index].onClick();
+        });
+      });
       this.overlayElement.style.display = 'flex';
     }
   }

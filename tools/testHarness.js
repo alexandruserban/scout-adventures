@@ -24,7 +24,8 @@ const SCRIPTS = [
   'src/monsters/monsterPainter.js',
   'src/monsters/monsterAbilities.js',
   'src/monsters/monsterForge.js',
-  'src/game/waveDirector.js'
+  'src/game/waveDirector.js',
+  'src/game/training.js'
 ];
 
 const noop = () => {};

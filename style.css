@@ -351,7 +351,7 @@ body, html {
   --touch-gap: clamp(28px, 8vw, 60px);
   /* Lift off the bottom edge so thumbs don't have to reach into the screen corner */
   --touch-bottom: 30px;
-  /* Extra space between ⚔ and ▲ on top of the normal gap */
+  /* Extra space between â and â² on top of the normal gap */
   --atk-extra-gap: clamp(16px, 6vw, 40px);
 }
 
@@ -369,7 +369,7 @@ body, html {
 }
 
 .menu-toggle {
-  /* Above the ▶ hit strip, which can reach under it on narrow phones */
+  /* Above the â¶ hit strip, which can reach under it on narrow phones */
   position: relative;
   z-index: 1;
   width: 40px;
@@ -435,13 +435,13 @@ body, html {
   bottom: -60px;
 }
 
-/* Left: from the screen's left edge across the gap to just short of ▶ */
+/* Left: from the screen's left edge across the gap to just short of â¶ */
 #btn-touch-left::before {
   left: -100px;
   right: calc((var(--touch-gap) - 6px) * -1 - 4px);
 }
 
-/* Right: from just left of its own edge to a full gap past it (☰ stays on top) */
+/* Right: from just left of its own edge to a full gap past it (â° stays on top) */
 #btn-touch-right::before {
   left: -10px;
   right: calc(var(--touch-gap) * -1 - 4px);
@@ -474,7 +474,7 @@ body, html {
   border-radius: 20px;
 }
 
-/* Jump: from a full button width left of its own edge to the screen's right edge (☰ stays on top) */
+/* Jump: from a full button width left of its own edge to the screen's right edge (â° stays on top) */
 #btn-touch-jump::before {
   left: calc(var(--touch-size) * -1 - 4px);
   right: -100px;
@@ -582,7 +582,7 @@ body, html {
 @media (max-width: 768px), (pointer: coarse) {
   #touch-controls { display: flex; }
 
-  /* The menu bar is hidden until the ☰ toggle opens it; it then pops up above the touch buttons */
+  /* The menu bar is hidden until the â° toggle opens it; it then pops up above the touch buttons */
   #controls-bar {
     display: none;
     bottom: calc(var(--touch-size) + var(--touch-bottom) + 16px + env(safe-area-inset-bottom, 0px));
@@ -809,9 +809,26 @@ body, html {
 .training-bar-text { font-size: 8px; line-height: 1.8; color: #e7d7b5; }
 .training-bar-text b { color: #a3e635; }
 .training-bar-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.training-map { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* The map chooser gets a line of its own, and the name sits in a fixed-width box sized for the
+   longest world name, so the arrows stay put whichever map is shown */
+.training-map {
+  flex: 1 1 100%;
+  display: grid;
+  /* Same size as the labels, so the 28em column fits the longest world name */
+  font-size: 8px;
+  /* On small screens the name box shrinks and its text wraps, instead of pushing ▶ away */
+  grid-template-columns: auto auto minmax(0, 28em) auto;
+  justify-content: start;
+  align-items: center;
+  gap: 6px;
+}
 .training-map-title { font-size: 8px; color: #e7d7b5; }
-.training-map-name { font-size: 8px; color: #a3e635; min-width: 13em; text-align: center; }
+.training-map-name { font-size: 8px; line-height: 1.6; color: #a3e635; text-align: center; overflow-wrap: break-word; }
+/* Narrow phones: "MAP:" sits above the arrows, leaving the name room for its longest word */
+@media (max-width: 420px) {
+  .training-map { grid-template-columns: auto minmax(0, 28em) auto; gap: 6px 3px; }
+  .training-map-title { grid-column: 1 / -1; }
+}
 
 .scrap-card.training-picked {
   border-color: #4d7c0f;

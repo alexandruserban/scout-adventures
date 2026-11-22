@@ -133,6 +133,8 @@
       ? `🎯 TRAINING: <b>${creatureCount}</b> ${creatureCount === 1 ? 'CREATURE' : 'CREATURES'} FROM <b>${speciesCount}</b> SPECIES`
       : '🎯 TRAINING: tick <b>☐ TRAIN</b> on any page you have found to practise against it.', true));
 
+    trainingBar.appendChild(createMapPicker());
+
     const buttons = createElement('div', 'training-bar-buttons');
     buttons.appendChild(createButton(isTraining ? '▶ RESTART TRAINING' : '▶ START TRAINING', 'pixel-btn small-btn start-training',
       startTraining, { disabled: creatureCount === 0 }));
@@ -149,6 +151,27 @@
       }));
     }
     trainingBar.appendChild(buttons);
+  }
+
+  /** ◀ MAP ▶: steps through every world of the adventure, plus a random one. */
+  function createMapPicker() {
+    const maps = [Training.RANDOM_MAP, ...Forest.Levels.themes.map(theme => theme.id)];
+    const labelFor = id => {
+      if (id === Training.RANDOM_MAP) return '🎲 RANDOM WORLD';
+      const theme = Forest.Levels.themes.find(entry => entry.id === id);
+      return `${theme.icon} ${theme.name}`;
+    };
+    const step = direction => {
+      const index = Math.max(0, maps.indexOf(Training.mapId));
+      Training.setMap(maps[(index + direction + maps.length) % maps.length]);
+      renderTrainingBar();
+    };
+    const picker = createElement('div', 'training-map');
+    picker.appendChild(createElement('span', 'training-map-title', 'MAP:'));
+    picker.appendChild(createButton('◀', 'pixel-btn small-btn train-step', () => step(-1), { title: 'Previous map' }));
+    picker.appendChild(createElement('span', 'training-map-name', labelFor(Training.mapId)));
+    picker.appendChild(createButton('▶', 'pixel-btn small-btn train-step', () => step(1), { title: 'Next map' }));
+    return picker;
   }
 
   function startTraining() {

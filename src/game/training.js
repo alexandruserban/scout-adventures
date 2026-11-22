@@ -4,6 +4,7 @@
  * For each species the boy has met, the player can tick it for training and choose how many
  * to fight and at which difficulty (Easy / Normal / Hard). The picks are remembered between
  * visits. buildSession() turns them into one custom wave for Forest.WaveDirector.startCustom.
+ * The player also picks the map: any world of the adventure (its look and rules) or a random one.
  *
  * Training never changes the scrapbook's counts or the high scores.
  */
@@ -28,8 +29,27 @@
   /** Tries at rolling a monster of the wanted species (each try hits it about 1 time in 20). */
   const MAX_SPECIES_ROLLS = 400;
 
+  /** Map choice meaning "a different random world each session". */
+  const RANDOM_MAP = 'random';
+
   /** @type {Object<string, {selected:boolean, count:number, level:string}>} */
   let picks = load();
+  /** Which world training takes place in (an id of Forest.Levels.themes, or RANDOM_MAP). */
+  let mapId = loadMap();
+
+  function isKnownMap(id) {
+    return id === RANDOM_MAP || Forest.Levels.themes.some(theme => theme.id === id);
+  }
+
+  function loadMap() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved && isKnownMap(saved.map)) return saved.map;
+    } catch (error) {
+      // Unreadable or blocked storage: train in the forest
+    }
+    return 'forest';
+  }
   const listeners = [];
 
   function load() {
@@ -48,7 +68,7 @@
 
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: SAVE_VERSION, picks }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: SAVE_VERSION, picks, map: mapId }));
     } catch (error) {
       // Storage unavailable: the picks just last until the page closes
     }
@@ -137,6 +157,18 @@
     MIN_COUNT,
     MAX_COUNT,
     LEVEL_IDS,
+    RANDOM_MAP,
+
+    /** The world training takes place in: an id of Forest.Levels.themes, or RANDOM_MAP. */
+    get mapId() {
+      return mapId;
+    },
+
+    setMap(id) {
+      if (!isKnownMap(id)) return;
+      mapId = id;
+      save();
+    },
 
     /** @returns {{selected:boolean, count:number, level:string}} a copy of the species' pick */
     pickFor(speciesId) {

@@ -809,6 +809,9 @@ body, html {
 .training-bar-text { font-size: 8px; line-height: 1.8; color: #e7d7b5; }
 .training-bar-text b { color: #a3e635; }
 .training-bar-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.training-map { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.training-map-title { font-size: 8px; color: #e7d7b5; }
+.training-map-name { font-size: 8px; color: #a3e635; min-width: 13em; text-align: center; }
 
 .scrap-card.training-picked {
   border-color: #4d7c0f;

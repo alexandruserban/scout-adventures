@@ -870,7 +870,13 @@
     isTraining = true;
     points = 0;
     const { startHearts } = Difficulty.current;
-    buildLevel(Levels.training, { hp: startHearts, maxHp: startHearts });
+    // The chosen world's look and rules, with fresh random ledges every session
+    const themes = Levels.themes;
+    const mapId = Training.mapId;
+    const theme = mapId === Training.RANDOM_MAP
+      ? themes[Math.floor(Math.random() * themes.length)]
+      : themes.find(entry => entry.id === mapId) || themes[0];
+    buildLevel(Levels.trainingGround(theme), { hp: startHearts, maxHp: startHearts });
     trainingTotal = session.total;
     waves.startCustom(session);
     refreshScore();

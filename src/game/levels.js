@@ -539,27 +539,78 @@
     }
   ].map(theme => Object.freeze(theme));
 
-  /** Flat, pit-free ground for training sessions against scrapbook picks. */
-  const TRAINING_GROUND = {
-    id: 'training',
-    number: 0,
-    name: 'TRAINING GROUND',
-    icon: '🎯',
-    flavor: '',
-    theme: 'forest',
-    playerStartX: 20,
-    ground: [[-8, 52]],
-    platforms: [],
-    coins: [],
-    enemies: [],
-    arena: { start: 0, end: 44 },
-    boss: null
-  };
+  // ==========================================
+  // The training ground
+  // ==========================================
+  const TRAINING_WIDTH = 44;
+  /** Ledges are scattered between these x positions (the player starts in the middle). */
+  const TRAINING_LEDGES_FROM = 2;
+  const TRAINING_LEDGES_TO = 41;
+  /** Staircases: steps this far apart across and this much higher each. */
+  const STAIR_STEP_ACROSS = 2.8;
+  const STAIR_STEP_RISE = 1.2;
+
+  /**
+   * Pit-free ground for training sessions against scrapbook picks, in the look and with the rules
+   * of a chosen world, dotted with fresh random ledges and staircases (and bounce pads where the
+   * world has them) every session.
+   * @param {object} theme an entry of Forest.Levels.themes
+   * @param {object} [options]
+   * @param {number} [options.seed] the same seed always gives the same ledges
+   */
+  function trainingGround(theme, { seed = randomSeed() } = {}) {
+    const random = createSeededRandom(seed);
+    const between = (low, high) => low + random() * (high - low);
+    const lift = Math.min(1.4, Math.sqrt(jumpScaleOf(theme)));
+    const bouncy = Boolean(theme.layout && theme.layout.bouncy);
+    const platforms = [];
+    let x = between(TRAINING_LEDGES_FROM, TRAINING_LEDGES_FROM + 2);
+    while (x < TRAINING_LEDGES_TO - 3) {
+      const roll = random();
+      if (roll < 0.3 && x + 3 * STAIR_STEP_ACROSS < TRAINING_LEDGES_TO) {
+        // A staircase climbing to the right or to the left
+        const steps = random() < 0.5 ? 2 : 3;
+        const climbsRight = random() < 0.5;
+        for (let step = 0; step < steps; step++) {
+          const level = climbsRight ? step : steps - 1 - step;
+          platforms.push({ x: x + step * STAIR_STEP_ACROSS, y: (1.3 + level * STAIR_STEP_RISE) * lift, width: 2.4 });
+        }
+        x += steps * STAIR_STEP_ACROSS + between(2, 4);
+      } else if (bouncy && roll < 0.45 && x + 7 < TRAINING_LEDGES_TO) {
+        platforms.push({ x, y: 0.6, width: 2.2, bouncy: true });
+        platforms.push({ x: x + 3.4, y: 4.2 * lift, width: 3 });
+        x += 6.4 + between(2, 4);
+      } else if (roll < 0.8) {
+        const width = between(2.5, 4);
+        platforms.push({ x, y: between(1.4, 3.2) * lift, width });
+        x += width + between(2, 5);
+      } else {
+        x += between(2, 4);
+      }
+    }
+    return Object.freeze({
+      ...theme,
+      id: 'training',
+      worldId: theme.id,
+      number: 0,
+      name: 'TRAINING GROUND',
+      icon: '🎯',
+      seed,
+      playerStartX: TRAINING_WIDTH / 2 - 2,
+      ground: [[-8, TRAINING_WIDTH + 8]],
+      platforms,
+      coins: [],
+      enemies: [],
+      routes: [],
+      arena: { start: 0, end: TRAINING_WIDTH },
+      boss: null
+    });
+  }
 
   Forest.Levels = Object.freeze({
     themes: Object.freeze(THEMES),
     generate,
     createRun,
-    training: TRAINING_GROUND
+    trainingGround
   });
 })(window.Forest);

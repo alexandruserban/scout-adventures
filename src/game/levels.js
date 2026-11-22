@@ -64,7 +64,7 @@
     flavor: 'Hop the gaps, grab the coins, and find out what rules these woods!',
     theme: 'forest',
     playerStartX: 2,
-    routes: [{ x: 14, height: 6, length: 18, climb: 'tower' }, { x: 88.5, height: 9, length: 26, climb: 'lift' }],
+    routes: [{ x: 14, height: 6, length: 16, climb: 'tower' }],
     ground: [[-8, 24], [27, 44], [47, 60], [66, 84], [87.5, 100], [104, 122], [125, 184]],
     platforms: Object.values(forestPlatforms),
     coins: [
@@ -149,7 +149,7 @@
     flavor: 'Torchlit halls and bottomless pits. Something big is smouldering below...',
     theme: 'dungeon',
     playerStartX: 2,
-    routes: [{ x: 22, height: 7, length: 20, climb: 'tower' }, { x: 109, height: 10, length: 28, climb: 'lift' }],
+    routes: [{ x: 109, height: 10, length: 16, climb: 'lift' }],
     ground: [[-8, 18], [21, 30], [34, 42], [46, 52], [55, 70], [74, 80], [84, 98], [102, 104], [108, 124], [128, 134], [138, 192]],
     platforms: Object.values(dungeonPlatforms),
     coins: [
@@ -238,7 +238,7 @@
     flavor: 'High above the forest, branch to branch and cloud to cloud. Don\'t look down!',
     theme: 'treetops',
     playerStartX: 2,
-    routes: [{ x: 53, height: 7, length: 20, climb: 'tower' }, { x: 114, height: 11, length: 28, climb: 'lift' }],
+    routes: [{ x: 53, height: 7, length: 16, climb: 'tower' }],
     ground: [[-8, 14], [18, 26], [30, 36], [41, 48], [52, 60], [65, 72], [77, 82], [87, 96], [101, 108], [113, 120], [125, 132], [137, 198]],
     platforms: Object.values(treetopPlatforms),
     coins: [
@@ -413,7 +413,7 @@
         coins.push({ x: cursor + 1 + travel / 2, y: previousY + 1.2 });
         cursor += 2.0 + travel;
       } else {
-        const width = 1.3 + random() * 2.6;
+        const width = 2.0 + random() * 1.8;
         const y = Math.max(height - 1.2, Math.min(height + 1.2, previousY + (random() - 0.5) * 1.8));
         const ledge = { x: cursor, y, width };
         platforms.push(ledge);
@@ -460,7 +460,7 @@
     theme: 'desert',
     hazard: 'wind',
     playerStartX: 2,
-    routes: [{ x: 24, height: 7, length: 22, climb: 'tower' }, { x: 108, height: 10, length: 26, climb: 'lift' }],
+    routes: [{ x: 108, height: 10, length: 16, climb: 'lift' }],
     ground: [[-8, 20], [23, 38], [41.5, 52], [55, 61], [64, 80], [83.5, 96], [99, 104], [107, 122], [125.5, 140], [143, 190]],
     platforms: ledges([[14, 1.5, 3], [30, 1.6, 3], [34, 3.1, 3], [68, 1.5, 3], [72, 3.0, 3], [76, 4.5, 2.5], [88, 1.6, 3],
       [92, 3.1, 2.5], [111, 1.5, 3], [115.5, 3.0, 3], [130, 1.6, 3], [135, 3.0, 2.5], [147, 1.5, 3]]),
@@ -488,7 +488,7 @@
     theme: 'ice',
     physics: { slippery: true },
     playerStartX: 2,
-    routes: [{ x: 22, height: 7, length: 20, climb: 'tower' }, { x: 116, height: 10, length: 22, climb: 'lift' }],
+    routes: [{ x: 22, height: 7, length: 16, climb: 'tower' }],
     ground: [[-8, 18], [21, 34], [37, 46], [49.5, 58], [61, 74], [77.5, 86], [89, 100], [103.5, 112], [115, 128], [131, 138], [141, 192]],
     platforms: ledges([[9, 1.5, 3], [25, 1.5, 3], [29, 3.0, 3], [40, 1.8, 3], [51, 1.6, 3], [64, 1.5, 2.5], [67.5, 3.0, 2.5],
       [71, 4.5, 2.5], [80, 1.8, 3], [92, 1.5, 3], [96, 3.0, 2.5], [106, 1.6, 3], [118, 1.5, 3], [122.5, 3.0, 3],
@@ -520,7 +520,7 @@
     theme: 'volcano',
     hazard: 'lavaBombs',
     playerStartX: 2,
-    routes: [{ x: 32, height: 7, length: 18, climb: 'tower' }, { x: 104, height: 10, length: 24, climb: 'lift' }],
+    routes: [{ x: 104, height: 10, length: 16, climb: 'lift' }],
     ground: [[-8, 16], [19.5, 28], [31, 40], [43.5, 50], [53, 66], [69.5, 76], [79, 90], [93.5, 100], [103, 114], [117.5, 124], [127, 136], [139, 190]],
     platforms: ledges([[10, 1.5, 3], [23, 1.8, 3], [34, 1.5, 3], [41, 1.6, 2], [58, 1.5, 3], [62, 3.0, 3], [72, 1.8, 2.5],
       [76.7, 1.5, 1.6], [83, 1.6, 3], [87, 3.1, 2.5], [91, 1.5, 2], [106, 1.5, 3], [110, 3.0, 3], [115, 1.6, 2],
@@ -548,7 +548,7 @@
     flavor: 'Sweet as can be... and full of teeth. Bounce on the marshmallows!',
     theme: 'candy',
     playerStartX: 2,
-    routes: [{ x: 25, height: 7, length: 20, climb: 'tower' }, { x: 103, height: 11, length: 26, climb: 'lift' }],
+    routes: [{ x: 25, height: 7, length: 16, climb: 'tower' }],
     ground: [[-8, 20], [24, 36], [40, 52], [57, 66], [70, 84], [89, 98], [102, 116], [121, 130], [134, 190]],
     platforms: ledges([[21, 0.6, 2, 'b'], [28, 1.5, 3], [32, 3.0, 3], [37, 0.6, 2, 'b'], [44, 4.4, 3], [47, 1.6, 3],
       [53, 0.6, 2.5, 'b'], [60, 1.5, 3], [74, 1.5, 3], [78, 3.0, 3], [85, 0.6, 2.5, 'b'], [92, 1.8, 3], [106, 1.5, 3],
@@ -577,7 +577,7 @@
     theme: 'moon',
     physics: { gravityScale: 0.55 },
     playerStartX: 2,
-    routes: [{ x: 23, height: 9, length: 24, climb: 'tower' }, { x: 119, height: 13, length: 26, climb: 'lift' }],
+    routes: [{ x: 119, height: 13, length: 16, climb: 'lift' }],
     ground: [[-8, 16], [22, 30], [36, 44], [50, 56], [62, 72], [78, 84], [90, 100], [106, 112], [118, 128], [134, 140], [146, 196]],
     platforms: ledges([[8, 2.5, 3], [24, 3.0, 3], [38, 2.0, 2.5], [40.5, 4.5, 2.5], [52, 3.0, 2.5], [58, 2.0, 2], [65, 2.5, 3],
       [68.5, 5.0, 3], [80, 2.8, 2.5], [93, 2.5, 3], [97, 5.0, 2.5], [108, 3.0, 2.5], [113.5, 2.0, 2], [121, 2.5, 3],

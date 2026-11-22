@@ -19,7 +19,13 @@
 
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
 
-  const COIN_POINTS = 10;
+  /** Each coin is cashed in for this many points once the level's boss is beaten. */
+  const COIN_POINTS = 20;
+  /** Pause after the "cleared" fanfare before the coins start turning into points. */
+  const COIN_TALLY_DELAY_SECONDS = 2.4;
+  /** Seconds between coin-to-points ticks; long hauls cash in several coins per tick. */
+  const COIN_TALLY_TICK_SECONDS = 0.05;
+  const COIN_TALLY_MAX_TICKS = 60;
   /** Beating a level's boss is worth this many points times the level number. */
   const LEVEL_CLEAR_POINTS = 250;
   /** Falling below this height means the boy dropped into a pit. */
@@ -64,7 +70,12 @@
     FIGHTING: 'FIGHTING',
     /** The boss is beaten; waiting for its leftovers (e.g. jelly halves) to go. */
     BOSS_DOWN: 'BOSS_DOWN',
-    CLEARED: 'CLEARED'
+    /** Fanfare playing; the coin tally starts soon. */
+    CLEARED: 'CLEARED',
+    /** The level's coins are being turned into points. */
+    COIN_TALLY: 'COIN_TALLY',
+    /** All done: on to the next level when the timer runs out. */
+    ADVANCING: 'ADVANCING'
   });
 
   // ==========================================
@@ -153,7 +164,11 @@
   /** Every enemy in play. */
   let enemies = [];
   let points = 0;
+  /** Coins picked up over the whole adventure (for the victory screen). */
   let coinsCollected = 0;
+  /** Coins picked up in this level, not yet turned into points. */
+  let levelCoins = 0;
+  let coinTally = { timer: 0, perTick: 1, cashed: 0 };
   /** High score for this difficulty, read once per run (not every frame). */
   let bestPointsBeforeRun = 0;
   /** True while a menu (scrapbook, gallery) covers the game. */
@@ -276,6 +291,7 @@
     hasWon = false;
     levelIndex = index;
     levelStart = { points, coins: coinsCollected, maxHp };
+    levelCoins = 0;
     buildLevel(Levels.list[index], { hp, maxHp });
 
     Sfx.waveStart();
@@ -347,6 +363,11 @@
       clearLevel();
     } else if (arenaState === ArenaState.CLEARED) {
       nextLevelTimer -= deltaSeconds;
+      if (nextLevelTimer <= 0) startCoinTally();
+    } else if (arenaState === ArenaState.COIN_TALLY) {
+      updateCoinTally(deltaSeconds);
+    } else if (arenaState === ArenaState.ADVANCING) {
+      nextLevelTimer -= deltaSeconds;
       if (nextLevelTimer <= 0) advanceToNextLevel();
     }
   }
@@ -384,10 +405,10 @@
     arenaState = ArenaState.BOSS_DOWN;
   }
 
-  /** Boss and leftovers gone: fanfare, bonus points, an extra heart, then on to the next level. */
+  /** Boss and leftovers gone: fanfare, bonus points and an extra heart, then the coins are cashed in. */
   function clearLevel() {
     arenaState = ArenaState.CLEARED;
-    nextLevelTimer = NEXT_LEVEL_DELAY_SECONDS;
+    nextLevelTimer = COIN_TALLY_DELAY_SECONDS;
     Sfx.levelCleared();
     const bonus = LEVEL_CLEAR_POINTS * level.number;
     points += bonus;
@@ -395,9 +416,42 @@
     const isLast = levelIndex === Levels.list.length - 1;
     hud.showBanner({
       title: `${level.name} CLEARED!`,
-      subtitle: `+${bonus} POINTS &middot; FULLY HEALED! ${isLast ? 'The forest is saved...' : 'Onwards...'}`,
+      subtitle: `+${bonus} POINTS &middot; FULLY HEALED! ${isLast ? 'The world is saved...' : 'Now to count your coins...'}`,
       variant: 'cleared',
-      seconds: NEXT_LEVEL_DELAY_SECONDS - 0.4
+      seconds: COIN_TALLY_DELAY_SECONDS
+    });
+  }
+
+  /** Turn the level's coins into points, a few at a time, with a ping for each tick. */
+  function startCoinTally() {
+    arenaState = ArenaState.COIN_TALLY;
+    coinTally = { timer: 0, perTick: Math.max(1, Math.ceil(levelCoins / COIN_TALLY_MAX_TICKS)), cashed: 0 };
+    if (levelCoins === 0) finishCoinTally();
+  }
+
+  function updateCoinTally(deltaSeconds) {
+    coinTally.timer -= deltaSeconds;
+    if (coinTally.timer > 0) return;
+    coinTally.timer = COIN_TALLY_TICK_SECONDS;
+    const coinsThisTick = Math.min(coinTally.perTick, levelCoins);
+    levelCoins -= coinsThisTick;
+    coinTally.cashed += coinsThisTick;
+    points += coinsThisTick * COIN_POINTS;
+    Sfx.coin();
+    particles.burst(player.x, player.y + player.height + 0.3, 3, '#ffd84a', 0.8, 0.3);
+    if (levelCoins === 0) finishCoinTally();
+  }
+
+  function finishCoinTally() {
+    arenaState = ArenaState.ADVANCING;
+    nextLevelTimer = NEXT_LEVEL_DELAY_SECONDS;
+    const { cashed } = coinTally;
+    Sfx.bonusPoints();
+    hud.showBanner({
+      title: cashed > 0 ? `🪙 ${cashed} COINS = +${(cashed * COIN_POINTS).toLocaleString()} POINTS` : 'NO COINS THIS TIME',
+      subtitle: levelIndex === Levels.list.length - 1 ? 'What a journey!' : 'Get ready for the next level...',
+      variant: 'cleared',
+      seconds: NEXT_LEVEL_DELAY_SECONDS - 0.3
     });
   }
 
@@ -451,7 +505,8 @@
   // ==========================================
   /** Points, a possible heart, and a tick in the scrapbook. */
   function onEnemyDefeated(enemy) {
-    const reward = Rewards.pointsFor(enemy);
+    // Harder difficulties pay more for every foe
+    const reward = Math.round(Rewards.pointsFor(enemy) * Difficulty.current.pointsMultiplier);
     points += reward;
     floatingText.spawn(`+${reward}`, enemy.x, enemy.centerY + 0.5);
     if (Math.random() < Rewards.heartDropChance(enemy)) hearts.spawn(enemy.x, enemy.centerY);
@@ -460,10 +515,10 @@
   }
 
   function collectCoin(coin) {
+    // Coins are cashed in for points at the end of the level (see startCoinTally)
     coinsCollected++;
-    points += COIN_POINTS;
+    levelCoins++;
     Sfx.coin();
-    floatingText.spawn(`+${COIN_POINTS}`, coin.x, coin.y + 0.4, '#ffe066');
   }
 
   function announceWave(wave) {
@@ -502,7 +557,8 @@
       hud.showScore(`🎯 TRAINING: ${waves.remainingFoes} LEFT`);
       return;
     }
-    hud.showScore(`${level.icon} LEVEL ${level.number}`, `🪙 COINS: ${coinsCollected}`);
+    // Coins on the main line, so they show even on narrow screens (which hide the detail line)
+    hud.showScore(`${level.icon} LEVEL ${level.number} &middot; 🪙 ${levelCoins}`);
   }
 
   /** End of a training session, won (everything defeated) or lost (the boy fell). */

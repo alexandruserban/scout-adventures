@@ -26,6 +26,8 @@
        * health, speed, numbers and mutant strength that later cycles add.
        */
       cycleRamp: 0.4,
+      /** Multiplies the points for every defeated foe. */
+      pointsMultiplier: 1,
       /** Multiplies the boss wave's fixed escorts (the nutlings and gloomwing beside the golem). */
       bossEscortScale: 0.34,
       /** This many fewer mutants join each boss wave. */
@@ -42,6 +44,7 @@
       creatureHpBonus: 0,
       spawnIntervalScale: 1,
       cycleRamp: 0.7,
+      pointsMultiplier: 1.5,
       bossEscortScale: 0.67,
       bossMutantReduction: 1
     }),
@@ -57,6 +60,7 @@
       creatureHpBonus: 1,
       spawnIntervalScale: 0.8,
       cycleRamp: 1,
+      pointsMultiplier: 2,
       bossEscortScale: 1,
       bossMutantReduction: 0
     })

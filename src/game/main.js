@@ -36,10 +36,8 @@
    */
   const MUSHROOM_SPAWN_DISTANCE = 14;
   const SKY_SPAWN_DISTANCE = 10;
-  /** How far back (from the furthest point reached) the boy may walk. */
-  const BACKTRACK_DISTANCE = 6;
   /** Enemies left this far behind are quietly removed. */
-  const DESPAWN_DISTANCE = 16;
+  const DESPAWN_DISTANCE = 30;
   /** The boss fight starts once the boy is this far into the arena. */
   const ARENA_TRIGGER_INSET = 1.5;
   const NEXT_LEVEL_DELAY_SECONDS = 4.5;
@@ -198,8 +196,6 @@
   let nextLevelTimer = 0;
   /** Seconds since the level started (drives the sandstorm gusts). */
   let levelTime = 0;
-  /** Furthest x the boy has reached in this level (see limitBacktracking). */
-  let furthestX = 0;
   let lavaBombTimer = 0;
   /** Restored when the level is retried after a defeat. */
   let levelStart = { points: 0, coins: 0, maxHp: 0 };
@@ -282,7 +278,6 @@
     nextLevelTimer = 0;
 
     player.reset(level.playerStartX, maxHp);
-    furthestX = level.playerStartX;
     player.hp = Math.min(hp, maxHp);
     player.setBounds(0, level.arena.end);
     cameraController.setBounds(0, level.arena.end);
@@ -324,18 +319,6 @@
 
   function spawnDistanceFor(entry) {
     return entry.kind === 'mushroom' ? MUSHROOM_SPAWN_DISTANCE : SKY_SPAWN_DISTANCE;
-  }
-
-  /**
-   * Like the classic side-scrollers, the boy can only walk back a few paces from the furthest point
-   * he has reached (the arena locks its own bounds).
-   */
-  function limitBacktracking() {
-    if (arenaState !== ArenaState.CLOSED) return;
-    furthestX = Math.max(furthestX, player.x);
-    const leftLimit = Math.max(0, furthestX - BACKTRACK_DISTANCE);
-    player.setBounds(leftLimit, level.arena.end);
-    cameraController.setBounds(leftLimit - 1, level.arena.end);
   }
 
   /** Drop in every enemy the boy has come close enough to. */
@@ -514,7 +497,7 @@
   function checkPitFall() {
     if (player.isDefeated || player.y >= PIT_Y) return;
     player.fallIntoPit();
-    // His last safe spot may be behind the backtracking limit: use the first solid ground ahead of it
+    // Never respawn past the left edge of what he can reach (e.g. the arena wall): use solid ground ahead
     if (!player.isDefeated && player.x < player.minX + 0.5) {
       player.x = world.terrain.safeGroundFrom(player.minX + 0.5);
       player.y = Config.GROUND_Y;
@@ -724,7 +707,6 @@
     scenery.update();
     player.update(gameDeltaSeconds);
     checkPitFall();
-    if (!isTraining) limitBacktracking();
     if (!player.isDefeated) {
       if (isTraining) waves.update(gameDeltaSeconds);
       else spawnApproachingEnemies();

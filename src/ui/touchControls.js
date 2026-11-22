@@ -35,9 +35,34 @@
       return button ? BUTTON_ACTIONS[button.id] : undefined;
     };
 
+    const forgetFinger = identifier => {
+      const action = fingerActions.get(identifier);
+      if (!action) return;
+      fingerActions.delete(identifier);
+      if (!isHeldByAnotherFinger(action)) input.release(action);
+    };
+
+    /**
+     * Browsers sometimes never send the touchend (a system gesture, the notification shade, an app
+     * switch). Any finger we still remember that isn't on the screen any more is let go here, so a
+     * lost touchend can't leave ◀ or ▶ stuck down.
+     */
+    const forgetLiftedFingers = event => {
+      const onScreen = new Set([...event.touches].map(touch => touch.identifier));
+      [...fingerActions.keys()].forEach(identifier => {
+        if (!onScreen.has(identifier)) forgetFinger(identifier);
+      });
+    };
+
+    // Leaving the page releases everything (see InputController), so forget the fingers too
+    input.onReleaseAll = () => fingerActions.clear();
+
     document.addEventListener('touchstart', event => {
+      forgetLiftedFingers(event);
       let isOnButton = false;
       for (const touch of event.changedTouches) {
+        // A reused identifier whose touchend went missing still holds its old button
+        forgetFinger(touch.identifier);
         const action = actionUnder(touch);
         if (!action) continue;
         isOnButton = true;
@@ -58,6 +83,7 @@
         fingerActions.delete(touch.identifier);
         if (!isHeldByAnotherFinger(action)) input.release(action);
       }
+      forgetLiftedFingers(event);
       if (wasOnButton && event.cancelable) event.preventDefault();
     };
     document.addEventListener('touchend', endTouches, { passive: false });

@@ -43,6 +43,14 @@
         if (action) this.release(action);
       });
 
+      // Leaving the page (app switch, notification shade, tab change) can swallow the keyup or
+      // touchend, which would leave the boy walking forever, so let go of everything instead
+      window.addEventListener('blur', () => this.releaseAll());
+      window.addEventListener('pagehide', () => this.releaseAll());
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) this.releaseAll();
+      });
+
       // Clicking anywhere on the game (but not on buttons or the HUD) attacks
       window.addEventListener('mousedown', event => {
         if (event.target.closest('button') || event.target.closest('#hud')) return;
@@ -60,6 +68,12 @@
       this.heldActions.delete(action);
       const callback = this.onRelease[action];
       if (callback) callback();
+    }
+
+    /** Release every held action (and tell listeners such as the touch buttons to forget their fingers). */
+    releaseAll() {
+      [...this.heldActions].forEach(action => this.release(action));
+      if (this.onReleaseAll) this.onReleaseAll();
     }
 
     /** Fire an action's press callback without marking it as held. */

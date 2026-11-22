@@ -70,7 +70,7 @@
         caption: `T${tierIndex + 1} ${creature.name}: ${frameName}`
       }))
     );
-    addSection('SKY CREATURES (ENDLESS WAVES)', [
+    addSection('LEVEL MONSTERS & BOSSES', [
       ...skyCreatureFrames,
       { canvas: asciiToCanvas(SkyArt.fireball.rows, ZOOM, SkyArt.fireball.palette), caption: 'Golem Fireball' }
     ]);

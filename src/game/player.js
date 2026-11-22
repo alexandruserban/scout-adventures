@@ -51,7 +51,14 @@
   /** A jump pressed this long before landing still fires on touchdown. */
   const JUMP_BUFFER_SECONDS = 0.12;
   /** Counts as standing on the ground when this close to it. */
-  const GROUNDED_TOLERANCE = 0.05;
+  /** Half the width of his feet: he still stands on a ledge with this much of him over the edge. */
+  const FOOT_HALF_WIDTH = 0.22;
+  /** Just after walking off a ledge, a jump still counts as jumping from the ground. */
+  const COYOTE_SECONDS = 0.1;
+  /** Respawn points (after falling in a pit) are at least this far from the edge of the ground. */
+  const SAFE_EDGE_DISTANCE = 1.0;
+  /** Blinking, untouchable time after climbing back out of a pit. */
+  const PIT_RESPAWN_INVULNERABLE_SECONDS = 1.6;
   /** One full somersault, finishing exactly at the apex of the double jump. */
   const SOMERSAULT_SECONDS = DOUBLE_JUMP_SPEED / GRAVITY;
   const LANDING_SECONDS = 0.09;
@@ -116,6 +123,7 @@
      * @param {(hitArea:{centerX, centerY, halfWidth, halfHeight}) => void} events.onSlamLanded
      */
     constructor(world, events) {
+      this.world = world;
       this.sprites = world.sprites.boy;
       this.input = world.input;
       this.particles = world.particles;
@@ -124,6 +132,8 @@
       this.events = events;
 
       this.maxHp = MAX_HP;
+      this.minX = LEVEL_START_X;
+      this.maxX = LEVEL_END_X;
       this.width = this.sprites.idle[0].width * UNITS_PER_PIXEL;
       this.height = this.sprites.idle[0].height * UNITS_PER_PIXEL;
 
@@ -150,6 +160,11 @@
       this.velocityX = 0;
       this.velocityY = 0;
       this.facing = 1; // 1 = right, -1 = left
+      this.isGrounded = true;
+      this.coyoteSeconds = 0;
+      /** Last spot safely on solid ground, where he comes back after falling in a pit. */
+      this.safeX = x;
+      this.safeY = GROUND_Y;
       this.turnSeconds = 0;
       this.scaleX = 1; // squash & stretch
       this.scaleY = 1;
@@ -206,7 +221,7 @@
     tryJump() {
       if (this.isIncapacitated) return;
 
-      if (this.y <= GROUND_Y + GROUNDED_TOLERANCE) {
+      if (this.isGrounded || this.coyoteSeconds > 0) {
         this.jumpFromGround();
       } else if (this.jumpsRemaining > 0) {
         this.doubleJump();
@@ -228,7 +243,7 @@
     startAttack() {
       if (this.isIncapacitated || this.isAttacking) return;
 
-      this.enterState(this.isAboveGround ? PlayerState.AIR_ATTACK : PlayerState.ATTACK);
+      this.enterState(this.isGrounded ? PlayerState.ATTACK : PlayerState.AIR_ATTACK);
       this.animationFrame = 0;
       this.bodyMesh.rotation.z = 0;
       this.showAttackFrame(0);
@@ -237,6 +252,8 @@
 
     jumpFromGround() {
       this.velocityY = JUMP_SPEED;
+      this.isGrounded = false;
+      this.coyoteSeconds = 0;
       this.jumpsRemaining = MAX_JUMPS - 1;
       this.jumpBufferSeconds = 0;
       this.bodyMesh.rotation.z = 0;
@@ -292,6 +309,40 @@
       if (this.hp <= 0) this.events.onDefeated();
     }
 
+    /**
+     * Fell into a pit: lose a heart and climb back out at the last safe spot, or be defeated.
+     */
+    fallIntoPit() {
+      if (this.isDefeated) return;
+      this.hp = Math.max(0, this.hp - 1);
+      Sfx.pitFall();
+      if (this.hp <= 0) {
+        this.enterState(PlayerState.DEFEATED);
+        this.velocityX = 0;
+        this.events.onHealthChanged(this.hp);
+        this.events.onDefeated();
+        return;
+      }
+      this.x = this.safeX;
+      this.y = this.safeY;
+      this.velocityX = 0;
+      this.velocityY = 0;
+      this.isGrounded = true;
+      this.jumpsRemaining = MAX_JUMPS;
+      this.bodyMesh.rotation.z = 0;
+      this.enterState(PlayerState.IDLE);
+      this.showFrame(this.sprites.idle[0]);
+      this.invulnerableSeconds = PIT_RESPAWN_INVULNERABLE_SECONDS;
+      this.particles.burst(this.x, this.y + 0.6, 12, '#bae6fd', 1.0, 0.5);
+      this.events.onHealthChanged(this.hp);
+    }
+
+    /** Horizontal limits he can walk between (the level, or the boss arena once it's locked). */
+    setBounds(minX, maxX) {
+      this.minX = minX;
+      this.maxX = maxX;
+    }
+
     /** Restore health (never above the maximum). Does nothing once defeated. */
     heal(amount) {
       if (this.isDefeated || this.hp >= this.maxHp) return;
@@ -313,14 +364,16 @@
     // Per-frame update
     // ==========================================
     update(deltaSeconds) {
+      const previousY = this.y;
       this.applyGravity(deltaSeconds);
       if (this.jumpBufferSeconds > 0) this.jumpBufferSeconds -= deltaSeconds;
-      if (this.y <= GROUND_Y) this.touchGround();
+      if (this.coyoteSeconds > 0) this.coyoteSeconds -= deltaSeconds;
+      this.resolveGround(previousY);
 
       this.updateInvulnerability(deltaSeconds);
       this.updateState(deltaSeconds);
 
-      this.x = clamp(this.x, LEVEL_START_X, LEVEL_END_X);
+      this.x = clamp(this.x, this.minX, this.maxX);
       this.relaxSquash(deltaSeconds);
       this.syncMeshes();
     }
@@ -330,10 +383,41 @@
       this.y += this.velocityY * deltaSeconds;
     }
 
-    touchGround() {
+    /**
+     * Land on whatever is under his feet (ground or a platform he came down onto), or start
+     * falling when he walks off an edge.
+     */
+    resolveGround(previousY) {
+      const terrain = this.world.terrain;
+      const surface = terrain
+        ? terrain.surfaceBelow(this.x, previousY, FOOT_HALF_WIDTH)
+        : { top: GROUND_Y, isGround: true, left: -Infinity, right: Infinity };
+      if (surface && this.velocityY <= 0 && this.y <= surface.top) {
+        this.touchGround(surface);
+        return;
+      }
+      if (!this.isGrounded) return;
+      // Walked off a ledge
+      this.isGrounded = false;
+      if (this.velocityY <= 0) this.coyoteSeconds = COYOTE_SECONDS;
+      if (this.state === PlayerState.IDLE || this.state === PlayerState.WALK || this.state === PlayerState.LAND) {
+        this.state = PlayerState.FALL;
+        this.showFrame(this.sprites.fall);
+      }
+    }
+
+    touchGround(surface) {
       const impactSpeed = -this.velocityY;
-      this.y = GROUND_Y;
+      this.y = surface.top;
       this.velocityY = 0;
+      this.isGrounded = true;
+      this.coyoteSeconds = 0;
+      const isSafeSpot = surface.isGround
+        && this.x - surface.left >= SAFE_EDGE_DISTANCE && surface.right - this.x >= SAFE_EDGE_DISTANCE;
+      if (isSafeSpot) {
+        this.safeX = this.x;
+        this.safeY = surface.top;
+      }
       this.jumpsRemaining = MAX_JUMPS;
       this.bodyMesh.rotation.z = 0;
       if (this.isAirborne) this.land(impactSpeed);
@@ -532,7 +616,7 @@
     }
 
     finishAttack() {
-      if (this.isAboveGround) {
+      if (!this.isGrounded) {
         this.state = PlayerState.FALL;
       } else {
         this.state = this.input.isPressingLeftOrRight() ? PlayerState.WALK : PlayerState.IDLE;
@@ -543,7 +627,7 @@
     /** The blade hits the ground: dust, shake, thud, then damage whatever is in reach. */
     landSlam(frame) {
       const tipX = this.x + this.facing * (frame.bladeTip.x - FRAME_SIZE / 2) * UNITS_PER_PIXEL;
-      const tipY = Math.max(GROUND_Y + 0.05, this.y + (FRAME_SIZE - frame.bladeTip.y) * UNITS_PER_PIXEL);
+      const tipY = Math.max(this.y + 0.05, this.y + (FRAME_SIZE - frame.bladeTip.y) * UNITS_PER_PIXEL);
 
       Sfx.slamImpact();
       this.cameraController.shake(0.07, 0.14);
@@ -582,7 +666,7 @@
       this.slideWithFriction(STAGGER_FRICTION, deltaSeconds);
       this.stateTimer -= deltaSeconds;
       if (this.stateTimer <= 0) {
-        this.state = this.isAboveGround ? PlayerState.FALL : PlayerState.IDLE;
+        this.state = this.isGrounded ? PlayerState.IDLE : PlayerState.FALL;
       }
     }
 

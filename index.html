@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Forest Pixel Adventure: The Boy & The Evil Mushrooms</title>
+  <title>Forest Pixel Adventure: The Boy's Quest</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -79,7 +79,7 @@
     </div>
   </div>
 
-  <!-- Wave announcements (fade in and out by themselves) -->
+  <!-- Level, boss and wave announcements (fade in and out by themselves) -->
   <div id="wave-banner"></div>
 
   <!-- "New species discovered" notes (fade in and out by themselves) -->
@@ -136,6 +136,8 @@
   <script src="src/art/environmentSprites.js"></script>
   <script src="src/art/boySprites.js"></script>
   <script src="src/art/backgroundPainters.js"></script>
+  <script src="src/art/themePainters.js"></script>
+  <script src="src/art/levelSprites.js"></script>
 
   <!-- Audio -->
   <script src="src/audio/synth.js"></script>
@@ -150,11 +152,12 @@
   <script src="src/ui/spriteGallery.js"></script>
 
   <!-- Game -->
-  <script src="src/game/levelData.js"></script>
+  <script src="src/game/terrain.js"></script>
+  <script src="src/game/levels.js"></script>
   <script src="src/game/gameSprites.js"></script>
   <script src="src/game/stage.js"></script>
   <script src="src/game/parallaxBackground.js"></script>
-  <script src="src/game/forestScenery.js"></script>
+  <script src="src/game/levelScenery.js"></script>
   <script src="src/game/particles.js"></script>
   <script src="src/game/ambientLeaves.js"></script>
   <script src="src/game/effects.js"></script>
@@ -177,6 +180,7 @@
   <!-- Points, heart drops and the scrapbook -->
   <script src="src/game/rewards.js"></script>
   <script src="src/game/pickups.js"></script>
+  <script src="src/game/coins.js"></script>
   <script src="src/game/scrapbook.js"></script>
   <script src="src/game/training.js"></script>
   <script src="src/ui/scrapbookView.js"></script>

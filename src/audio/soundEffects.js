@@ -100,6 +100,31 @@
     },
 
     // ==========================================
+    // Levels
+    // ==========================================
+
+    /** Bright two-note ping for a coin. */
+    coin() {
+      synth.playTone({ wave: 'square', frequency: 1319, duration: 0.05, volume: 0.06 });
+      synth.playTone({ wave: 'square', frequency: 1760, duration: 0.12, volume: 0.06, delay: 0.05 });
+    },
+
+    /** Long falling whistle into a pit. */
+    pitFall() {
+      synth.playTone({ wave: 'square', frequency: 880, endFrequency: 110, duration: 0.5, volume: 0.09, endVolume: 0.001 });
+    },
+
+    /** Triumphant fanfare when a level's boss is beaten. */
+    levelCleared() {
+      const notes = [523.2, 523.2, 523.2, 659.3, 784.0, 659.3, 784.0, 1046.5]; // C C C E G E G C
+      const delays = [0, 0.1, 0.2, 0.3, 0.45, 0.6, 0.7, 0.85];
+      notes.forEach((frequency, index) => {
+        synth.playTone({ wave: 'square', frequency, duration: index === notes.length - 1 ? 0.5 : 0.12, volume: 0.07, delay: delays[index] });
+      });
+      synth.playTone({ wave: 'triangle', frequency: 130.8, duration: 1.2, volume: 0.15, delay: 0.85 });
+    },
+
+    // ==========================================
     // Sky creatures
     // ==========================================
 

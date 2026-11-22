@@ -383,7 +383,7 @@
       };
       puff(monster.x, monster.centerY);
       const targetX = player.x + randomDirection() * randomBetween(2.5, 4);
-      monster.x = clamp(targetX, LEVEL_START_X + LEVEL_MARGIN, LEVEL_END_X - LEVEL_MARGIN);
+      monster.x = clamp(targetX, monster.minX, monster.maxX);
       monster.facing = directionTowards(monster.x, player.x);
       puff(monster.x, monster.centerY);
       Sfx.wingFlutter();

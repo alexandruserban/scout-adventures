@@ -1,5 +1,5 @@
 /**
- * Creatures that rain down from the sky once the mushrooms are gone, in five tiers:
+ * Creatures that drop down from the sky as the boy makes his way through a level, in five tiers:
  *   1. Nutling       - an acorn that cracks open and hops at the boy
  *   2. Thornback     - an armoured beetle that growls, then charges across the grass
  *   3. Gloomwing     - a spore moth that circles overhead and dive-bombs
@@ -113,8 +113,9 @@
      * @param {(creature: SkyCreature) => void} options.onDefeated called the moment its health hits zero
      * @param {{y:number, velocityX:number, velocityY:number}} [options.launch]
      *   start mid-air with this motion instead of dropping from the sky
+     * @param {number} [options.sizeScale] makes it bigger (bosses)
      */
-    constructor(world, { kind, frames, x, stats, spriteScale, fallFrame, colors, onDefeated, launch }) {
+    constructor(world, { kind, frames, x, stats, spriteScale, fallFrame, colors, onDefeated, launch, sizeScale = 1 }) {
       this.world = world;
       this.scene = world.scene;
       this.particles = world.particles;
@@ -127,7 +128,8 @@
       /** Which creature this is (nutling, thornback, ...); also its species id in the scrapbook. */
       this.kind = kind;
       this.frames = frames || world.sprites.skyCreatures[kind];
-      this.unitsPerPixel = PIXEL_SCALE * spriteScale;
+      this.unitsPerPixel = PIXEL_SCALE * spriteScale * sizeScale;
+      this.sizeScale = sizeScale;
       const firstSprite = this.frames[fallFrame].normal;
       this.width = firstSprite.width * this.unitsPerPixel;
       this.height = firstSprite.height * this.unitsPerPixel;
@@ -148,7 +150,11 @@
       this.damage = stats.damage;
       this.hpBar = this.maxHp >= 3 ? this.createHpBar() : null;
 
-      this.x = clamp(x, LEVEL_START_X + LEVEL_MARGIN, LEVEL_END_X - LEVEL_MARGIN);
+      // It roams only its own stretch of ground, so it never wanders into a pit
+      const range = world.terrain ? world.terrain.walkableRange(x) : { minX: LEVEL_START_X, maxX: LEVEL_END_X };
+      this.minX = range.minX + LEVEL_MARGIN;
+      this.maxX = Math.max(this.minX, range.maxX - LEVEL_MARGIN);
+      this.x = clamp(x, this.minX, this.maxX);
       this.facing = randomDirection();
       this.scaleX = 1;
       this.scaleY = 1;
@@ -372,7 +378,7 @@
     }
 
     keepInsideLevel() {
-      const clampedX = clamp(this.x, LEVEL_START_X + LEVEL_MARGIN, LEVEL_END_X - LEVEL_MARGIN);
+      const clampedX = clamp(this.x, this.minX, this.maxX);
       const hitEdge = clampedX !== this.x;
       this.x = clampedX;
       return hitEdge;

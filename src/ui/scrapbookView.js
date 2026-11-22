@@ -67,7 +67,7 @@
     page.appendChild(createElement('div', 'scrap-latin', species.latin));
     page.appendChild(createElement('div', 'scrap-common', species.common));
     page.appendChild(createElement('div', 'scrap-stats',
-      `SEEN ${entry.seen} · DEFEATED ${entry.defeated}<br>FIRST SEEN: ${entry.firstWave > 0 ? `WAVE ${entry.firstWave}` : 'THE MUSHROOM PATCH'}`, true));
+      `SEEN ${entry.seen} · DEFEATED ${entry.defeated}<br>FIRST SEEN: ${typeof entry.firstWave === 'string' ? entry.firstWave : (entry.firstWave > 0 ? `WAVE ${entry.firstWave}` : 'THE MUSHROOM PATCH')}`, true));
     page.appendChild(createElement('div', 'scrap-note', species.note));
 
     if (entry.specimen) {

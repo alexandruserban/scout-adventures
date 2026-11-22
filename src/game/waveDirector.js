@@ -1,5 +1,6 @@
 /**
- * Endless waves of sky creatures, started once the mushrooms are defeated.
+ * Waves of sky creatures. The adventure is now made of side-scrolling levels (see levels.js), so
+ * waves only run training sessions (startCustom); the endless five-wave cycle below is kept for it.
  *
  * Waves 1-5 each introduce a tougher creature. After wave 5 the cycle repeats with
  * more health, more speed, more creatures and extra random escorts, so it goes on

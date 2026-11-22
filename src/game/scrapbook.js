@@ -60,7 +60,7 @@
     /**
      * Note that the boy has met `enemy`.
      * @param {object} enemy any foe
-     * @param {number} wave current wave number (0 while the mushrooms are still around)
+     * @param {number|string} wave where it was first met: a level name (older saves hold a wave number)
      * @returns {{species:object, isNew:boolean}}
      */
     recordEncounter(enemy, wave) {

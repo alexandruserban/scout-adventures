@@ -229,7 +229,8 @@
 
         // Bounce and skid on the grass
         const restingY = GROUND_Y + chunk.size / 2;
-        if (chunk.mesh.position.y < restingY) {
+        const isOverPit = this.terrain && !this.terrain.groundAt(chunk.mesh.position.x);
+        if (!isOverPit && chunk.mesh.position.y < restingY) {
           chunk.mesh.position.y = restingY;
           chunk.velocityY = Math.abs(chunk.velocityY) > 1 ? -chunk.velocityY * 0.35 : 0;
           chunk.velocityX *= 0.6;

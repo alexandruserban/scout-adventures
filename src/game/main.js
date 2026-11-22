@@ -1,19 +1,57 @@
 /**
  * Entry point: builds the world, wires the systems together, and runs the game loop.
  *
- * The game starts with the evil mushrooms. Once they're all defeated, endless waves of
- * creatures start falling from the sky (see WaveDirector) until the boy is defeated.
+ * The adventure is three side-scrolling levels (see Forest.Levels): forest, dungeon and treetops.
+ * The boy runs right, jumping pits and climbing platforms, collecting coins and fighting the
+ * monsters that drop in as he goes. Each level ends in an arena with a boss; beat it to move on.
+ *
+ * Training (picked in the scrapbook) instead runs one custom wave on a flat training ground.
  */
 (function (Forest) {
-  const { Config, LevelData } = Forest;
+  const { Config, Levels } = Forest;
   const Sfx = Forest.SoundEffects;
   const { Difficulty, Rewards, Scrapbook, Training } = Forest;
 
   /** Training mushrooms patrol this far either side of where they appear. */
   const TRAINING_PATROL_DISTANCE = 3.5;
+  /** Mushrooms placed in a level patrol this far either side of where they appear. */
+  const LEVEL_PATROL_DISTANCE = 3;
 
-  const BEST_WAVE_STORAGE_KEY = 'forest-pixel-adventure.bestWave';
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
+
+  const COIN_POINTS = 10;
+  /** Beating a level's boss is worth this many points times the level number. */
+  const LEVEL_CLEAR_POINTS = 250;
+  /** Falling below this height means the boy dropped into a pit. */
+  const PIT_Y = -3.5;
+  /**
+   * How close (in x) the boy gets before an enemy appears: mushrooms walk in from off-screen,
+   * sky creatures drop down where he can see them coming.
+   */
+  const MUSHROOM_SPAWN_DISTANCE = 14;
+  const SKY_SPAWN_DISTANCE = 10;
+  /** Enemies left this far behind are quietly removed. */
+  const DESPAWN_DISTANCE = 30;
+  /** The boss fight starts once the boy is this far into the arena. */
+  const ARENA_TRIGGER_INSET = 1.5;
+  const NEXT_LEVEL_DELAY_SECONDS = 4.5;
+  /** How much tougher each later level's creatures are, as a fraction of the difficulty's cycle ramp. */
+  const RAMP_PER_LEVEL = 0.5;
+
+  const THEME_LEAF_COLORS = {
+    forest: ['#86d66e', '#ffd166', '#86d66e'],
+    dungeon: ['#6b6475', '#8a8294'],
+    treetops: ['#86d66e', '#b5e48c', '#ffd166']
+  };
+
+  const ArenaState = Object.freeze({
+    /** The boy hasn't reached the arena yet. */
+    CLOSED: 'CLOSED',
+    FIGHTING: 'FIGHTING',
+    /** The boss is beaten; waiting for its leftovers (e.g. jelly halves) to go. */
+    BOSS_DOWN: 'BOSS_DOWN',
+    CLEARED: 'CLEARED'
+  });
 
   // ==========================================
   // World setup
@@ -26,8 +64,6 @@
     viewWidthUnits: stage.viewWidthUnits,
     cameraRestY: Config.CAMERA_REST_Y
   });
-  stage.scene.background = new THREE.Color(background.topColor);
-  Forest.buildForestScenery(stage.scene, sprites, LevelData.foregroundTrees);
 
   const hud = new Forest.Hud();
   const hitStop = new Forest.HitStop();
@@ -81,11 +117,14 @@
     effects,
     hitStop,
     cameraController,
+    /** The current level's ground and platforms (see Forest.Terrain). */
+    terrain: null,
     /** Adds an enemy created mid-fight (e.g. the halves of a split Thunder Jelly). */
     spawnEnemy: enemy => addEnemy(enemy)
   };
   world.projectiles = new Forest.ProjectileSystem(world);
   const hearts = new Forest.HeartPickups(world, collectHeart);
+  const coins = new Forest.Coins(world, collectCoin);
   const floatingText = new Forest.FloatingText(stage.scene);
 
   const player = new Forest.Player(world, {
@@ -94,18 +133,19 @@
     onSlamLanded: hitEnemiesInArea
   });
 
-  /** Mushrooms and sky creatures alike. */
+  // ==========================================
+  // Run state
+  // ==========================================
+  /** Every enemy in play. */
   let enemies = [];
-  let mushroomsDefeated = 0;
-  let foesDefeated = 0;
   let points = 0;
+  let coinsCollected = 0;
   /** High score for this difficulty, read once per run (not every frame). */
   let bestPointsBeforeRun = 0;
   /** True while a menu (scrapbook, gallery) covers the game. */
   let isPaused = false;
   /** Names of the menus currently pausing the game (see Forest.Game.setPaused). */
   const pauseReasons = new Set();
-  const totalMushrooms = LevelData.mushroomSpawns.length;
   /**
    * True while practising against creatures picked in the scrapbook (see Forest.Training)
    * instead of playing the adventure. Training doesn't touch the scrapbook or the high scores.
@@ -113,6 +153,20 @@
   let isTraining = false;
   /** How many creatures the current training session started with. */
   let trainingTotal = 0;
+  /** True once every level is beaten (the victory screen is up). */
+  let hasWon = false;
+
+  // --- The current level ---
+  let level = null;
+  let levelIndex = 0;
+  let scenery = null;
+  /** Enemies not dropped in yet, in the order the boy will reach them. */
+  let pendingEnemies = [];
+  let boss = null;
+  let arenaState = ArenaState.CLOSED;
+  let nextLevelTimer = 0;
+  /** Restored when the level is retried after a defeat. */
+  let levelStart = { points: 0, coins: 0, maxHp: 0 };
 
   const waves = new Forest.WaveDirector({
     spawnCreature: ({ kind, stats, genome }, x) => {
@@ -131,17 +185,11 @@
     onWaveCleared: rewardWaveCleared
   });
 
-  function spawnMushrooms() {
-    LevelData.mushroomSpawns.forEach(spawn => {
-      addEnemy(new Forest.EvilMushroom(world, spawn, onEnemyDefeated));
-    });
-  }
-
   /** Every enemy enters play through here, so the scrapbook hears about it. */
   function addEnemy(enemy) {
     enemies.push(enemy);
     if (isTraining) return;
-    const { species, isNew } = Scrapbook.recordEncounter(enemy, waves.waveNumber);
+    const { species, isNew } = Scrapbook.recordEncounter(enemy, level.name);
     if (isNew) {
       points += Rewards.NEW_SPECIES_POINTS;
       Sfx.newSpecies();
@@ -154,65 +202,236 @@
   }
 
   // ==========================================
+  // Levels
+  // ==========================================
+  /** Wipe everything left over from the last level or attempt. */
+  function clearWorld() {
+    hud.hideOverlay();
+    hud.hideBanner();
+    hud.hideToast();
+    effects.clear();
+    world.projectiles.clear();
+    hearts.clear();
+    coins.clear();
+    floatingText.clear();
+    hitStop.reset();
+    cameraController.stopShake();
+    enemies.forEach(enemy => enemy.remove());
+    enemies = [];
+    waves.reset();
+  }
+
+  /** Build a level's terrain, scenery and background, and put the boy at its start. */
+  function buildLevel(levelData, { hp, maxHp }) {
+    clearWorld();
+    level = levelData;
+    world.terrain = new Forest.Terrain(level);
+    effects.terrain = world.terrain;
+    if (scenery) scenery.dispose();
+    scenery = new Forest.LevelScenery(stage.scene, sprites, level);
+    background.setTheme(level.theme);
+    stage.scene.background = new THREE.Color(background.topColor);
+    ambientLeaves.setColors(THEME_LEAF_COLORS[level.theme]);
+    coins.place(level.coins);
+
+    pendingEnemies = level.enemies
+      .map((entry, index) => ({ ...entry, seed: level.number * 1000 + index, triggerX: entry.x - spawnDistanceFor(entry) }))
+      .sort((a, b) => a.triggerX - b.triggerX);
+    boss = null;
+    arenaState = ArenaState.CLOSED;
+    nextLevelTimer = 0;
+
+    player.reset(level.playerStartX, maxHp);
+    player.hp = Math.min(hp, maxHp);
+    player.setBounds(0, level.arena.end);
+    cameraController.setBounds(0, level.arena.end);
+    cameraController.snapTo(player);
+    refreshHealth();
+  }
+
+  /** Start level `index` (0-based) with the boy's current health carried over. */
+  function startLevel(index, hp, maxHp) {
+    isTraining = false;
+    hasWon = false;
+    levelIndex = index;
+    levelStart = { points, coins: coinsCollected, maxHp };
+    buildLevel(Levels.list[index], { hp, maxHp });
+
+    Sfx.waveStart();
+    hud.showBanner({ title: `LEVEL ${level.number}: ${level.name}`, subtitle: level.flavor, variant: 'wave', seconds: 3.4 });
+    refreshScore();
+    refreshPoints();
+  }
+
+  /** A brand new adventure from the first level. */
+  function startAdventure() {
+    points = 0;
+    coinsCollected = 0;
+    bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
+    const { startHearts } = Difficulty.current;
+    startLevel(0, startHearts, startHearts);
+  }
+
+  /** Try the current level again from its start, with full health. */
+  function retryLevel() {
+    points = levelStart.points;
+    coinsCollected = levelStart.coins;
+    bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
+    startLevel(levelIndex, levelStart.maxHp, levelStart.maxHp);
+  }
+
+  function spawnDistanceFor(entry) {
+    return entry.kind === 'mushroom' ? MUSHROOM_SPAWN_DISTANCE : SKY_SPAWN_DISTANCE;
+  }
+
+  /** Drop in every enemy the boy has come close enough to. */
+  function spawnApproachingEnemies() {
+    while (pendingEnemies.length > 0 && player.x >= pendingEnemies[0].triggerX) {
+      spawnLevelEnemy(pendingEnemies.shift());
+    }
+  }
+
+  function spawnLevelEnemy(entry) {
+    const difficulty = Difficulty.current;
+    if (entry.kind === 'mushroom') {
+      addEnemy(new Forest.EvilMushroom(world, { x: entry.x, patrolDistance: LEVEL_PATROL_DISTANCE }, onEnemyDefeated));
+      return;
+    }
+    const options = { x: entry.x, onDefeated: onEnemyDefeated };
+    if (entry.kind === 'mutant') {
+      const genome = Forest.MonsterForge.generate({ power: entry.power, seed: entry.seed });
+      addEnemy(Forest.MonsterForge.create(world, { ...options, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) }));
+      return;
+    }
+    const ramp = levelIndex * RAMP_PER_LEVEL * difficulty.cycleRamp;
+    const stats = Forest.WaveDirector.creatureStats(entry.kind, difficulty, ramp);
+    addEnemy(new Forest.SkyCreatures[entry.kind](world, { ...options, stats }));
+  }
+
+  /** Enemies left far behind are removed (no reward), so long levels stay light. */
+  function despawnDistantEnemies() {
+    enemies.forEach(enemy => {
+      if (enemy !== boss && !enemy.isGone && enemy.x < player.x - DESPAWN_DISTANCE) enemy.remove();
+    });
+  }
+
+  /** Walking into the arena shuts it behind the boy and brings down the boss. */
+  function updateArena(deltaSeconds) {
+    if (isTraining || !level.boss) return;
+
+    if (arenaState === ArenaState.CLOSED && player.x >= level.arena.start + ARENA_TRIGGER_INSET && !player.isDefeated) {
+      enterArena();
+    } else if (arenaState === ArenaState.BOSS_DOWN && enemies.every(enemy => enemy.isGone)) {
+      clearLevel();
+    } else if (arenaState === ArenaState.CLEARED) {
+      nextLevelTimer -= deltaSeconds;
+      if (nextLevelTimer <= 0) advanceToNextLevel();
+    }
+  }
+
+  function enterArena() {
+    const { arena, boss: bossData } = level;
+    arenaState = ArenaState.FIGHTING;
+    player.setBounds(arena.start + 0.5, arena.end - 0.3);
+    cameraController.lockTo(arena.start, arena.end);
+    // Stragglers outside the arena can't reach the fight any more
+    enemies.forEach(enemy => { if (enemy.x < arena.start) enemy.remove(); });
+    pendingEnemies = [];
+
+    const difficulty = Difficulty.current;
+    const stats = {
+      hp: Math.max(4, bossData.hp + difficulty.creatureHpBonus * 3),
+      damage: 1,
+      speed: difficulty.creatureSpeed
+    };
+    boss = new Forest.SkyCreatures[bossData.kind](world, {
+      x: bossData.x,
+      stats,
+      sizeScale: bossData.sizeScale,
+      onDefeated: onBossDefeated
+    });
+    addEnemy(boss);
+    Sfx.waveStart();
+    hud.showBanner({ title: `BOSS: ${bossData.name}`, subtitle: bossData.flavor, variant: 'boss', seconds: 3.2 });
+  }
+
+  function onBossDefeated(enemy) {
+    onEnemyDefeated(enemy);
+    arenaState = ArenaState.BOSS_DOWN;
+  }
+
+  /** Boss and leftovers gone: fanfare, bonus points, an extra heart, then on to the next level. */
+  function clearLevel() {
+    arenaState = ArenaState.CLEARED;
+    nextLevelTimer = NEXT_LEVEL_DELAY_SECONDS;
+    Sfx.levelCleared();
+    const bonus = LEVEL_CLEAR_POINTS * level.number;
+    points += bonus;
+    player.raiseMaxHp(1, Difficulty.current.maxHearts);
+    const isLast = levelIndex === Levels.list.length - 1;
+    hud.showBanner({
+      title: `${level.name} CLEARED!`,
+      subtitle: `+${bonus} POINTS &middot; FULLY HEALED! ${isLast ? 'The forest is saved...' : 'Onwards...'}`,
+      variant: 'cleared',
+      seconds: NEXT_LEVEL_DELAY_SECONDS - 0.4
+    });
+  }
+
+  function advanceToNextLevel() {
+    if (levelIndex < Levels.list.length - 1) {
+      startLevel(levelIndex + 1, player.hp, player.maxHp);
+      return;
+    }
+    hasWon = true;
+    const totalCoins = Levels.list.reduce((sum, entry) => sum + entry.coins.length, 0);
+    const previousBest = loadBest(BEST_POINTS_STORAGE_KEY);
+    const isNewBestPoints = points > previousBest;
+    if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, points);
+    hud.showVictory(startAdventure, {
+      points,
+      coins: coinsCollected,
+      totalCoins,
+      bestPoints: Math.max(previousBest, points),
+      isNewBestPoints
+    });
+  }
+
+  /** Dropped into a pit: a heart lost and back to solid ground (or defeat on the last heart). */
+  function checkPitFall() {
+    if (player.isDefeated || player.y >= PIT_Y) return;
+    player.fallIntoPit();
+    cameraController.snapTo(player);
+  }
+
+  // ==========================================
   // Game rules
   // ==========================================
   /** Points, a possible heart, and a tick in the scrapbook. */
   function onEnemyDefeated(enemy) {
-    foesDefeated++;
     const reward = Rewards.pointsFor(enemy);
     points += reward;
     floatingText.spawn(`+${reward}`, enemy.x, enemy.centerY + 0.5);
     if (Math.random() < Rewards.heartDropChance(enemy)) hearts.spawn(enemy.x, enemy.centerY);
     if (isTraining) return;
-
     Scrapbook.recordDefeat(enemy);
-    if (enemy instanceof Forest.EvilMushroom) {
-      mushroomsDefeated++;
-      // The last mushroom angers the sky itself
-      if (mushroomsDefeated >= totalMushrooms) waves.start();
-    }
+  }
+
+  function collectCoin(coin) {
+    coinsCollected++;
+    points += COIN_POINTS;
+    Sfx.coin();
+    floatingText.spawn(`+${COIN_POINTS}`, coin.x, coin.y + 0.4, '#ffe066');
   }
 
   function announceWave(wave) {
     Sfx.waveStart();
-    if (isTraining) {
-      hud.showBanner({ title: '🎯 TRAINING', subtitle: wave.flavor, variant: 'cleared', seconds: 3.2 });
-      return;
-    }
-    hud.showBanner({
-      title: `WAVE ${wave.number}: ${wave.name}`,
-      subtitle: wave.flavor,
-      variant: wave.isBoss ? 'boss' : 'wave',
-      seconds: 3.2
-    });
+    hud.showBanner({ title: '🎯 TRAINING', subtitle: wave.flavor, variant: 'cleared', seconds: 3.2 });
   }
 
-  /** Hearts back after every wave (depending on difficulty); an extra heart container after each boss. */
-  function rewardWaveCleared(wave) {
+  /** Only training uses waves now: its one wave is over. */
+  function rewardWaveCleared() {
     Sfx.waveCleared();
-    if (isTraining) {
-      showTrainingResult(true);
-      return;
-    }
-    const { heartsPerWaveCleared, maxHearts } = Difficulty.current;
-    let reward;
-    if (wave.isBoss) {
-      player.raiseMaxHp(1, maxHearts);
-      reward = 'BOSS DOWN - FULLY HEALED!';
-    } else if (heartsPerWaveCleared === 0) {
-      reward = 'NO HEALING ON HARD!';
-    } else {
-      reward = player.hp < player.maxHp ? `+${heartsPerWaveCleared} HEART${heartsPerWaveCleared > 1 ? 'S' : ''}` : 'FULL HEALTH!';
-      player.heal(heartsPerWaveCleared);
-    }
-    const bonus = Rewards.WAVE_CLEARED_POINTS_PER_WAVE * wave.number;
-    points += bonus;
-    hud.showBanner({
-      title: `WAVE ${wave.number} CLEARED!`,
-      subtitle: `${reward} +${bonus} POINTS. The sky is rumbling again...`,
-      variant: 'cleared',
-      seconds: 2.4
-    });
+    showTrainingResult(true);
   }
 
   /** A dropped heart heals one heart; with full health it's worth points instead. */
@@ -240,8 +459,7 @@
       hud.showScore(`🎯 TRAINING: ${waves.remainingFoes} LEFT`);
       return;
     }
-    // No defeated-enemy counts; just the wave number once the sky waves begin
-    hud.showScore(waves.isActive ? `WAVE ${waves.waveNumber}` : '');
+    hud.showScore(`${level.icon} LEVEL ${level.number}`, `🪙 COINS: ${coinsCollected}`);
   }
 
   /** End of a training session, won (everything defeated) or lost (the boy fell). */
@@ -262,26 +480,19 @@
       showTrainingResult(false);
       return;
     }
-    const previousBestWave = loadBest(BEST_WAVE_STORAGE_KEY);
-    const isNewBest = waves.waveNumber > previousBestWave;
-    if (isNewBest) saveBest(BEST_WAVE_STORAGE_KEY, waves.waveNumber);
-
     const previousBestPoints = loadBest(BEST_POINTS_STORAGE_KEY);
     const isNewBestPoints = points > previousBestPoints;
     if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, points);
 
-    hud.showGameOver(restartGame, {
-      wave: waves.waveNumber,
-      foesDefeated,
-      bestWave: Math.max(previousBestWave, waves.waveNumber),
-      isNewBest,
+    hud.showGameOver(retryLevel, {
+      levelLabel: `LEVEL ${level.number}: ${level.name}`,
       points,
       bestPoints: Math.max(previousBestPoints, points),
       isNewBestPoints
     });
   }
 
-  /** Bests (wave, points) are tracked separately for each difficulty. */
+  /** Bests are tracked separately for each difficulty. */
   function bestKey(baseKey) {
     return `${baseKey}.${Difficulty.current.id}`;
   }
@@ -327,47 +538,45 @@
     enemies = enemies.filter(enemy => !enemy.isGone);
   }
 
+  /** [R] or a "try again" button: retry the level (or the training, or a new adventure after winning). */
   function restartGame() {
-    hud.hideOverlay();
-    hud.hideBanner();
-    player.reset(LevelData.playerStartX, Difficulty.current.startHearts);
-    effects.clear();
-    world.projectiles.clear();
-    hearts.clear();
-    floatingText.clear();
-    hitStop.reset();
-    cameraController.stopShake();
-    hud.hideToast();
-
-    enemies.forEach(enemy => enemy.remove());
-    enemies = [];
-    waves.reset();
-    mushroomsDefeated = 0;
-    foesDefeated = 0;
-    points = 0;
-    bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
-
-    const session = isTraining ? Training.buildSession() : null;
-    // Nothing left to train against (e.g. every pick was unticked): back to the adventure
-    if (!session) isTraining = false;
-    if (session) {
-      trainingTotal = session.total;
-      waves.startCustom(session);
-    } else {
-      spawnMushrooms();
+    if (isTraining) {
+      startTrainingSession();
+      return;
     }
-    refreshHealth();
+    if (hasWon) {
+      startAdventure();
+      return;
+    }
+    retryLevel();
+  }
+
+  function startTrainingSession() {
+    const session = Training.buildSession();
+    // Nothing left to train against (e.g. every pick was unticked): back to the adventure
+    if (!session) {
+      isTraining = false;
+      startAdventure();
+      return;
+    }
+    isTraining = true;
+    points = 0;
+    const { startHearts } = Difficulty.current;
+    buildLevel(Levels.training, { hp: startHearts, maxHp: startHearts });
+    trainingTotal = session.total;
+    waves.startCustom(session);
     refreshScore();
     refreshPoints();
   }
 
   // A new difficulty starts a fresh run with that many hearts
-  Difficulty.onChange(level => {
-    restartGame();
+  Difficulty.onChange(changedLevel => {
+    if (isTraining) startTrainingSession();
+    else startAdventure();
     hud.showBanner({
-      title: `DIFFICULTY: ${level.label}`,
-      subtitle: `${level.startHearts} hearts. ${isTraining ? 'Training starts over!' : 'A fresh adventure begins!'}`,
-      variant: level.id === 'HARD' ? 'boss' : 'cleared',
+      title: `DIFFICULTY: ${changedLevel.label}`,
+      subtitle: `${changedLevel.startHearts} hearts. ${isTraining ? 'Training starts over!' : 'A fresh adventure begins!'}`,
+      variant: changedLevel.id === 'HARD' ? 'boss' : 'cleared',
       seconds: 2.2
     });
   });
@@ -390,16 +599,25 @@
     const gameDeltaSeconds = hitStop.consume(realDeltaSeconds);
 
     player.update(gameDeltaSeconds);
-    if (!player.isDefeated) waves.update(gameDeltaSeconds);
+    checkPitFall();
+    if (!player.isDefeated) {
+      if (isTraining) waves.update(gameDeltaSeconds);
+      else spawnApproachingEnemies();
+    }
     updateEnemies(gameDeltaSeconds);
+    if (!isTraining) {
+      despawnDistantEnemies();
+      updateArena(gameDeltaSeconds);
+    }
     world.projectiles.update(gameDeltaSeconds, player);
     hearts.update(gameDeltaSeconds, player);
+    coins.update(gameDeltaSeconds, player);
     floatingText.update(gameDeltaSeconds);
     particles.update(gameDeltaSeconds);
-    ambientLeaves.update(gameDeltaSeconds);
     effects.update(gameDeltaSeconds);
 
     cameraController.update(player, realDeltaSeconds);
+    ambientLeaves.update(gameDeltaSeconds, stage.camera.position.x);
     background.update(stage.camera.position.x, stage.camera.position.y, realDeltaSeconds);
     refreshScore();
     refreshPoints();
@@ -429,7 +647,7 @@
       const { MonsterForge, MathUtils } = Forest;
       const genome = genomeOrOptions.appearance ? genomeOrOptions : MonsterForge.generate(genomeOrOptions);
       const offset = MathUtils.randomDirection() * MathUtils.randomBetween(...SUMMON_DISTANCE);
-      const x = MathUtils.clamp(player.x + offset, Config.LEVEL_START_X + 1, Config.LEVEL_END_X - 1);
+      const x = MathUtils.clamp(player.x + offset, player.minX + 1, player.maxX - 1);
       const monster = MonsterForge.create(world, { genome, x, onDefeated: onEnemyDefeated });
       addEnemy(monster);
       return monster;
@@ -458,8 +676,7 @@
      */
     startTraining() {
       if (Training.selectedCreatureCount === 0) return false;
-      isTraining = true;
-      restartGame();
+      startTrainingSession();
       notifyModeChanged();
       return true;
     },
@@ -467,7 +684,7 @@
     /** Leave training and start a fresh adventure. */
     endTraining() {
       isTraining = false;
-      restartGame();
+      startAdventure();
       notifyModeChanged();
     },
 
@@ -480,6 +697,19 @@
       modeListeners.push(listener);
     },
 
+    /**
+     * Jump straight to a level (1-3), e.g. from the console: Forest.Game.goToLevel(3)
+     * @param {number} number
+     */
+    goToLevel(number) {
+      startLevel(Math.max(0, Math.min(Levels.list.length - 1, number - 1)), player.maxHp, player.maxHp);
+    },
+
+    /** The current level's data (read-only). */
+    get level() {
+      return level;
+    },
+
     /** The boy (read-only access for the console and tests). */
     get player() {
       return player;
@@ -487,9 +717,17 @@
 
     get points() {
       return points;
+    },
+
+    get coins() {
+      return coinsCollected;
+    },
+
+    get enemies() {
+      return enemies;
     }
   };
 
-  restartGame();
+  startAdventure();
   requestAnimationFrame(runFrame);
 })(window.Forest);

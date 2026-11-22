@@ -14,9 +14,9 @@
     /** Height of the grass surface everything stands on. */
     GROUND_Y: 0,
 
-    /** Horizontal limits of the playable forest. */
-    LEVEL_START_X: -12,
-    LEVEL_END_X: 48,
+    /** Outer horizontal limits shared by every level (each level also has its own, tighter bounds). */
+    LEVEL_START_X: -8,
+    LEVEL_END_X: 240,
 
     /** Camera height when the player stands on the ground. */
     CAMERA_REST_Y: 2.6,

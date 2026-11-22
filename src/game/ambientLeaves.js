@@ -9,6 +9,8 @@
   const MAX_HEIGHT = 8.0;
   /** How far past the level edge a leaf travels before wrapping to the other side. */
   const WRAP_MARGIN = 5;
+  /** Leaves live within this distance either side of the camera. */
+  const VIEW_SPAN = 14;
 
   function randomLeafHeight() {
     return GROUND_Y + randomBetween(MIN_HEIGHT, MAX_HEIGHT);
@@ -37,7 +39,16 @@
       }
     }
 
-    update(deltaSeconds) {
+    /** Recolour the leaves for a level's theme (e.g. grey dust in the dungeon) or hide them. */
+    setColors(colors) {
+      this.leaves.forEach((leaf, index) => {
+        leaf.mesh.visible = colors.length > 0;
+        if (colors.length) leaf.mesh.material.color.set(colors[index % colors.length]);
+      });
+    }
+
+    /** @param {number} [cameraX] leaves wrap around the camera, so they're everywhere in a long level */
+    update(deltaSeconds, cameraX = 0) {
       this.leaves.forEach(leaf => {
         const position = leaf.mesh.position;
         leaf.wobblePhase += leaf.wobbleSpeed * deltaSeconds;
@@ -48,8 +59,12 @@
         leaf.mesh.rotation.z = wobble * 0.4;
 
         // Blown off the left edge: re-enter from the right
-        if (position.x < LEVEL_START_X - WRAP_MARGIN) {
-          position.x = LEVEL_END_X + WRAP_MARGIN;
+        if (position.x < cameraX - VIEW_SPAN) {
+          position.x = cameraX + VIEW_SPAN;
+          position.y = randomLeafHeight();
+        } else if (position.x > cameraX + VIEW_SPAN + WRAP_MARGIN) {
+          // The camera jumped back (a new level): bring the leaf into view
+          position.x = cameraX + randomBetween(-VIEW_SPAN, VIEW_SPAN);
           position.y = randomLeafHeight();
         }
         // Reached the ground: start again from the top

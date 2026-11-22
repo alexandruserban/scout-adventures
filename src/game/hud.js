@@ -86,25 +86,39 @@
     }
 
     /**
-     * @param {() => void} onRestart
-     * @param {{wave:number, foesDefeated:number, bestWave:number, isNewBest:boolean,
-     *   points:number, bestPoints:number, isNewBestPoints:boolean}} run
+     * The boy was defeated somewhere in a level.
+     * @param {() => void} onRetry restart the level
+     * @param {{levelLabel:string, points:number, bestPoints:number, isNewBestPoints:boolean}} run
      */
-    showGameOver(onRestart, { wave, foesDefeated, bestWave, isNewBest, points, bestPoints, isNewBestPoints }) {
-      const pointsLine = `<br><br>POINTS: ${points.toLocaleString()}<br>`
+    showGameOver(onRetry, { levelLabel, points, bestPoints, isNewBestPoints }) {
+      const message = `The boy fell in ${levelLabel}.<br><br>POINTS: ${points.toLocaleString()}<br>`
         + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
-      const message = (wave === 0
-        ? 'The evil forest mushrooms overwhelmed the boy...'
-        : `The boy fell on WAVE ${wave} after defeating ${foesDefeated} foes.<br><br>`
-          + (isNewBest ? '&#9733; NEW BEST WAVE! &#9733;' : `BEST: WAVE ${bestWave}`))
-        + pointsLine;
       this.showOverlay({
         variant: 'game-over',
         titleClass: 'text-red',
         title: 'DEFEATED!',
         message,
-        buttonLabel: 'PRESS [ R ] TO TRY AGAIN',
-        onRestart
+        buttonLabel: 'PRESS [ R ] TO TRY THE LEVEL AGAIN',
+        onRestart: onRetry
+      });
+    }
+
+    /**
+     * Every level and boss beaten.
+     * @param {() => void} onPlayAgain
+     * @param {{points:number, coins:number, totalCoins:number, bestPoints:number, isNewBestPoints:boolean}} run
+     */
+    showVictory(onPlayAgain, { points, coins, totalCoins, bestPoints, isNewBestPoints }) {
+      const message = 'All three bosses are beaten and the forest is safe again!'
+        + `<br><br>COINS: ${coins} / ${totalCoins}<br>POINTS: ${points.toLocaleString()}<br>`
+        + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
+      this.showOverlay({
+        variant: 'victory',
+        titleClass: 'text-green',
+        title: 'YOU WIN!',
+        message,
+        buttonLabel: 'PLAY AGAIN',
+        onRestart: onPlayAgain
       });
     }
 

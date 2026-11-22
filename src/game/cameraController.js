@@ -20,6 +20,7 @@
      */
     constructor(camera, viewWidthUnits) {
       this.camera = camera;
+      this.viewWidthUnits = viewWidthUnits;
       this.minX = LEVEL_START_X + viewWidthUnits / 2 - EDGE_OVERSCROLL;
       this.maxX = LEVEL_END_X - viewWidthUnits / 2 + EDGE_OVERSCROLL;
       // Smoothed position before shake is added
@@ -29,6 +30,30 @@
       this.shakeMagnitude = 0;
       /** Highest the camera may go (e.g. so the soil stays behind the touch buttons). */
       this.maxY = Infinity;
+    }
+
+    /**
+     * Keep the view between these world x positions (a level's ends, or the boss arena).
+     * @param {number} leftX
+     * @param {number} rightX
+     */
+    setBounds(leftX, rightX) {
+      this.minX = leftX + this.viewWidthUnits / 2 - EDGE_OVERSCROLL;
+      this.maxX = Math.max(this.minX, rightX - this.viewWidthUnits / 2 + EDGE_OVERSCROLL);
+    }
+
+    /** Lock the view to exactly this stretch (no overscroll), e.g. a boss arena. */
+    lockTo(leftX, rightX) {
+      this.minX = leftX + this.viewWidthUnits / 2;
+      this.maxX = Math.max(this.minX, rightX - this.viewWidthUnits / 2);
+    }
+
+    /** Jump straight to the target, without easing (e.g. at the start of a level). */
+    snapTo(target) {
+      this.focusX = clamp(target.x + target.facing * LOOK_AHEAD, this.minX, this.maxX);
+      this.focusY = Math.min(this.maxY, CAMERA_REST_Y);
+      this.camera.position.x = this.focusX;
+      this.camera.position.y = this.focusY;
     }
 
     /** Caps the camera height; applies immediately, without easing. */

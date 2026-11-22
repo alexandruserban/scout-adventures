@@ -59,16 +59,19 @@
   // Sky and sun (do not scroll)
   // ------------------------------------------
 
-  /** Narrow strip stretched across the screen; the top half is solid so tall screens stay covered. */
-  function paintSky() {
+  /**
+   * Narrow strip stretched across the screen; the top half is solid so tall screens stay covered.
+   * @param {string[]} [colors] gradient from the top of the screen down to the horizon
+   */
+  function paintSky(colors = SKY_COLORS) {
     const { canvas, plot, height } = createWrappingCanvas(8, 512);
     const gradientStartY = 256;
     for (let y = 0; y < height; y++) {
-      const position = Math.max(0, (y - gradientStartY) / (height - gradientStartY)) * (SKY_COLORS.length - 1);
-      const band = Math.min(SKY_COLORS.length - 2, Math.floor(position));
+      const position = Math.max(0, (y - gradientStartY) / (height - gradientStartY)) * (colors.length - 1);
+      const band = Math.min(colors.length - 2, Math.floor(position));
       const blend = position - band;
       for (let x = 0; x < 8; x++) {
-        plot(x, y, blend > ditherThreshold(x, y) ? SKY_COLORS[band + 1] : SKY_COLORS[band]);
+        plot(x, y, blend > ditherThreshold(x, y) ? colors[band + 1] : colors[band]);
       }
     }
     return canvas;
@@ -95,18 +98,29 @@
   // Scrolling layers, far to near
   // ------------------------------------------
 
-  /** Flat-bottomed puffy clouds made of overlapping half-discs. */
-  function paintClouds() {
-    const { canvas, plot, height } = createWrappingCanvas(LAYER_WIDTH, 64);
-    const random = createSeededRandom(7);
-    const cloudCount = 6;
+  /** Warm golden-hour cloud colours: body, underside, lower shade, sunlit top. */
+  const GOLDEN_CLOUD_COLORS = { body: '#f7e9bd', underside: '#c9b88e', shade: '#e2cf9f', top: '#fff6d8' };
+
+  /**
+   * Flat-bottomed puffy clouds made of overlapping half-discs.
+   * @param {object} [options]
+   * @param {number} [options.seed]
+   * @param {number} [options.count] clouds across the layer
+   * @param {{body:string, underside:string, shade:string, top:string}} [options.colors]
+   * @param {number} [options.height] canvas height in pixels
+   * @param {number} [options.sizeScale] multiplies cloud widths
+   */
+  function paintClouds({ seed = 7, count = 6, colors = GOLDEN_CLOUD_COLORS, height: canvasHeight = 64, sizeScale = 1 } = {}) {
+    const { canvas, plot, height } = createWrappingCanvas(LAYER_WIDTH, canvasHeight);
+    const random = createSeededRandom(seed);
+    const cloudCount = count;
 
     const clouds = [];
     for (let i = 0; i < cloudCount; i++) {
       clouds.push({
         left: i * (LAYER_WIDTH / cloudCount) + random() * 40,
-        baseY: 14 + random() * 34,
-        width: 34 + random() * 50
+        baseY: 14 + random() * (height - 30),
+        width: (34 + random() * 50) * sizeScale
       });
     }
 
@@ -131,10 +145,10 @@
 
         for (let y = Math.floor(top); y <= cloud.baseY; y++) {
           if (y >= height) break;
-          let color = '#f7e9bd';
-          if (y > cloud.baseY - 2) color = '#c9b88e';
-          else if (y > cloud.baseY - 5) color = '#e2cf9f';
-          else if (y < top + 2) color = '#fff6d8';
+          let color = colors.body;
+          if (y > cloud.baseY - 2) color = colors.underside;
+          else if (y > cloud.baseY - 5) color = colors.shade;
+          else if (y < top + 2) color = colors.top;
           plot(x, y, color);
         }
       }
@@ -378,6 +392,10 @@
   Forest.BackgroundPainters = {
     LAYER_WIDTH,
     SKY_COLORS,
+    // Shared helpers for the other themes' painters (see themePainters.js)
+    createWrappingCanvas,
+    ditherThreshold,
+    ridgeOffset,
     paintSky,
     paintSun,
     paintClouds,

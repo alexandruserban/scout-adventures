@@ -61,6 +61,9 @@
   /** Snug box around the cap and stem: a normal jump clears it (see Forest.MathUtils.isBodyTouching). */
   const BODY_BOX = { enemyHalfWidthRatio: 0.35, playerHalfWidthRatio: 0.25, topRatio: 0.85 };
 
+  /** Keeps this far from the ends of its ground. */
+  const EDGE_MARGIN = 0.5;
+
   // --- Colours ---
   const SPORE_PURPLE = '#9d4edd';
   const POISON_YELLOW = '#ffd166';
@@ -83,9 +86,13 @@
       /** Species id in the scrapbook. */
       this.kind = 'mushroom';
 
-      this.spawnX = spawn.x;
+      // Stays on its own stretch of ground, so it never walks into a pit
+      const range = world.terrain ? world.terrain.walkableRange(spawn.x) : { minX: -Infinity, maxX: Infinity };
+      this.minX = range.minX + EDGE_MARGIN;
+      this.maxX = Math.max(this.minX, range.maxX - EDGE_MARGIN);
+      this.x = Math.min(this.maxX, Math.max(this.minX, spawn.x));
+      this.spawnX = this.x;
       this.patrolDistance = spawn.patrolDistance;
-      this.x = spawn.x;
       this.y = GROUND_Y;
       this.velocityX = 0;
       this.velocityY = 0;
@@ -197,6 +204,10 @@
         this.y = GROUND_Y;
         this.velocityY = 0;
         this.velocityX *= GROUND_FRICTION;
+      }
+      if (this.x < this.minX || this.x > this.maxX) {
+        this.x = Math.min(this.maxX, Math.max(this.minX, this.x));
+        this.facing = this.x <= this.minX ? 1 : -1;
       }
     }
 

@@ -41,6 +41,8 @@
   const HEART_BOB_SPEED = 4;
   const HEART_BOB_HEIGHT = 0.06;
   const LEVEL_MARGIN = 0.4;
+  /** A heart that fell this far into a pit is gone. */
+  const FALLEN_AWAY_Y = -6;
 
   class HeartPickups {
     /**
@@ -48,6 +50,7 @@
      * @param {(heart: {x:number, y:number}) => void} onCollected
      */
     constructor(world, onCollected) {
+      this.world = world;
       this.scene = world.scene;
       this.particles = world.particles;
       this.onCollected = onCollected;
@@ -83,6 +86,8 @@
           this.particles.burst(heart.x, heart.y + this.size / 2, 6, '#ffffff', 0.8, 0.3);
           this.onCollected(heart);
           this.removeAt(i);
+        } else if (heart.y < FALLEN_AWAY_Y) {
+          this.removeAt(i);
         } else if (heart.age >= HEART_LIFETIME) {
           this.particles.burst(heart.x, heart.y + this.size / 2, 5, '#a81c2b', 0.6, 0.3);
           this.removeAt(i);
@@ -91,17 +96,21 @@
     }
 
     move(heart, deltaSeconds) {
+      const previousY = heart.y;
       heart.velocityY -= HEART_GRAVITY * deltaSeconds;
       heart.x = clamp(heart.x + heart.velocityX * deltaSeconds, LEVEL_START_X + LEVEL_MARGIN, LEVEL_END_X - LEVEL_MARGIN);
       heart.y += heart.velocityY * deltaSeconds;
 
-      if (heart.y <= GROUND_Y) {
-        heart.y = GROUND_Y;
+      // Lands on ground or a platform; over a pit it falls away (and is removed once out of sight)
+      const terrain = this.world.terrain;
+      heart.floorY = terrain ? terrain.floorBelow(heart.x, previousY) : GROUND_Y;
+      if (heart.y <= heart.floorY) {
+        heart.y = heart.floorY;
         heart.velocityX *= 0.7;
         heart.velocityY = heart.velocityY < -BOUNCE_STOP_SPEED ? -heart.velocityY * HEART_BOUNCINESS : 0;
       }
 
-      const isResting = heart.y === GROUND_Y && heart.velocityY === 0;
+      const isResting = heart.y === heart.floorY && heart.velocityY === 0;
       const bob = isResting ? (1 + Math.sin(heart.age * HEART_BOB_SPEED)) * HEART_BOB_HEIGHT : 0;
       heart.mesh.position.set(heart.x, heart.y + this.size / 2 + bob, HEART_Z);
 

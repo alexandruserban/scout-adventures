@@ -109,6 +109,12 @@
       synth.playTone({ wave: 'square', frequency: 1760, duration: 0.12, volume: 0.06, delay: 0.05 });
     },
 
+    /** Springy boing off a marshmallow pad. */
+    bounce() {
+      synth.playTone({ wave: 'sine', frequency: 180, endFrequency: 720, duration: 0.22, volume: 0.18 });
+      synth.playTone({ wave: 'square', frequency: 360, endFrequency: 900, duration: 0.12, volume: 0.05, delay: 0.03 });
+    },
+
     /** Long falling whistle into a pit. */
     pitFall() {
       synth.playTone({ wave: 'square', frequency: 880, endFrequency: 110, duration: 0.5, volume: 0.09, endVolume: 0.001 });

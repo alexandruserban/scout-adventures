@@ -122,7 +122,7 @@
      * @param {{hp:number, damage:number, speed:number}} [options.stats] defaults to statsFor(genome)
      * @param {{y:number, velocityX:number, velocityY:number}} [options.launch] start mid-air instead of falling
      */
-    constructor(world, { genome, x, stats, onDefeated, launch }) {
+    constructor(world, { genome, x, stats, onDefeated, launch, sizeScale }) {
       const art = acquireArt(genome);
       super(world, {
         kind: 'monster',
@@ -133,7 +133,8 @@
         fallFrame: 'idle',
         colors: { main: genome.appearance.palette.b, accent: genome.appearance.palette.s },
         onDefeated,
-        launch
+        launch,
+        sizeScale
       });
       this.artKey = art.key;
       this.genome = genome;

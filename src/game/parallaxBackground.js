@@ -7,6 +7,7 @@
 (function (Forest) {
   const Painters = Forest.BackgroundPainters;
   const Theme = Forest.ThemePainters;
+  const World = Forest.WorldPainters;
   const { createPixelTexture } = Forest.Graphics;
   const { createSeededRandom } = Forest.MathUtils;
 
@@ -73,6 +74,70 @@
         { canvas: Theme.paintNearCanopy(), follow: 0.4, bottomY: -5.6 }
       ],
       motes: { count: 14, colors: ['#ffffff', '#fff7c2'], rise: 0.1 }
+    },
+    desert: {
+      skyColors: World.DESERT_SKY_COLORS,
+      clearColor: World.DESERT_SKY_COLORS[0],
+      hasSun: true,
+      layers: () => [
+        { canvas: World.paintMesas(), follow: 0.92, bottomY: -1.0 },
+        { canvas: World.paintFarDunes(), follow: 0.82, bottomY: -2.0 },
+        { canvas: World.paintPyramids(), follow: 0.75, bottomY: -0.6 },
+        { canvas: Painters.paintMist(), follow: 0.65, bottomY: -0.4, opacity: 0.25, drift: -14 },
+        { canvas: World.paintCactusRow(), follow: 0.5, bottomY: -1.2 },
+        { canvas: World.paintNearDunes(), follow: 0.35, bottomY: -2.2 }
+      ],
+      motes: { count: 24, colors: ['#f6d89a', '#ffffff'], rise: 0.05 }
+    },
+    ice: {
+      skyColors: World.ICE_SKY_COLORS,
+      clearColor: World.ICE_SKY_COLORS[0],
+      celestial: () => World.paintDisc({ size: 40, colors: { light: '#ffffff', mid: '#e3ecf7', dark: '#b9c8dc' }, craters: [[14, 16, 3, '#ccd8e8'], [24, 25, 2, '#ccd8e8']] }),
+      layers: () => [
+        { canvas: World.paintStars({ seed: 8, count: 160 }), follow: 0.99, bottomY: -1.0 },
+        { canvas: World.paintAurora(), follow: 0.97, bottomY: 3.5, opacity: 0.45, additive: true, breathe: true },
+        { canvas: World.paintIcePeaks(), follow: 0.88, bottomY: -1.6 },
+        { canvas: World.paintSnowyPines(), follow: 0.6, bottomY: -1.4 },
+        { canvas: World.paintSnowDrifts(), follow: 0.35, bottomY: -2.0 }
+      ],
+      motes: { count: 16, colors: ['#bff3ff', '#e8d6ff'], rise: 0 }
+    },
+    volcano: {
+      skyColors: World.VOLCANO_SKY_COLORS,
+      clearColor: World.VOLCANO_SKY_COLORS[0],
+      hasSun: false,
+      layers: () => [
+        { canvas: Painters.paintClouds({ seed: 31, count: 5, colors: World.ASH_CLOUD_COLORS, height: 80, sizeScale: 1.5 }), follow: 0.96, bottomY: 3.6, opacity: 0.9, drift: -1.5 },
+        { canvas: World.paintVolcano(), follow: 0.9, bottomY: -1.8 },
+        { canvas: World.paintBasaltColumns(), follow: 0.65, bottomY: -2.0 },
+        { canvas: World.paintLavaGlow(), follow: 0.5, bottomY: -3.0, opacity: 0.35, additive: true, flicker: true },
+        { canvas: World.paintVolcanicRocks(), follow: 0.35, bottomY: -2.0 }
+      ],
+      motes: { count: 30, colors: ['#ff8a2a', '#ffd25e'], rise: 0.6 }
+    },
+    candy: {
+      skyColors: World.CANDY_SKY_COLORS,
+      clearColor: World.CANDY_SKY_COLORS[0],
+      hasSun: true,
+      layers: () => [
+        { canvas: Painters.paintClouds({ seed: 41, count: 6, colors: World.COTTON_CANDY_COLORS, height: 80, sizeScale: 1.2 }), follow: 0.95, bottomY: 3.0, drift: -2 },
+        { canvas: World.paintCandyHills(), follow: 0.85, bottomY: -1.8 },
+        { canvas: World.paintLollipops(), follow: 0.6, bottomY: -1.4 },
+        { canvas: World.paintGumdrops(), follow: 0.35, bottomY: -2.2 }
+      ],
+      motes: { count: 26, colors: ['#ff6fae', '#7fd6ff'], rise: -0.2 }
+    },
+    moon: {
+      skyColors: World.SPACE_SKY_COLORS,
+      clearColor: '#000000',
+      celestial: () => World.paintDisc({ size: 56, colors: { light: '#7fd0ff', mid: '#2f7fd6', dark: '#1b4d9a' }, craters: [[20, 18, 6, '#4caf50'], [32, 30, 5, '#4caf50'], [16, 32, 3, '#e8f4ff']] }),
+      layers: () => [
+        { canvas: World.paintStars({ seed: 12, count: 260 }), follow: 0.995, bottomY: -1.0 },
+        { canvas: World.paintNebula(), follow: 0.98, bottomY: -0.5, opacity: 0.5, additive: true },
+        { canvas: World.paintMoonHills({ height: 112, baseY: 62, waves: [[10, 3, 0.4], [5, 8, 1.2]], colors: { body: '#5a5a66', shade: '#474752', light: '#7a7a88' }, seed: 1 }), follow: 0.88, bottomY: -1.6 },
+        { canvas: World.paintMoonHills({ height: 64, baseY: 40, waves: [[4, 4, 1.9], [2, 11, 0.6]], colors: { body: '#3a3a44', shade: '#2c2c34', light: '#55555f' }, seed: 2 }), follow: 0.4, bottomY: -2.0 }
+      ],
+      motes: { count: 20, colors: ['#ffffff', '#cfe3ff'], rise: 0 }
     }
   };
 
@@ -115,8 +180,9 @@
       this.sky = this.createStaticPlane(Painters.paintSky(theme.skyColors), this.planeWidth + 2, SKY_DEPTH, false);
       this.skyBaseY = -1.5 + (this.sky.geometry.parameters.height) / 2;
       this.sun = null;
-      if (theme.hasSun) {
-        const sunCanvas = Painters.paintSun();
+      // The sun, or another body hanging in the sky (a moon, the Earth)
+      if (theme.hasSun || theme.celestial) {
+        const sunCanvas = theme.celestial ? theme.celestial() : Painters.paintSun();
         this.sun = this.createStaticPlane(sunCanvas, sunCanvas.width * this.pixelScale, SUN_DEPTH, true);
       }
 
@@ -248,7 +314,7 @@
       const RISE_SPAN = 6;
       this.motes.forEach(mote => {
         mote.offsetX += mote.driftSpeed * deltaSeconds;
-        if (this.moteRise) mote.baseY = 0.2 + ((mote.baseY - 0.2 + this.moteRise * deltaSeconds) % RISE_SPAN);
+        if (this.moteRise) mote.baseY = 0.2 + ((((mote.baseY - 0.2 + this.moteRise * deltaSeconds) % RISE_SPAN) + RISE_SPAN) % RISE_SPAN);
         let x = mote.offsetX - cameraX * 0.6;
         x = ((x % wrapSpan) + wrapSpan * 1.5) % wrapSpan - wrapSpan / 2;
         const y = mote.baseY + Math.sin(this.elapsed * mote.bobSpeed + mote.phase) * 0.25;

@@ -36,12 +36,26 @@
   const ARENA_TRIGGER_INSET = 1.5;
   const NEXT_LEVEL_DELAY_SECONDS = 4.5;
   /** How much tougher each later level's creatures are, as a fraction of the difficulty's cycle ramp. */
-  const RAMP_PER_LEVEL = 0.5;
+  const RAMP_PER_LEVEL = 0.35;
+
+  // --- Level hazards ---
+  /** Sandstorm: a light headwind, with a strong gust every WIND_GUST_PERIOD seconds. */
+  const WIND_BASE_SPEED = -0.3;
+  const WIND_GUST_SPEED = -1.7;
+  const WIND_GUST_PERIOD = 7;
+  /** Lava bombs fall from the sky this often (seconds, random in the range). */
+  const LAVA_BOMB_INTERVAL = [1.8, 3.2];
+  const LAVA_BOMB_FLIGHT_SECONDS = 1.5;
 
   const THEME_LEAF_COLORS = {
     forest: ['#86d66e', '#ffd166', '#86d66e'],
     dungeon: ['#6b6475', '#8a8294'],
-    treetops: ['#86d66e', '#b5e48c', '#ffd166']
+    treetops: ['#86d66e', '#b5e48c', '#ffd166'],
+    desert: ['#f6d89a', '#e8be7c', '#fff1c8'],
+    ice: ['#ffffff', '#e6f2ff'],
+    volcano: ['#6b5b58', '#8a7672', '#ff8a2a'],
+    candy: ['#ff6fae', '#7fd6ff', '#ffe066', '#9af08f'],
+    moon: []
   };
 
   const ArenaState = Object.freeze({
@@ -165,6 +179,9 @@
   let boss = null;
   let arenaState = ArenaState.CLOSED;
   let nextLevelTimer = 0;
+  /** Seconds since the level started (drives the sandstorm gusts). */
+  let levelTime = 0;
+  let lavaBombTimer = 0;
   /** Restored when the level is retried after a defeat. */
   let levelStart = { points: 0, coins: 0, maxHp: 0 };
 
@@ -226,12 +243,16 @@
     clearWorld();
     level = levelData;
     world.terrain = new Forest.Terrain(level);
+    world.levelPhysics = { gravityScale: 1, slippery: false, windSpeed: 0, ...(level.physics || {}) };
+    levelTime = 0;
+    lavaBombTimer = LAVA_BOMB_INTERVAL[1];
     effects.terrain = world.terrain;
     if (scenery) scenery.dispose();
     scenery = new Forest.LevelScenery(stage.scene, sprites, level);
     background.setTheme(level.theme);
     stage.scene.background = new THREE.Color(background.topColor);
     ambientLeaves.setColors(THEME_LEAF_COLORS[level.theme]);
+    ambientLeaves.setWind(0);
     coins.place(level.coins);
 
     pendingEnemies = level.enemies
@@ -345,12 +366,14 @@
       damage: 1,
       speed: difficulty.creatureSpeed
     };
-    boss = new Forest.SkyCreatures[bossData.kind](world, {
-      x: bossData.x,
-      stats,
-      sizeScale: bossData.sizeScale,
-      onDefeated: onBossDefeated
-    });
+    const bossOptions = { x: bossData.x, stats, sizeScale: bossData.sizeScale, onDefeated: onBossDefeated };
+    if (bossData.kind === 'mutant') {
+      // A fixed seed, so the same monster guards this level every time
+      const genome = Forest.MonsterForge.generate({ power: bossData.power, movement: bossData.movement, seed: bossData.seed });
+      boss = Forest.MonsterForge.create(world, { ...bossOptions, genome });
+    } else {
+      boss = new Forest.SkyCreatures[bossData.kind](world, bossOptions);
+    }
     addEnemy(boss);
     Sfx.waveStart();
     hud.showBanner({ title: `BOSS: ${bossData.name}`, subtitle: bossData.flavor, variant: 'boss', seconds: 3.2 });
@@ -395,6 +418,25 @@
       bestPoints: Math.max(previousBest, points),
       isNewBestPoints
     });
+  }
+
+  /** The level's own hazard: sandstorm gusts or lava bombs raining down. */
+  function updateHazards(deltaSeconds) {
+    levelTime += deltaSeconds;
+    if (level.hazard === 'wind') {
+      const gust = Math.max(0, Math.sin((levelTime / WIND_GUST_PERIOD) * Math.PI * 2));
+      world.levelPhysics.windSpeed = player.isDefeated ? 0 : WIND_BASE_SPEED + WIND_GUST_SPEED * gust * gust;
+      ambientLeaves.setWind(world.levelPhysics.windSpeed);
+    } else if (level.hazard === 'lavaBombs' && arenaState !== ArenaState.CLEARED && !player.isDefeated) {
+      lavaBombTimer -= deltaSeconds;
+      if (lavaBombTimer <= 0) {
+        lavaBombTimer = Forest.MathUtils.randomBetween(...LAVA_BOMB_INTERVAL);
+        const fromX = player.x + Forest.MathUtils.randomBetween(-3, 9);
+        const targetX = player.x + Forest.MathUtils.randomBetween(-2.5, 4);
+        world.projectiles.launchFireball(fromX, stage.camera.position.y + stage.viewHeightUnits / 2 + 1, targetX, Config.GROUND_Y + 0.3, LAVA_BOMB_FLIGHT_SECONDS, 1);
+        Sfx.skyWhistle();
+      }
+    }
   }
 
   /** Dropped into a pit: a heart lost and back to solid ground (or defeat on the last heart). */
@@ -609,6 +651,7 @@
     if (!isTraining) {
       despawnDistantEnemies();
       updateArena(gameDeltaSeconds);
+      updateHazards(gameDeltaSeconds);
     }
     world.projectiles.update(gameDeltaSeconds, player);
     hearts.update(gameDeltaSeconds, player);

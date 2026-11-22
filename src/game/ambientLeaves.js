@@ -47,6 +47,11 @@
       });
     }
 
+    /** Extra sideways speed for every leaf (a sandstorm gust); 0 for calm air. */
+    setWind(speed) {
+      this.wind = speed;
+    }
+
     /** @param {number} [cameraX] leaves wrap around the camera, so they're everywhere in a long level */
     update(deltaSeconds, cameraX = 0) {
       this.leaves.forEach(leaf => {
@@ -54,7 +59,7 @@
         leaf.wobblePhase += leaf.wobbleSpeed * deltaSeconds;
         const wobble = Math.sin(leaf.wobblePhase);
 
-        position.x += leaf.velocityX * deltaSeconds;
+        position.x += (leaf.velocityX + (this.wind || 0) * 2.5) * deltaSeconds;
         position.y += leaf.velocityY * deltaSeconds + wobble * 0.008;
         leaf.mesh.rotation.z = wobble * 0.4;
 

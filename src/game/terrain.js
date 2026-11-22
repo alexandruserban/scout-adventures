@@ -15,13 +15,14 @@
     /**
      * @param {object} level
      * @param {Array<[number, number]>} level.ground [left, right] of every ground segment
-     * @param {Array<{x:number, y:number, width:number}>} [level.platforms] x is the left edge, y the top
+     * @param {Array<{x:number, y:number, width:number, bouncy?:boolean}>} [level.platforms] x is the left edge,
+     *   y the top; bouncy ones launch whoever lands on them
      */
     constructor({ ground, platforms = [] }) {
       this.ground = ground
         .map(([left, right]) => ({ left, right, top: GROUND_Y, isGround: true }))
         .sort((a, b) => a.left - b.left);
-      this.platforms = platforms.map(({ x, y, width }) => ({ left: x, right: x + width, top: y, isGround: false }));
+      this.platforms = platforms.map(({ x, y, width, bouncy = false }) => ({ left: x, right: x + width, top: y, isGround: false, isBouncy: bouncy }));
       this.surfaces = [...this.ground, ...this.platforms];
     }
 

@@ -1,5 +1,7 @@
 /**
- * The three side-scrolling levels (plus a flat training ground).
+ * The eight side-scrolling levels (plus a flat training ground). Each world looks different, and the
+ * later ones each add a rule of their own: `physics` (slippery ice, low gravity), `hazard` (sandstorm
+ * wind, falling lava bombs) or bouncy platforms.
  *
  * Positions are in world units: x along the level, y up from the grass line (0).
  *  - ground:    [left, right] solid segments; the spaces between them are bottomless pits
@@ -288,6 +290,207 @@
     }
   };
 
+  // ==========================================
+  // Helpers for the later worlds
+  // ==========================================
+  const FOE_CODES = { mu: 'mushroom', nut: 'nutling', tb: 'thornback', gw: 'gloomwing', je: 'jelly' };
+
+  /**
+   * Enemies from a compact list: "m5 12, nut 26" is a power-5 mutant at x 12 and a nutling at x 26.
+   * Codes: m<power> mutant, mu mushroom, nut nutling, tb thornback, gw gloomwing, je jelly.
+   */
+  function foes(spec) {
+    return spec.split(',').map(item => {
+      const [code, x] = item.trim().split(/\s+/);
+      if (/^m\d+$/.test(code)) return { kind: 'mutant', power: Number(code.slice(1)), x: Number(x) };
+      return { kind: FOE_CODES[code], x: Number(x) };
+    });
+  }
+
+  /** Platforms from [x, y, width] (add 'b' as a fourth item for a bouncy marshmallow pad). */
+  function ledges(list) {
+    return list.map(([x, y, width, flag]) => ({ x, y, width, bouncy: flag === 'b' }));
+  }
+
+  /**
+   * Coins laid out automatically: along every platform (high above bouncy pads), in an arc over
+   * every pit, and a row on long stretches of ground before the arena.
+   * @param {number} jumpScale how much higher he jumps here (low gravity), for arc heights
+   */
+  function autoCoins({ ground, platforms, arena }, jumpScale) {
+    const coins = [];
+    platforms.forEach(platform => {
+      if (platform.bouncy) {
+        coins.push(...coinRow(platform.x + platform.width / 2 - 0.35, platform.y + 3.4, 2));
+        return;
+      }
+      coins.push(...coinsOn(platform, Math.max(2, Math.min(4, Math.round(platform.width / 1.0)))));
+    });
+    const sorted = [...ground].sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const left = sorted[i][1];
+      const right = sorted[i + 1][0];
+      const gap = right - left;
+      const count = Math.max(3, Math.min(5, Math.round(gap / 1.2) + 1));
+      coins.push(...coinArc(left - 0.5, right + 0.5, 0.8, Math.min(2.6, 0.8 + gap * 0.35) * jumpScale, count));
+    }
+    sorted.forEach(([left, right]) => {
+      const end = Math.min(right, arena.start) - 2;
+      if (end - (left + 2) > 10) coins.push(...coinRow((left + end) / 2 - 1.4, GROUND_COIN_Y, 5));
+    });
+    return coins;
+  }
+
+  /** Fill in the coins of a level description (so each level below stays short). */
+  function withCoins(level) {
+    const gravityScale = (level.physics && level.physics.gravityScale) || 1;
+    return { ...level, coins: autoCoins(level, Math.min(1.8, 1 / gravityScale)) };
+  }
+
+  // ==========================================
+  // Level 4: the desert (sandstorm gusts)
+  // ==========================================
+  const DESERT = withCoins({
+    id: 'desert',
+    number: 4,
+    name: 'THE SCORCHING DUNES',
+    icon: '🏜️',
+    flavor: 'Blazing sun and howling sandstorms. Watch the gusts when you jump!',
+    theme: 'desert',
+    hazard: 'wind',
+    playerStartX: 2,
+    ground: [[-8, 20], [23, 38], [41.5, 52], [55, 61], [64, 80], [83.5, 96], [99, 104], [107, 122], [125.5, 140], [143, 190]],
+    platforms: ledges([[14, 1.5, 3], [30, 1.6, 3], [34, 3.1, 3], [68, 1.5, 3], [72, 3.0, 3], [76, 4.5, 2.5], [88, 1.6, 3],
+      [92, 3.1, 2.5], [111, 1.5, 3], [115.5, 3.0, 3], [130, 1.6, 3], [135, 3.0, 2.5], [147, 1.5, 3]]),
+    enemies: foes('m4 16, tb 28, m4 35, m4 47, nut 58, m5 70, gw 78, m5 90, m5 110, tb 118, m5 130, m6 137, m6 148'),
+    arena: { start: 156, end: 182 },
+    boss: {
+      kind: 'thornback',
+      name: 'THE DUNE THORNBACK',
+      flavor: 'A colossal beetle bursts from the sand! Jump its charge!',
+      x: 173,
+      hp: 14,
+      sizeScale: 2.0
+    }
+  });
+
+  // ==========================================
+  // Level 5: the ice (slippery)
+  // ==========================================
+  const ICE = withCoins({
+    id: 'ice',
+    number: 5,
+    name: 'THE FROZEN PEAKS',
+    icon: '❄️',
+    flavor: 'A silent night under the aurora. The ice is slippery: you can\'t stop on a dime!',
+    theme: 'ice',
+    physics: { slippery: true },
+    playerStartX: 2,
+    ground: [[-8, 18], [21, 34], [37, 46], [49.5, 58], [61, 74], [77.5, 86], [89, 100], [103.5, 112], [115, 128], [131, 138], [141, 192]],
+    platforms: ledges([[9, 1.5, 3], [25, 1.5, 3], [29, 3.0, 3], [40, 1.8, 3], [51, 1.6, 3], [64, 1.5, 2.5], [67.5, 3.0, 2.5],
+      [71, 4.5, 2.5], [80, 1.8, 3], [92, 1.5, 3], [96, 3.0, 2.5], [106, 1.6, 3], [118, 1.5, 3], [122.5, 3.0, 3],
+      [133, 1.8, 2.5], [146, 1.5, 3], [150.5, 3.0, 3]]),
+    enemies: foes('m5 12, nut 27, m5 42, m5 54, tb 66, m6 72, gw 83, m6 95, je 108, m6 120, m6 134, m7 148, m7 154'),
+    arena: { start: 160, end: 186 },
+    boss: {
+      kind: 'mutant',
+      power: 8,
+      movement: 'walker',
+      seed: 4242,
+      name: 'THE FROST BEHEMOTH',
+      flavor: 'Something enormous wakes beneath the snow!',
+      x: 177,
+      hp: 16,
+      sizeScale: 1.8
+    }
+  });
+
+  // ==========================================
+  // Level 6: the volcano (lava bombs)
+  // ==========================================
+  const VOLCANO = withCoins({
+    id: 'volcano',
+    number: 6,
+    name: 'THE MOLTEN CORE',
+    icon: '🌋',
+    flavor: 'Rivers of lava and fire raining from the sky. Smash the lava bombs!',
+    theme: 'volcano',
+    hazard: 'lavaBombs',
+    playerStartX: 2,
+    ground: [[-8, 16], [19.5, 28], [31, 40], [43.5, 50], [53, 66], [69.5, 76], [79, 90], [93.5, 100], [103, 114], [117.5, 124], [127, 136], [139, 190]],
+    platforms: ledges([[10, 1.5, 3], [23, 1.8, 3], [34, 1.5, 3], [41, 1.6, 2], [58, 1.5, 3], [62, 3.0, 3], [72, 1.8, 2.5],
+      [76.7, 1.5, 1.6], [83, 1.6, 3], [87, 3.1, 2.5], [91, 1.5, 2], [106, 1.5, 3], [110, 3.0, 3], [115, 1.6, 2],
+      [130, 1.8, 3], [144, 1.5, 3], [148.5, 3.0, 3]]),
+    enemies: foes('m5 12, m6 25, tb 36, m6 47, m6 60, je 64, m6 74, m7 85, gw 97, m7 108, m7 121, tb 132, m7 146, m8 152'),
+    arena: { start: 158, end: 184 },
+    boss: {
+      kind: 'golem',
+      name: 'THE MAGMA GOLEM',
+      flavor: 'The heart of the volcano rises, bigger and angrier than ever!',
+      x: 175,
+      hp: 18,
+      sizeScale: 1.35
+    }
+  });
+
+  // ==========================================
+  // Level 7: the candy kingdom (bouncy marshmallows)
+  // ==========================================
+  const CANDY = withCoins({
+    id: 'candy',
+    number: 7,
+    name: 'THE CANDY KINGDOM',
+    icon: '🍭',
+    flavor: 'Sweet as can be... and full of teeth. Bounce on the marshmallows!',
+    theme: 'candy',
+    playerStartX: 2,
+    ground: [[-8, 20], [24, 36], [40, 52], [57, 66], [70, 84], [89, 98], [102, 116], [121, 130], [134, 190]],
+    platforms: ledges([[21, 0.6, 2, 'b'], [28, 1.5, 3], [32, 3.0, 3], [37, 0.6, 2, 'b'], [44, 4.4, 3], [47, 1.6, 3],
+      [53, 0.6, 2.5, 'b'], [60, 1.5, 3], [74, 1.5, 3], [78, 3.0, 3], [85, 0.6, 2.5, 'b'], [92, 1.8, 3], [106, 1.5, 3],
+      [110, 3.0, 3], [117, 0.6, 2.5, 'b'], [124, 1.8, 3], [138, 1.5, 3], [142, 3.0, 3], [147, 0.4, 2, 'b'], [150.5, 4.4, 3]]),
+    enemies: foes('mu 14, m6 30, nut 46, m6 50, m6 62, je 76, m7 80, gw 93, m7 108, m7 112, nut 126, m7 140, m8 152'),
+    arena: { start: 160, end: 186 },
+    boss: {
+      kind: 'nutling',
+      name: 'THE JAWBREAKER',
+      flavor: 'A giant candied nut with a mean bite! Watch its hops!',
+      x: 177,
+      hp: 14,
+      sizeScale: 2.6
+    }
+  });
+
+  // ==========================================
+  // Level 8: the moon (low gravity)
+  // ==========================================
+  const MOON = withCoins({
+    id: 'moon',
+    number: 8,
+    name: 'THE SILENT MOON',
+    icon: '🌙',
+    flavor: 'The Earth hangs overhead. Gravity is weak here: float across the craters!',
+    theme: 'moon',
+    physics: { gravityScale: 0.55 },
+    playerStartX: 2,
+    ground: [[-8, 16], [22, 30], [36, 44], [50, 56], [62, 72], [78, 84], [90, 100], [106, 112], [118, 128], [134, 140], [146, 196]],
+    platforms: ledges([[8, 2.5, 3], [24, 3.0, 3], [38, 2.0, 2.5], [40.5, 4.5, 2.5], [52, 3.0, 2.5], [58, 2.0, 2], [65, 2.5, 3],
+      [68.5, 5.0, 3], [80, 2.8, 2.5], [93, 2.5, 3], [97, 5.0, 2.5], [108, 3.0, 2.5], [113.5, 2.0, 2], [121, 2.5, 3],
+      [124.5, 5.0, 3], [136, 3.0, 2.5], [150, 2.5, 3], [154, 5.0, 3]]),
+    enemies: foes('m7 12, gw 26, m7 40, m7 53, m8 66, je 70, m8 81, m8 95, gw 109, m8 122, m9 137, m9 150, m9 157'),
+    arena: { start: 164, end: 190 },
+    boss: {
+      kind: 'mutant',
+      power: 10,
+      movement: 'flyer',
+      seed: 9001,
+      name: 'THE STAR DEVOURER',
+      flavor: 'A monster from beyond the stars! The final battle!',
+      x: 181,
+      hp: 20,
+      sizeScale: 2.0
+    }
+  });
+
   /** Flat, pit-free ground for training sessions against scrapbook picks. */
   const TRAINING_GROUND = {
     id: 'training',
@@ -306,7 +509,7 @@
   };
 
   Forest.Levels = Object.freeze({
-    list: [FOREST, DUNGEON, TREETOPS],
+    list: [FOREST, DUNGEON, TREETOPS, DESERT, ICE, VOLCANO, CANDY, MOON],
     training: TRAINING_GROUND
   });
 })(window.Forest);

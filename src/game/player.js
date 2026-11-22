@@ -59,6 +59,14 @@
   const SAFE_EDGE_DISTANCE = 1.0;
   /** Blinking, untouchable time after climbing back out of a pit. */
   const PIT_RESPAWN_INVULNERABLE_SECONDS = 1.6;
+
+  // --- World rules (see the `physics` of each level) ---
+  /** On ice he speeds up and slows down gradually: how quickly he reaches the speed he wants. */
+  const ICE_ACCELERATION = 2.2;
+  /** Speed kept per frame when sliding on ice with no button held. */
+  const ICE_FRICTION = 0.985;
+  /** Upward speed from landing on a bouncy (marshmallow) platform. */
+  const BOUNCE_SPEED = 15;
   /** One full somersault, finishing exactly at the apex of the double jump. */
   const SOMERSAULT_SECONDS = DOUBLE_JUMP_SPEED / GRAVITY;
   const LANDING_SECONDS = 0.09;
@@ -378,9 +386,16 @@
       this.syncMeshes();
     }
 
+    /** The current level's rules: gravity scale, slippery ground, wind. */
+    get physics() {
+      return this.world.levelPhysics || {};
+    }
+
     applyGravity(deltaSeconds) {
-      this.velocityY -= GRAVITY * deltaSeconds;
+      this.velocityY -= GRAVITY * (this.physics.gravityScale || 1) * deltaSeconds;
       this.y += this.velocityY * deltaSeconds;
+      // Gusts push him about while he's in the air
+      if (this.physics.windSpeed && !this.isDefeated && !this.isGrounded) this.x += this.physics.windSpeed * deltaSeconds;
     }
 
     /**
@@ -418,9 +433,28 @@
         this.safeX = this.x;
         this.safeY = surface.top;
       }
+      if (surface.isBouncy && !this.isDefeated) {
+        this.bounce();
+        return;
+      }
       this.jumpsRemaining = MAX_JUMPS;
       this.bodyMesh.rotation.z = 0;
       if (this.isAirborne) this.land(impactSpeed);
+    }
+
+    /** A marshmallow pad flings him high into the air (and gives his double jump back). */
+    bounce() {
+      this.velocityY = BOUNCE_SPEED;
+      this.isGrounded = false;
+      this.jumpsRemaining = MAX_JUMPS - 1;
+      this.bodyMesh.rotation.z = 0;
+      if (!this.isIncapacitated) {
+        this.enterState(PlayerState.JUMP);
+        this.showFrame(this.sprites.jumpRise);
+      }
+      this.setSquash(0.75, 1.3);
+      Sfx.bounce();
+      this.particles.burst(this.x, this.y + 0.1, 8, '#ffd1e6', 1.0, 0.35);
     }
 
     /** Brief landing crouch; harder landings squash more and kick up more dust. */
@@ -463,7 +497,7 @@
     }
 
     updateIdle(deltaSeconds) {
-      this.slideWithFriction(IDLE_FRICTION, deltaSeconds);
+      this.slideWithFriction(this.physics.slippery ? ICE_FRICTION : IDLE_FRICTION, deltaSeconds);
 
       if (this.input.isPressingLeftOrRight()) {
         this.state = PlayerState.WALK;
@@ -478,6 +512,16 @@
         this.state = PlayerState.IDLE;
         this.turnSeconds = 0;
         this.showFrame(this.sprites.idle[0]);
+        return;
+      }
+
+      // On ice he can't stop dead or turn on the spot: he skids towards the speed he wants
+      if (this.physics.slippery) {
+        this.facing = direction;
+        const blend = Math.min(1, ICE_ACCELERATION * deltaSeconds);
+        this.velocityX += (direction * WALK_SPEED - this.velocityX) * blend;
+        this.x += this.velocityX * deltaSeconds;
+        this.advanceLoopingAnimation(this.sprites.walk, WALK_FRAME_SECONDS, deltaSeconds);
         return;
       }
 
@@ -555,7 +599,7 @@
     }
 
     updateLanding(deltaSeconds) {
-      this.slideWithFriction(LANDING_FRICTION, deltaSeconds);
+      this.slideWithFriction(this.physics.slippery ? ICE_FRICTION : LANDING_FRICTION, deltaSeconds);
       this.stateTimer -= deltaSeconds;
       if (this.stateTimer <= 0) {
         this.state = this.input.isPressingLeftOrRight() ? PlayerState.WALK : PlayerState.IDLE;

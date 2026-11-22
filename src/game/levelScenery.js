@@ -9,6 +9,7 @@
   const { PIXEL_SCALE, GROUND_Y } = Forest.Config;
   const { createSprite, createSpriteMesh, createPixelTexture } = Forest.Graphics;
   const Art = Forest.LevelSprites;
+  const WorldArt = Forest.WorldSprites;
 
   // Depth (z) of each scenery layer; characters sit between 0.25 and 0.3
   const TREE_Z = -0.2;
@@ -28,8 +29,12 @@
   const THEME_STYLE = {
     forest: { fill: '#290f02', edge: '#170800', pit: '#080402' },
     dungeon: { fill: Art.DUNGEON_FILL_COLOR, edge: '#0f0c14', pit: '#030205' },
-    treetops: { fill: null, edge: null, pit: null }
+    treetops: { fill: null, edge: null, pit: null },
+    ...WorldArt.WORLD_STYLES
   };
+
+  /** Lava pits: a bright crust on top of a molten glow. */
+  const LAVA_COLORS = { crust: '#ffd25e', top: '#ff8a2a', body: '#e0400f' };
 
   /** Painted once and shared by every level that needs them. */
   let themeTiles = null;
@@ -43,6 +48,9 @@
         brazier: createSprite(Art.createBrazier()),
         bones: createSprite(Art.createBones())
       };
+      Object.entries(WorldArt.tiles).forEach(([theme, paint]) => { themeTiles[theme] = createSprite(paint()); });
+      themeTiles.worldDecor = Object.fromEntries(Object.entries(WorldArt.decorations)
+        .map(([theme, painters]) => [theme, painters.map(paint => createSprite(paint()))]));
     }
     return themeTiles;
   }
@@ -129,7 +137,8 @@
 
       if (this.theme === 'forest') this.decorateForest(left, right, index);
       else if (this.theme === 'dungeon') this.decorateDungeon(left, right, index);
-      else this.decorateTreetops(left, right, index);
+      else if (this.theme === 'treetops') this.decorateTreetops(left, right, index);
+      else this.decorateWorld(left, right, index);
     }
 
     /** Dark shafts between the ground segments. */
@@ -138,14 +147,25 @@
         const left = segments[i][1];
         const right = segments[i + 1][0];
         if (right <= left) continue;
-        this.solidRect(this.style.pit, right - left + 0.02, FILL_DEPTH, (left + right) / 2, GROUND_Y - FILL_DEPTH / 2 - 0.3, PIT_Z);
+        const width = right - left + 0.02;
+        const centerX = (left + right) / 2;
+        if (this.style.pit === 'lava') {
+          // Molten lava a little below the rim, glowing up the walls
+          this.solidRect(LAVA_COLORS.body, width, FILL_DEPTH, centerX, GROUND_Y - 1.1 - FILL_DEPTH / 2, PIT_Z);
+          this.solidRect(LAVA_COLORS.top, width, 0.25, centerX, GROUND_Y - 1.0, PIT_Z + 0.001);
+          this.solidRect(LAVA_COLORS.crust, width, 0.1, centerX, GROUND_Y - 0.88, PIT_Z + 0.002);
+          this.solidRect('#2a0a05', width, 0.8, centerX, GROUND_Y - 0.4, PIT_Z);
+        } else {
+          this.solidRect(this.style.pit, width, FILL_DEPTH, centerX, GROUND_Y - FILL_DEPTH / 2 - 0.3, PIT_Z);
+        }
       }
     }
 
-    addPlatform({ x, y, width }) {
+    addPlatform({ x, y, width, bouncy }) {
       const widthPixels = Math.round(width / PIXEL_SCALE);
-      const painters = { forest: Art.createForestLedge, dungeon: Art.createStoneSlab, treetops: Art.createCloudPlatform };
-      const { canvas, surfaceRow } = painters[this.theme](widthPixels);
+      const painters = { forest: Art.createForestLedge, dungeon: Art.createStoneSlab, treetops: Art.createCloudPlatform, ...WorldArt.platforms };
+      const paint = bouncy ? WorldArt.createMarshmallowPad : painters[this.theme];
+      const { canvas, surfaceRow } = paint(widthPixels);
       const sprite = createSprite(canvas);
       this.ownTextures.push(sprite.texture);
       const mesh = createSpriteMesh(sprite, PIXEL_SCALE);
@@ -193,6 +213,15 @@
       }
       // Long branches hang from a trunk dropping away into the clouds
       if (right - left > 8) this.addTrunk((left + right) / 2 + (hash(index) - 0.5) * 3);
+    }
+
+    /** The later worlds: their own props (cacti, crystals, lollipops...) dotted along the ground. */
+    decorateWorld(left, right, index) {
+      const props = this.tiles.worldDecor[this.theme];
+      for (let x = left + 1.8; x < right - 1.2; x += 4.5 + hash(index * 13 + x) * 4) {
+        const prop = props[Math.floor(hash(x * 7) * props.length)];
+        this.addSprite(prop, 1.3 + hash(x) * 0.4, x, GROUND_Y - 0.05, hash(x * 3) < 0.6 ? DECOR_Z : FRONT_DECOR_Z);
+      }
     }
 
     addTrunk(x) {

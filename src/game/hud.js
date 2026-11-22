@@ -109,7 +109,7 @@
      * @param {{points:number, coins:number, totalCoins:number, bestPoints:number, isNewBestPoints:boolean}} run
      */
     showVictory(onPlayAgain, { points, coins, totalCoins, bestPoints, isNewBestPoints }) {
-      const message = 'All three bosses are beaten and the forest is safe again!'
+      const message = 'Every boss is beaten, from the forest to the moon. The world is safe again!'
         + `<br><br>COINS: ${coins} / ${totalCoins}<br>POINTS: ${points.toLocaleString()}<br>`
         + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
       this.showOverlay({

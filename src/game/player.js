@@ -47,6 +47,11 @@
   const DOUBLE_JUMP_SPEED = 9.2;
   /** Upward speed kept when jump is released early (variable jump height). */
   const JUMP_CUT_SPEED = 3.5;
+  /**
+   * Letting go of jump only cuts the climb short after he has risen for this long, so even the
+   * quickest tap on a touch screen gives a proper jump (holding still goes a little higher).
+   */
+  const MIN_JUMP_HOLD_SECONDS = 0.22;
   const MAX_JUMPS = 2;
   /** A jump pressed this long before landing still fires on touchdown. */
   const JUMP_BUFFER_SECONDS = 0.12;
@@ -188,6 +193,9 @@
       this.hp = maxHp;
       this.jumpsRemaining = MAX_JUMPS;
       this.jumpBufferSeconds = 0;
+      this.jumpRiseSeconds = 0;
+      this.isJumpCutPending = false;
+      this.isButtonJump = false;
       this.invulnerableSeconds = 0;
 
       this.state = PlayerState.IDLE;
@@ -234,7 +242,11 @@
     // Actions triggered by input
     // ==========================================
     tryJump() {
-      if (this.isIncapacitated) return;
+      if (this.isIncapacitated) {
+        // Remember it, so a jump pressed as he recovers from a hit still happens
+        this.jumpBufferSeconds = JUMP_BUFFER_SECONDS;
+        return;
+      }
 
       if (this.isGrounded || this.coyoteSeconds > 0) {
         this.jumpFromGround();
@@ -246,12 +258,26 @@
       }
     }
 
-    /** Releasing jump early cuts the climb short. */
+    /** Releasing jump early cuts the climb short (once he has risen for MIN_JUMP_HOLD_SECONDS). */
     releaseJump() {
+      if (!this.isButtonJump) return; // bounces off marshmallows aren't cut short
+      if (this.jumpRiseSeconds >= MIN_JUMP_HOLD_SECONDS) this.cutJumpShort();
+      else this.isJumpCutPending = true;
+    }
+
+    cutJumpShort() {
+      this.isJumpCutPending = false;
       const isRising = this.state === PlayerState.JUMP || this.state === PlayerState.DOUBLE_JUMP;
       if (isRising && this.velocityY > JUMP_CUT_SPEED) {
         this.velocityY = JUMP_CUT_SPEED;
       }
+    }
+
+    /** A fresh climb: from the ground, a double jump or a bounce. */
+    startRise(isButtonJump) {
+      this.isButtonJump = isButtonJump;
+      this.jumpRiseSeconds = 0;
+      this.isJumpCutPending = false;
     }
 
     /** Overhead slam on the ground; a quick horizontal slash in the air. */
@@ -266,6 +292,7 @@
     }
 
     jumpFromGround() {
+      this.startRise(true);
       this.velocityY = JUMP_SPEED;
       this.isGrounded = false;
       this.coyoteSeconds = 0;
@@ -280,6 +307,7 @@
     }
 
     doubleJump() {
+      this.startRise(true);
       this.velocityY = DOUBLE_JUMP_SPEED;
       this.jumpsRemaining = 0;
       this.bodyMesh.rotation.z = 0;
@@ -385,6 +413,8 @@
       this.applyGravity(deltaSeconds);
       if (this.jumpBufferSeconds > 0) this.jumpBufferSeconds -= deltaSeconds;
       if (this.coyoteSeconds > 0) this.coyoteSeconds -= deltaSeconds;
+      this.jumpRiseSeconds += deltaSeconds;
+      if (this.isJumpCutPending && this.jumpRiseSeconds >= MIN_JUMP_HOLD_SECONDS) this.cutJumpShort();
       this.resolveGround(previousY);
 
       this.updateInvulnerability(deltaSeconds);
@@ -462,6 +492,7 @@
 
     /** A marshmallow pad flings him high into the air (and gives his double jump back). */
     bounce() {
+      this.startRise(false);
       this.velocityY = BOUNCE_SPEED;
       this.isGrounded = false;
       this.jumpsRemaining = MAX_JUMPS - 1;
@@ -729,6 +760,7 @@
       this.stateTimer -= deltaSeconds;
       if (this.stateTimer <= 0) {
         this.state = this.isGrounded ? PlayerState.IDLE : PlayerState.FALL;
+        if (this.jumpBufferSeconds > 0) this.tryJump(); // a jump pressed just as he recovers
       }
     }
 

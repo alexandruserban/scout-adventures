@@ -447,8 +447,31 @@ body, html {
   right: calc(var(--touch-gap) * -1 - 4px);
 }
 
+/*
+ * Attack floats right above jump. It's positioned outside the layout so the touch panel stays one
+ * button tall (the camera keeps the soil behind the panel), and sits on top of jump's tall hit strip
+ * so a tap on it is always an attack.
+ */
+#touch-controls .touch-cluster:last-child {
+  position: relative;
+}
+
 #btn-touch-atk {
-  margin-right: var(--atk-extra-gap);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 40px);
+  z-index: 2;
+}
+
+/*
+ * A touch area reaching 20px past the visible button at the sides and bottom, and 40px above it,
+ * so near-misses still attack (the insets are measured from inside the 4px border).
+ */
+#btn-touch-atk::before {
+  content: '';
+  position: absolute;
+  inset: -44px -24px -24px;
+  border-radius: 20px;
 }
 
 /* Jump: from a bit left of its own edge to the screen's right edge */

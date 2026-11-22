@@ -2,7 +2,7 @@
  * Assembles the painted background layers into the Three.js scene and scrolls them
  * at different speeds to fake depth (parallax), plus glowing motes drifting between layers.
  *
- * Each level has its own theme (forest, dungeon, treetops); setTheme swaps every layer.
+ * Each level has its own theme (forest, dungeon, neon city...); setTheme swaps every layer.
  */
 (function (Forest) {
   const Painters = Forest.BackgroundPainters;
@@ -138,7 +138,9 @@
         { canvas: World.paintMoonHills({ height: 64, baseY: 40, waves: [[4, 4, 1.9], [2, 11, 0.6]], colors: { body: '#3a3a44', shade: '#2c2c34', light: '#55555f' }, seed: 2 }), follow: 0.4, bottomY: -2.0 }
       ],
       motes: { count: 20, colors: ['#ffffff', '#cfe3ff'], rise: 0 }
-    }
+    },
+    // The future-meets-fantasy worlds (see futurePainters.js)
+    ...Forest.FutureThemes
   };
 
   class ParallaxBackground {

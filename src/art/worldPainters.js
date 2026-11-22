@@ -418,6 +418,7 @@
   }
 
   Forest.WorldPainters = {
+    paintRidge,
     paintStars,
     paintDisc,
     // Desert

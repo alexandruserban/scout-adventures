@@ -179,7 +179,8 @@
     addPlatform({ x, y, width, bouncy }, surface) {
       const widthPixels = Math.round(width / PIXEL_SCALE);
       const painters = { forest: Art.createForestLedge, dungeon: Art.createStoneSlab, treetops: Art.createCloudPlatform, ...WorldArt.platforms };
-      const paint = bouncy ? WorldArt.createMarshmallowPad : painters[this.theme];
+      const bouncePad = (WorldArt.bouncePads && WorldArt.bouncePads[this.theme]) || WorldArt.createMarshmallowPad;
+      const paint = bouncy ? bouncePad : painters[this.theme];
       const { canvas, surfaceRow } = paint(widthPixels);
       const sprite = createSprite(canvas);
       this.ownTextures.push(sprite.texture);

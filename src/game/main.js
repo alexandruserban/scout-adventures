@@ -1,8 +1,8 @@
 /**
  * Entry point: builds the world, wires the systems together, and runs the game loop.
  *
- * The adventure is three side-scrolling levels (see Forest.Levels): forest, dungeon and treetops.
- * The boy runs right, jumping pits and climbing platforms, collecting coins and fighting the
+ * The adventure visits all sixteen worlds (see Forest.Levels) in a random order, each with a freshly
+ * generated course. The boy runs right, jumping pits and climbing platforms, collecting coins and fighting the
  * monsters that drop in as he goes. Each level ends in an arena with a boss; beat it to move on.
  *
  * Training (picked in the scrapbook) instead runs one custom wave on a flat training ground.
@@ -44,7 +44,7 @@
   const ARENA_TRIGGER_INSET = 1.5;
   const NEXT_LEVEL_DELAY_SECONDS = 4.5;
   /** How much tougher each later level's creatures are, as a fraction of the difficulty's cycle ramp. */
-  const RAMP_PER_LEVEL = 0.35;
+  const RAMP_PER_LEVEL = 0.16;
 
   // --- Level hazards ---
   /** Sandstorm: a light headwind, with a strong gust every WIND_GUST_PERIOD seconds. */
@@ -63,7 +63,15 @@
     ice: ['#ffffff', '#e6f2ff'],
     volcano: ['#6b5b58', '#8a7672', '#ff8a2a'],
     candy: ['#ff6fae', '#7fd6ff', '#ffe066', '#9af08f'],
-    moon: []
+    moon: [],
+    neon: ['#ff4fd8', '#4ff0ff'],
+    crystal: ['#7fffd4', '#c79bff'],
+    clockwork: ['#f2c96b', '#e8e0d8', '#c8913a'],
+    atlantis: ['#bff3ff', '#ffffff'],
+    fae: ['#ff9cf0', '#b4ffef', '#9af08f'],
+    mechKeep: ['#6b5b58', '#ff6a1f', '#8a92a3'],
+    rift: ['#00f0ff', '#c86bff'],
+    station: []
   };
 
   const ArenaState = Object.freeze({
@@ -189,7 +197,12 @@
 
   // --- The current level ---
   let level = null;
+  /** Position in the adventure (0 = first world visited). */
   let levelIndex = 0;
+  /** The worlds of this adventure in the order they are played (indices into Levels.themes). */
+  let runOrder = Levels.createRun();
+  /** Coins laid out in every level played so far this adventure (for the victory screen). */
+  let coinsOffered = 0;
   let scenery = null;
   /** Enemies not dropped in yet, in the order the boy will reach them. */
   let pendingEnemies = [];
@@ -200,7 +213,7 @@
   let levelTime = 0;
   let lavaBombTimer = 0;
   /** Restored when the level is retried after a defeat. */
-  let levelStart = { points: 0, coins: 0, maxHp: 0 };
+  let levelStart = { points: 0, coins: 0, coinsOffered: 0, maxHp: 0 };
 
   const waves = new Forest.WaveDirector({
     spawnCreature: ({ kind, stats, genome }, x) => {
@@ -287,14 +300,20 @@
     refreshHealth();
   }
 
-  /** Start level `index` (0-based) with the boy's current health carried over. */
-  function startLevel(index, hp, maxHp) {
+  /**
+   * Start the adventure's level `index` (0-based) with the boy's current health carried over.
+   * Its world comes from the shuffled run order and gets a freshly rolled course, unless
+   * `course` (an already generated level, e.g. on a retry) is given.
+   */
+  function startLevel(index, hp, maxHp, course = null) {
     isTraining = false;
     hasWon = false;
     levelIndex = index;
-    levelStart = { points, coins: coinsCollected, maxHp };
+    if (!course) levelStart = { points, coins: coinsCollected, coinsOffered, maxHp };
     levelCoins = 0;
-    buildLevel(Levels.list[index], { hp, maxHp });
+    const levelData = course || Levels.generate(Levels.themes[runOrder[index]], { position: index });
+    buildLevel(levelData, { hp, maxHp });
+    coinsOffered = levelStart.coinsOffered + level.coins.length;
 
     Sfx.waveStart();
     hud.showBanner({ title: `LEVEL ${level.number}: ${level.name}`, subtitle: level.flavor, variant: 'wave', seconds: 3.4 });
@@ -302,21 +321,23 @@
     refreshPoints();
   }
 
-  /** A brand new adventure from the first level. */
+  /** A brand new adventure: every world once, in a new random order, each with a new course. */
   function startAdventure() {
     points = 0;
     coinsCollected = 0;
+    coinsOffered = 0;
+    runOrder = Levels.createRun();
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
     const { startHearts } = Difficulty.current;
     startLevel(0, startHearts, startHearts);
   }
 
-  /** Try the current level again from its start, with full health. */
+  /** Try the current level again from its start, with full health (same course as before). */
   function retryLevel() {
     points = levelStart.points;
     coinsCollected = levelStart.coins;
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
-    startLevel(levelIndex, levelStart.maxHp, levelStart.maxHp);
+    startLevel(levelIndex, levelStart.maxHp, levelStart.maxHp, level);
   }
 
   function spawnDistanceFor(entry) {
@@ -417,7 +438,7 @@
     const bonus = LEVEL_CLEAR_POINTS * level.number;
     points += bonus;
     player.raiseMaxHp(1, Difficulty.current.maxHearts);
-    const isLast = levelIndex === Levels.list.length - 1;
+    const isLast = levelIndex === runOrder.length - 1;
     hud.showBanner({
       title: `${level.name} CLEARED!`,
       subtitle: `+${bonus} POINTS &middot; FULLY HEALED! ${isLast ? 'The world is saved...' : 'Now to count your coins...'}`,
@@ -453,19 +474,19 @@
     Sfx.bonusPoints();
     hud.showBanner({
       title: cashed > 0 ? `🪙 ${cashed} COINS = +${(cashed * COIN_POINTS).toLocaleString()} POINTS` : 'NO COINS THIS TIME',
-      subtitle: levelIndex === Levels.list.length - 1 ? 'What a journey!' : 'Get ready for the next level...',
+      subtitle: levelIndex === runOrder.length - 1 ? 'What a journey!' : 'Get ready for the next level...',
       variant: 'cleared',
       seconds: NEXT_LEVEL_DELAY_SECONDS - 0.3
     });
   }
 
   function advanceToNextLevel() {
-    if (levelIndex < Levels.list.length - 1) {
+    if (levelIndex < runOrder.length - 1) {
       startLevel(levelIndex + 1, player.hp, player.maxHp);
       return;
     }
     hasWon = true;
-    const totalCoins = Levels.list.reduce((sum, entry) => sum + entry.coins.length, 0);
+    const totalCoins = coinsOffered;
     const previousBest = loadBest(BEST_POINTS_STORAGE_KEY);
     const isNewBestPoints = points > previousBest;
     if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, points);
@@ -810,11 +831,24 @@
     },
 
     /**
-     * Jump straight to a level (1-3), e.g. from the console: Forest.Game.goToLevel(3)
+     * Jump straight to a level of this adventure (1-16), e.g. from the console: Forest.Game.goToLevel(3)
      * @param {number} number
      */
     goToLevel(number) {
-      startLevel(Math.max(0, Math.min(Levels.list.length - 1, number - 1)), player.maxHp, player.maxHp);
+      startLevel(Math.max(0, Math.min(runOrder.length - 1, number - 1)), player.maxHp, player.maxHp);
+    },
+
+    /**
+     * Play a world by id (e.g. 'neon', 'rift') as the current level, with a new course:
+     * Forest.Game.goToWorld('fae')
+     * @param {string} id
+     */
+    goToWorld(id) {
+      const themeIndex = Levels.themes.findIndex(theme => theme.id === id);
+      if (themeIndex < 0) return;
+      const swapWith = runOrder.indexOf(themeIndex);
+      [runOrder[levelIndex], runOrder[swapWith]] = [runOrder[swapWith], runOrder[levelIndex]];
+      startLevel(levelIndex, player.maxHp, player.maxHp);
     },
 
     /** The current level's ground and platforms (read-only, for the console and tests). */

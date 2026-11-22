@@ -269,15 +269,19 @@
    * @param {string} [options.name] override the scientific name
    * @param {boolean} [options.cyber] force cybernetic implants on (true) or off (false); when left
    *   out, stronger monsters are more likely to be cyber
+   * @param {string} [options.shape] force the body shape and [options.headgear] what grows on its head
+   *   (with movement and cyber, that picks the species: e.g. a boss's look-alike helpers)
    * @returns {object} genome (plain data, safe to JSON.stringify). `species` is an id into
    *   Forest.MonsterSpecies; `name` is the individual's scientific name, e.g. "Boingus mohawkensis majoris".
    */
-  function generate({ seed = randomSeed(), power = 1, movement, abilities, name, cyber } = {}) {
+  function generate({ seed = randomSeed(), power = 1, movement, abilities, name, cyber, shape, headgear } = {}) {
     const dice = createDice(seed);
     const level = Math.max(1, power);
 
     const chosenMovement = movement || dice.weighted({ walker: 4.5, hopper: 3, flyer: 2.5 });
     const appearance = rollAppearance(dice, chosenMovement, level);
+    if (shape) appearance.shape = shape;
+    if (headgear) appearance.headgear = headgear;
     const cyberDice = createDice((seed ^ CYBER_SEED_SALT) >>> 0);
     const isCyber = cyber !== undefined ? Boolean(cyber) : cyberDice.chance(cyberChance(level));
     if (isCyber) addCyberImplants(cyberDice, appearance);

@@ -360,6 +360,21 @@
       this.passives.forEach(passive => passive.onExploded && passive.onExploded(this));
     }
 
+    /**
+     * Boss rage stage: unlocks extra weapons (lasers and rockets if it's cyber, fire spit and spore
+     * bursts if not) and attacks again almost at once.
+     */
+    onRage() {
+      const extra = this.genome.appearance.cyber ? ['laser', 'rockets'] : ['spit', 'nova'];
+      extra.forEach(id => {
+        const attack = MonsterAbilities[id];
+        if (!this.attacks.includes(attack)) this.attacks.push(attack);
+      });
+      // Counts as enraged too, so the Enrage passive doesn't stack another speed boost on top
+      this.isEnraged = true;
+      this.attackCooldown = Math.min(this.attackCooldown, 0.4);
+    }
+
     remove() {
       if (this.isGone) return;
       super.remove();

@@ -65,6 +65,9 @@
   const SMALL_CREATURE_BODY_BOX = { enemyHalfWidthRatio: 0.35, playerHalfWidthRatio: 0.25, topRatio: 0.85 };
 
   const WHITE = 0xffffff;
+  /** A raging boss moves and attacks this much faster, and glows this colour. */
+  const RAGE_SPEED = 1.35;
+  const RAGE_TINT = 0xff9a8a;
 
   // ==========================================
   // Shared meshes
@@ -390,6 +393,41 @@
       return hitEdge;
     }
 
+    /**
+     * Keep its whole body inside [left, right], e.g. a boss arena that fills the screen, so it can
+     * never wander out of sight.
+     */
+    confineTo(left, right) {
+      const halfWidth = Math.min(this.width * 0.5, (right - left) / 2);
+      this.minX = Math.max(this.minX, left + halfWidth);
+      this.maxX = Math.min(this.maxX, right - halfWidth);
+      if (this.maxX < this.minX) this.minX = this.maxX = (left + right) / 2;
+      this.keepInsideLevel();
+    }
+
+    // ==========================================
+    // Boss rage
+    // ==========================================
+    /**
+     * A boss's second stage: it glows red, speeds up, and (see onRage) fights dirtier.
+     * Called by the game when its health drops to half.
+     */
+    enterRage() {
+      if (this.isRaging) return;
+      this.isRaging = true;
+      this.speed *= RAGE_SPEED;
+      this.rageTint = RAGE_TINT;
+      this.onRage();
+    }
+
+    /** Each kind adds its own nastier moves here. */
+    onRage() {}
+
+    /** Lob a coloured projectile (acorns, spores, sparks) that comes down at `targetX`. */
+    lobAt(targetX, { tint, trail, fromY = this.y + this.height * 0.8, seconds = 1.0 }) {
+      this.world.projectiles.launchFireball(this.x, fromY, targetX, this.floorY + 0.3, seconds, this.damage, { tint, trail });
+    }
+
     /** Shatter into pixel debris with a flash and shockwaves. */
     explode() {
       const sprite = this.frames[this.frameName].normal;
@@ -464,7 +502,8 @@
       if (this.state !== CreatureState.DEFEATED) {
         this.mesh.scale.set(this.facing * this.scaleX, this.scaleY, 1);
       }
-      this.mesh.material.color.setHex(this.tint);
+      // A raging boss keeps a red glow whenever nothing else is tinting it
+      this.mesh.material.color.setHex(this.tint === WHITE && this.rageTint ? this.rageTint : this.tint);
       this.mesh.position.set(this.x + this.offsetX, this.y + (this.height * this.scaleY) / 2 + this.offsetY, MESH_Z);
 
       this.syncShadow();
@@ -544,6 +583,11 @@
 
     onTouchGround() {
       this.setSquash(1.25, 0.75);
+      // Raging: spits a sharp acorn shell at the boy on most landings
+      if (this.isRaging && this.target && !this.target.isDefeated && Math.random() < 0.6) {
+        this.lobAt(this.target.x + randomBetween(-0.6, 0.6), { tint: 0xd9a066, trail: ['#c98a3e', '#7bc043'] });
+        Sfx.acornCrack();
+      }
     }
 
     recover() {
@@ -646,8 +690,18 @@
     }
 
     endCharge() {
+      // Raging: skids round and charges straight back once more
+      if (this.isRaging && !this.isSecondCharge && this.target && !this.target.isDefeated) {
+        this.isSecondCharge = true;
+        this.facing = directionTowards(this.x, this.target.x);
+        this.state = CreatureState.TELEGRAPH;
+        this.stateTimer = BEETLE_TELEGRAPH_SECONDS * 0.4;
+        Sfx.beetleGrowl();
+        return;
+      }
+      this.isSecondCharge = false;
       this.state = CreatureState.WALK;
-      this.cooldown = BEETLE_COOLDOWN_SECONDS;
+      this.cooldown = BEETLE_COOLDOWN_SECONDS * (this.isRaging ? 0.5 : 1);
       this.tint = WHITE;
     }
 
@@ -801,6 +855,11 @@
       this.stateTimer = randomBetween(...MOTH_HOVER_SECONDS) / this.speed;
       this.side = -this.side;
       this.tint = WHITE;
+      // Raging: showers the boy with spore bombs as it pulls out of each dive
+      if (this.isRaging && this.target && !this.target.isDefeated) {
+        [-1.6, 0, 1.6].forEach(offset => this.lobAt(this.target.x + offset, { tint: 0xff9de2, trail: ['#ff9de2', '#ffe066'], fromY: this.centerY, seconds: 0.9 }));
+        Sfx.wingFlutter();
+      }
     }
 
     flapWings(deltaSeconds) {
@@ -936,7 +995,11 @@
 
     /** Lightning crackles along the grass; it only hurts the boy if he's standing on it nearby. */
     shockwave() {
-      const radius = JELLY_SHOCK_RADIUS * this.sizeFactor;
+      // Raging: a wider shock, plus two sparks flung out to either side
+      const radius = JELLY_SHOCK_RADIUS * this.sizeFactor * (this.isRaging ? 1.35 : 1);
+      if (this.isRaging && !this.isMini) {
+        [-1, 1].forEach(direction => this.lobAt(this.x + direction * 3.5, { tint: 0xfff07a, trail: ['#ffe14d', '#8ff0ff', '#ffffff'], fromY: this.y + 0.4, seconds: 0.7 }));
+      }
       this.setSquash(1.4, 0.6);
       this.effects.spawnRing({ color: '#ffe14d', x: this.x, y: this.floorY + 0.15, fromScale: 0.4, toScale: radius * 2, lifetime: 0.3 });
       this.effects.spawnRing({ color: '#8ff0ff', x: this.x, y: this.floorY + 0.15, fromScale: 0.3, toScale: radius * 1.4, lifetime: 0.4 });
@@ -1108,7 +1171,7 @@
     }
 
     throwFireballs(player) {
-      const count = this.isEnraged ? 3 : 1;
+      const count = this.isRaging ? 5 : (this.isEnraged ? 3 : 1);
       const handY = this.y + this.height * 0.95;
       for (let i = 0; i < count; i++) {
         const targetX = player.x + (i - (count - 1) / 2) * FIREBALL_SPREAD;
@@ -1119,6 +1182,11 @@
 
     get restingTint() {
       return this.isEnraged ? GOLEM_ENRAGED_TINT : WHITE;
+    }
+
+    /** As a boss, its rage stage is its blazing enraged form, throwing even more fire. */
+    onRage() {
+      if (!this.isEnraged) this.enrage();
     }
 
     /** At half health its cracks blaze and it moves and throws faster. */

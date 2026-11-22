@@ -181,9 +181,10 @@
   // ==========================================
   /** The boss arena starts somewhere in this range (the level's length). */
   const ARENA_START_RANGE = [148, 166];
-  const ARENA_WIDTH = 26;
+  /** One screen wide (the view is 23 units), so the camera holds still and the boss can never get out of sight. */
+  const ARENA_WIDTH = 22;
   /** The boss drops in this far into the arena. */
-  const BOSS_OFFSET = 17;
+  const BOSS_OFFSET = 15;
   /** Ordinary pits, and the wide ones with a stepping stone in the middle (before reach scaling). */
   const PIT_WIDTH = [1.7, 3.2];
   const WIDE_PIT_WIDTH = [4.6, 6.0];
@@ -313,6 +314,44 @@
     return Object.freeze({ ...level, platforms: [...kept, ...routePlatforms], coins });
   }
 
+  /** Share of levels guarded by a brand-new random mutant; the rest get a signature boss from any world. */
+  const RANDOM_MUTANT_BOSS_CHANCE = 0.6;
+  /** Random mutant bosses: power at the first level and growth per level, and their size. */
+  const MUTANT_BOSS_FIRST_POWER = 4;
+  const MUTANT_BOSS_POWER_PER_LEVEL = 0.45;
+  const MUTANT_BOSS_SIZE = [1.7, 2.1];
+  /** In the future-tech worlds, random mutant bosses are usually cyber. */
+  const FUTURE_CYBER_BOSS_CHANCE = 0.7;
+  const MUTANT_BOSS_FLAVORS = [
+    'Any monster can grow into a boss. This one ate its vegetables.',
+    'The biggest, meanest one in the whole world has found you!',
+    'It has been waiting for a worthy opponent. That\'s you.',
+    'Its little helpers never leave its side.',
+    'Nobody has ever seen one this big. Nobody wanted to.'
+  ];
+
+  /**
+   * Who guards this level, picked at random: usually a brand-new mutant of any species (named
+   * once it is generated, see the game), sometimes one of the signature bosses of any world.
+   */
+  function pickBoss(theme, random, position) {
+    if (random() >= RANDOM_MUTANT_BOSS_CHANCE) {
+      const signature = THEMES[Math.floor(random() * THEMES.length)].boss;
+      return { ...signature };
+    }
+    const movements = ['walker', 'walker', 'hopper', 'flyer'];
+    return {
+      kind: 'mutant',
+      power: Math.min(MAX_POWER, MUTANT_BOSS_FIRST_POWER + Math.floor(position * MUTANT_BOSS_POWER_PER_LEVEL)),
+      movement: movements[Math.floor(random() * movements.length)],
+      seed: Math.floor(random() * 0x7fffffff),
+      cyber: theme.future && random() < FUTURE_CYBER_BOSS_CHANCE ? true : undefined,
+      name: null,
+      flavor: MUTANT_BOSS_FLAVORS[Math.floor(random() * MUTANT_BOSS_FLAVORS.length)],
+      sizeScale: MUTANT_BOSS_SIZE[0] + random() * (MUTANT_BOSS_SIZE[1] - MUTANT_BOSS_SIZE[0])
+    };
+  }
+
   /** A fresh random seed for a level. */
   function randomSeed() {
     return Math.floor(Math.random() * 0x7fffffff);
@@ -329,7 +368,7 @@
     const random = createSeededRandom(seed);
     const course = rollCourse(theme, random, jumpScaleOf(theme), position);
     const boss = {
-      ...theme.boss,
+      ...pickBoss(theme, random, position),
       hp: Math.round(BOSS_FIRST_HP + position * BOSS_HP_PER_LEVEL),
       x: course.arena.start + BOSS_OFFSET
     };

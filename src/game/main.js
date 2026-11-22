@@ -21,6 +21,22 @@
   /** Share of mutants that come with cybernetic implants in the future-tech worlds (elsewhere it depends on power). */
   const FUTURE_CYBER_CHANCE = 0.6;
 
+  // --- Boss fights ---
+  /** Mutant sidekicks that drop in with the boss (one more from this level number on). */
+  const BOSS_COMPANIONS = 2;
+  const COMPANION_EXTRA_FROM_LEVEL = 8;
+  /** Sidekicks are this much stronger than the level's own monsters at its start. */
+  const COMPANION_POWER_BONUS = 1;
+  /** Sidekicks never land closer to the boy than this. */
+  const COMPANION_MIN_DISTANCE = 3.5;
+  /** The boss flies into a rage at this share of its health, and this many more sidekicks arrive. */
+  const BOSS_RAGE_HEALTH = 0.5;
+  const RAGE_REINFORCEMENTS = 2;
+  /** Helpers are this much smaller than ordinary mutants, with this share of their health. */
+  const HELPER_SIZE = 0.7;
+  const HELPER_HP_SHARE = 0.6;
+  const MUTANT_BOSS_TITLES = ['THE GREAT', 'THE MIGHTY', 'KING', 'QUEEN', 'THE ANCIENT', 'THE COLOSSAL'];
+
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
 
   /** Each coin is cashed in for this many points once the level's boss is beaten. */
@@ -209,6 +225,8 @@
   /** Enemies not dropped in yet, in the order the boy will reach them. */
   let pendingEnemies = [];
   let boss = null;
+  /** The boss's display name (a randomly picked mutant boss is only named once it's generated). */
+  let bossName = '';
   let arenaState = ArenaState.CLOSED;
   let nextLevelTimer = 0;
   /** Seconds since the level started (drives the sandstorm gusts). */
@@ -237,6 +255,8 @@
   /** Every enemy enters play through here, so the scrapbook hears about it. */
   function addEnemy(enemy) {
     enemies.push(enemy);
+    // Anything appearing once the boss fight starts (the boss, sidekicks, split jellies, broodlings) stays on screen
+    if (!isTraining && level && level.boss && arenaState !== ArenaState.CLOSED) confineToArena(enemy);
     if (isTraining) return;
     const { species, isNew } = Scrapbook.recordEncounter(enemy, level.name);
     if (isNew) {
@@ -388,6 +408,8 @@
 
     if (arenaState === ArenaState.CLOSED && player.x >= level.arena.start + ARENA_TRIGGER_INSET && !player.isDefeated) {
       enterArena();
+    } else if (arenaState === ArenaState.FIGHTING) {
+      updateBossFight();
     } else if (arenaState === ArenaState.BOSS_DOWN && enemies.every(enemy => enemy.isGone)) {
       clearLevel();
     } else if (arenaState === ArenaState.CLEARED) {
@@ -406,8 +428,11 @@
     arenaState = ArenaState.FIGHTING;
     player.setBounds(arena.start + 0.5, arena.end - 0.3);
     cameraController.lockTo(arena.start, arena.end);
-    // Stragglers outside the arena can't reach the fight any more
-    enemies.forEach(enemy => { if (enemy.x < arena.start) enemy.remove(); });
+    // Stragglers outside the arena can't reach the fight any more; the rest stay on screen
+    enemies.forEach(enemy => {
+      if (enemy.x < arena.start) enemy.remove();
+      else confineToArena(enemy);
+    });
     pendingEnemies = [];
 
     const difficulty = Difficulty.current;
@@ -417,21 +442,86 @@
       speed: difficulty.creatureSpeed
     };
     const bossOptions = { x: bossData.x, stats, sizeScale: bossData.sizeScale, onDefeated: onBossDefeated };
+    bossName = bossData.name;
     if (bossData.kind === 'mutant') {
-      // A fixed seed, so the same monster guards this level every time
-      const genome = Forest.MonsterForge.generate({ power: bossData.power, movement: bossData.movement, seed: bossData.seed, cyber: Boolean(bossData.cyber) });
+      // Seeded by the level, so a retry faces the same monster. Signature bosses keep their exact look;
+      // a randomly picked mutant may or may not turn out cybernetic
+      const cyber = bossData.name ? Boolean(bossData.cyber) : bossData.cyber;
+      const genome = Forest.MonsterForge.generate({ power: bossData.power, movement: bossData.movement, seed: bossData.seed, cyber });
       boss = Forest.MonsterForge.create(world, { ...bossOptions, genome });
+      if (!bossName) bossName = mutantBossName(genome);
     } else {
       boss = new Forest.SkyCreatures[bossData.kind](world, bossOptions);
     }
     addEnemy(boss);
+    summonCompanions(level.number <= COMPANION_EXTRA_FROM_LEVEL ? BOSS_COMPANIONS : BOSS_COMPANIONS + 1);
     Sfx.waveStart();
-    hud.showBanner({ title: `BOSS: ${bossData.name}`, subtitle: bossData.flavor, variant: 'boss', seconds: 3.2 });
+    hud.showBanner({ title: `BOSS: ${bossName}`, subtitle: `${bossData.flavor} It brought little helpers!`, variant: 'boss', seconds: 3.2 });
+  }
+
+  /** A title for a randomly picked mutant boss, from its species: e.g. "THE GREAT SPIKY CYBER-BIGHEAD". */
+  function mutantBossName(genome) {
+    const species = Forest.MonsterSpecies.forGenome(genome);
+    return `${MUTANT_BOSS_TITLES[genome.seed % MUTANT_BOSS_TITLES.length]} ${species.common.toUpperCase()}`;
+  }
+
+  /** Arena enemies keep their whole body on screen (the arena is exactly one screen wide). */
+  function confineToArena(enemy) {
+    if (enemy.confineTo) enemy.confineTo(level.arena.start, level.arena.end);
+  }
+
+  /**
+   * Small helper mutants that drop in to fight beside the boss, landing away from the boy. A mutant
+   * boss brings little look-alikes of its own species (each with its own colours and tricks); the
+   * other bosses bring small random mutants (often cybernetic in the future-tech worlds).
+   */
+  function summonCompanions(count) {
+    const { arena } = level;
+    const power = Math.min(10, 1 + Math.floor((level.number - 1) * 0.55) + COMPANION_POWER_BONUS);
+    const bossLook = boss && boss.genome
+      ? { movement: boss.genome.movement, shape: boss.genome.appearance.shape, headgear: boss.genome.appearance.headgear, cyber: Boolean(boss.genome.appearance.cyber) }
+      : null;
+    for (let i = 0; i < count; i++) {
+      let x = arena.start + 3 + ((i + Math.random()) / count) * (arena.end - arena.start - 6);
+      if (Math.abs(x - player.x) < COMPANION_MIN_DISTANCE) x = player.x + (x >= player.x ? 1 : -1) * COMPANION_MIN_DISTANCE;
+      const look = bossLook || { cyber: level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined };
+      const genome = Forest.MonsterForge.generate({ power, ...look });
+      const stats = Forest.MonsterForge.statsFor(genome, Difficulty.current);
+      const companion = Forest.MonsterForge.create(world, {
+        genome, x, allowLedges: false, onDefeated: onEnemyDefeated, sizeScale: HELPER_SIZE,
+        stats: { ...stats, hp: Math.max(1, Math.ceil(stats.hp * HELPER_HP_SHARE)) }
+      });
+      companion.isBossCompanion = true;
+      addEnemy(companion);
+    }
+  }
+
+  /** During the fight: the boss flies into a rage at half health and calls for reinforcements. */
+  function updateBossFight() {
+    if (!boss || boss.isGone || boss.hp <= 0) return;
+    if (!boss.isRaging && boss.hp <= boss.maxHp * BOSS_RAGE_HEALTH) {
+      boss.enterRage();
+      summonCompanions(RAGE_REINFORCEMENTS);
+      Sfx.golemRoar();
+      cameraController.shake(0.25, 0.5);
+      hitStop.trigger(0.12);
+      effects.spawnRing({ color: '#ff3b3b', x: boss.x, y: boss.centerY, fromScale: 0.5, toScale: 9, lifetime: 0.5, z: 0.62 });
+      particles.burst(boss.x, boss.centerY, 26, '#ff5a1f', 2.6, 0.7);
+      hud.showBanner({ title: `${bossName} IS ENRAGED!`, subtitle: 'Faster, meaner... and it called for backup!', variant: 'boss', seconds: 2.6 });
+    }
+    // Angry red embers rising off it for the rest of the fight
+    if (boss.isRaging && Math.random() < 0.35) {
+      particles.burst(boss.x + (Math.random() - 0.5) * boss.width, boss.y + Math.random() * boss.height, 1, Math.random() < 0.5 ? '#ff3b3b' : '#ffb347', 0.6, 0.5);
+    }
   }
 
   function onBossDefeated(enemy) {
     onEnemyDefeated(enemy);
     arenaState = ArenaState.BOSS_DOWN;
+    // With their leader gone, the sidekicks blow up too
+    enemies.forEach(other => {
+      if (other.isBossCompanion && other.isHittable) other.defeat();
+    });
   }
 
   /** Boss and leftovers gone: fanfare, bonus points and an extra heart, then the coins are cashed in. */

@@ -474,9 +474,9 @@ body, html {
   border-radius: 20px;
 }
 
-/* Jump: from a bit left of its own edge to the screen's right edge */
+/* Jump: from a full button width left of its own edge to the screen's right edge (☰ stays on top) */
 #btn-touch-jump::before {
-  left: -24px;
+  left: calc(var(--touch-size) * -1 - 4px);
   right: -100px;
 }
 

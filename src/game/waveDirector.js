@@ -146,7 +146,9 @@
     const mainCount = definition.main.count + Math.round(definition.isBoss ? ramp / 2 : ramp);
     const mainKinds = repeat(definition.main.kind, mainCount);
 
-    const escortKinds = definition.escorts.flatMap(escort => repeat(escort.kind, escort.count));
+    // Easier difficulties send fewer helpers alongside the boss
+    const escortScale = definition.isBoss ? difficulty.bossEscortScale : 1;
+    const escortKinds = definition.escorts.flatMap(escort => repeat(escort.kind, Math.round(escort.count * escortScale)));
     const randomEscortKinds = definition.groundOnly
       ? ESCORT_KINDS.filter(kind => !FLYING_KINDS.includes(kind))
       : ESCORT_KINDS;
@@ -157,7 +159,7 @@
 
     const toEntry = kind => ({ kind, stats: creatureStats(kind, difficulty, ramp) });
 
-    const mutants = buildMutants(number, difficulty, Boolean(definition.groundOnly));
+    const mutants = buildMutants(number, difficulty, Boolean(definition.groundOnly), Boolean(definition.isBoss));
 
     // The boss always arrives first; otherwise everything falls in a random order
     const mainEntries = mainKinds.map(toEntry);
@@ -185,14 +187,15 @@
    * Randomly generated monsters (see Forest.MonsterForge) join from wave 2 on: one at first,
    * one more every few waves, each as strong as the wave number during the first cycle; after that
    * their strength (and number) grows only as fast as the difficulty's cycle ramp allows.
-   * With `groundOnly`, none of them fly.
+   * With `groundOnly`, none of them fly. Boss waves get fewer on easier difficulties.
    */
-  function buildMutants(number, difficulty, groundOnly) {
+  function buildMutants(number, difficulty, groundOnly, isBoss) {
     if (number < FIRST_MUTANT_WAVE) return [];
     const power = number <= WAVES.length
       ? number
       : Math.round(WAVES.length + (number - WAVES.length) * difficulty.cycleRamp);
-    const count = Math.min(MAX_MUTANTS_PER_WAVE, 1 + Math.floor((power - FIRST_MUTANT_WAVE) / WAVES_PER_EXTRA_MUTANT));
+    const fullCount = Math.min(MAX_MUTANTS_PER_WAVE, 1 + Math.floor((power - FIRST_MUTANT_WAVE) / WAVES_PER_EXTRA_MUTANT));
+    const count = Math.max(0, fullCount - (isBoss ? difficulty.bossMutantReduction : 0));
     const { WALKER, HOPPER } = Forest.MonsterGenome.Movement;
     return Array.from({ length: count }, () => {
       const movement = groundOnly ? (Math.random() < 0.5 ? WALKER : HOPPER) : undefined;

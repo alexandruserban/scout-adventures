@@ -93,10 +93,11 @@
 
   /** A fresh random monster of exactly this species (body shape and headgear decide the species). */
   function genomeOfSpecies(speciesId, power) {
-    const [movement, shape, headgear] = speciesId.split('-');
+    const [movement, shape, headgear, cyberTag] = speciesId.split('-');
+    const cyber = cyberTag === 'cyber';
     let genome = null;
     for (let i = 0; i < MAX_SPECIES_ROLLS; i++) {
-      genome = Forest.MonsterForge.generate({ power, movement });
+      genome = Forest.MonsterForge.generate({ power, movement, cyber });
       if (genome.species === speciesId) return genome;
     }
     // Astronomically unlikely: just reshape the last roll into the right species

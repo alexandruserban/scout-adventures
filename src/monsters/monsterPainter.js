@@ -19,6 +19,8 @@
 
   const HEADGEAR_HEIGHT = { none: 0, horns: 4, antennae: 4, spikes: 2, crest: 3 };
   const LEG_HEIGHT = { walker: 3, hopper: 1, flyer: 2 };
+  /** Cyber antenna mast, light included. */
+  const MAST_HEIGHT = 4;
 
   /** Half-width of the body (0..1) at height v (-1 = top, 1 = bottom). */
   const SHAPES = {
@@ -77,7 +79,8 @@
     const bodyHalfWidth = look.bodyHalfWidth;
     const bodyHeight = look.bodyHeight;
     const wingSpan = look.wingSpan;
-    const headroom = Math.max(HEADGEAR_HEIGHT[look.headgear], wingSpan);
+    const mastHeight = look.cyber && look.cyber.hasMast ? MAST_HEIGHT : 0;
+    const headroom = Math.max(HEADGEAR_HEIGHT[look.headgear], wingSpan, mastHeight);
     const bodyTop = 1 + headroom;
     const legHeight = LEG_HEIGHT[genome.movement];
 
@@ -216,10 +219,15 @@
     });
   }
 
+  /** Top row of the mouth. */
+  function mouthRow(size, eyes) {
+    const eyeBottom = Math.max(...eyes.map(eye => eye.row + eye.height - 1));
+    return Math.min(eyeBottom + 2, size.bodyBottom - 2);
+  }
+
   function paintMouth(canvas, size, eyes, isOpen) {
     const { look, bodyHalfWidth } = size;
-    const eyeBottom = Math.max(...eyes.map(eye => eye.row + eye.height - 1));
-    const row = Math.min(eyeBottom + 2, size.bodyBottom - 2);
+    const row = mouthRow(size, eyes);
     const halfWidth = Math.max(1, Math.round(bodyHalfWidth * 0.4));
     const paint = (column, paintRow, letter) => {
       if (isBody(size, column, paintRow)) canvas.set(column, paintRow, letter);
@@ -252,6 +260,10 @@
 
   function paintHeadgear(canvas, size) {
     const { look, bodyHalfWidth, columnTop } = size;
+    // Cyber monsters: metal stalks and fins with glowing lights
+    const stalk = look.cyber ? 'O' : 'd';
+    const light = look.cyber ? 'L' : 's';
+    const fin = look.cyber ? 'G' : 'h';
     switch (look.headgear) {
       case 'horns': {
         const base = Math.max(1, Math.round(bodyHalfWidth * 0.55));
@@ -263,8 +275,8 @@
       case 'antennae': {
         const base = Math.max(1, Math.round(bodyHalfWidth * 0.35));
         const top = columnTop[base];
-        for (let k = 0; k < 3; k++) canvas.set(base + Math.floor(k / 2), top - 1 - k, 'd');
-        [[1, 3], [2, 3], [1, 4], [2, 4]].forEach(([dc, dr]) => canvas.set(base + dc, top - dr, 's'));
+        for (let k = 0; k < 3; k++) canvas.set(base + Math.floor(k / 2), top - 1 - k, stalk);
+        [[1, 3], [2, 3], [1, 4], [2, 4]].forEach(([dc, dr]) => canvas.set(base + dc, top - dr, light));
         break;
       }
       case 'spikes':
@@ -274,9 +286,9 @@
         }
         break;
       case 'crest':
-        for (let k = 1; k <= 3; k++) canvas.set(0, columnTop[0] - k, k % 2 ? 's' : 'h');
-        canvas.set(1, columnTop[1] - 1, 's');
-        canvas.set(1, columnTop[1] - 2, 'h');
+        for (let k = 1; k <= 3; k++) canvas.set(0, columnTop[0] - k, k % 2 ? light : fin);
+        canvas.set(1, columnTop[1] - 1, light);
+        canvas.set(1, columnTop[1] - 2, fin);
         break;
     }
   }
@@ -296,7 +308,7 @@
       const column = baseColumn + spread;
       const bottom = footRow - lift;
       for (let row = columnBottom[Math.min(column, bodyHalfWidth - 1)] + 1; row <= bottom; row++) {
-        const letter = row === bottom ? 'n' : 'd';
+        const letter = row === bottom ? 'n' : (look.cyber ? (row % 2 ? 'G' : 'O') : 'd');
         canvas.set(column, row, letter);
         canvas.set(column + 1, row, letter);
       }
@@ -340,6 +352,99 @@
   }
 
   // ==========================================
+  // Cybernetics
+  // ==========================================
+  /**
+   * Implants on top of the finished body: a face upgrade (visor, lenses or jaw grille), panel seams
+   * with rivets, a chest plate with a glowing power core, an antenna mast and, on flyers, a jet
+   * thruster. Glowing parts turn the angry colour in the attack frame.
+   */
+  function paintCyberware(canvas, size, eyes, frameName) {
+    const { look, bodyTop, bodyHeight, rowWidths } = size;
+    const cyber = look.cyber;
+    const isAngry = frameName === 'attack';
+    const lit = isAngry ? 'r' : 'L';
+    const onBody = (column, row, letter) => {
+      if (isBody(size, column, row)) canvas.set(column, row, letter);
+    };
+
+    // Panel seams down the sides, riveted every few rows
+    for (let index = Math.round(bodyHeight * 0.3); index < Math.round(bodyHeight * 0.75); index++) {
+      const column = rowWidths[index] - 2;
+      if (column >= 2) onBody(column, bodyTop + index, index % 3 === 0 ? 'M' : 'O');
+    }
+
+    // Face
+    const eyeTop = Math.min(...eyes.map(eye => eye.row));
+    const eyeBottom = Math.max(...eyes.map(eye => eye.row + eye.height - 1));
+    const eyeReach = Math.max(...eyes.map(eye => eye.column + eye.width));
+    if (cyber.implant === 'visor') {
+      // One glowing band across every eye, in a metal frame
+      for (let column = 0; column <= eyeReach; column++) {
+        onBody(column, eyeTop - 1, 'O');
+        for (let row = eyeTop; row <= eyeBottom; row++) onBody(column, row, column === eyeReach ? 'O' : lit);
+        onBody(column, eyeBottom + 1, 'O');
+      }
+      // A brighter scanning dot that hops along the band from frame to frame
+      const scan = { idle: 0, move: Math.max(0, eyeReach - 2), attack: 1 }[frameName];
+      onBody(scan, eyeTop, 'M');
+    } else if (cyber.implant === 'lenses') {
+      // Eyes become metal sockets with glowing lenses
+      eyes.forEach(eye => {
+        for (let dr = 0; dr < eye.height; dr++) {
+          for (let dc = 0; dc < eye.width; dc++) {
+            const column = eye.column + dc;
+            const row = eye.row + dr;
+            const letter = canvas.get(column, row);
+            if (letter === 'W') onBody(column, row, 'G');
+            else if (letter === 'E' || letter === 'r') onBody(column, row, lit);
+          }
+        }
+        onBody(eye.column + eye.width, eye.row, 'O');
+      });
+    } else {
+      // Jaw grille: the mouth becomes metal slats, glowing between them when it attacks
+      const top = mouthRow(size, eyes);
+      for (let row = top - 1; row <= top + 3; row++) {
+        for (let column = 0; column < size.bodyHalfWidth; column++) {
+          const letter = canvas.get(column, row);
+          if (letter === 'm' || letter === 'T') onBody(column, row, column % 2 ? 'O' : (isAngry ? lit : 'G'));
+        }
+      }
+    }
+
+    // Chest plate with a power core, below the mouth
+    if (cyber.hasCore) {
+      const top = Math.max(mouthRow(size, eyes) + 3, bodyTop + Math.round(bodyHeight * 0.6));
+      const bottom = size.bodyBottom - 1;
+      if (bottom - top >= 1) {
+        for (let row = top; row <= bottom; row++) {
+          const plateHalf = Math.max(2, Math.round(rowWidths[row - bodyTop] * 0.55));
+          for (let column = 0; column < plateHalf; column++) {
+            onBody(column, row, row === top ? 'M' : (column === plateHalf - 1 ? 'O' : 'G'));
+          }
+        }
+        const coreRow = Math.min(bottom, top + 1);
+        onBody(0, coreRow, lit);
+        if (bottom - top >= 2) onBody(0, coreRow + 1, frameName === 'move' ? 'M' : lit);
+      }
+    }
+
+    // Antenna mast with a light on top
+    if (cyber.hasMast) {
+      const top = size.columnTop[0];
+      for (let k = 1; k < MAST_HEIGHT; k++) canvas.set(0, top - k, 'O');
+      canvas.set(0, top - MAST_HEIGHT, frameName === 'move' ? 'M' : lit);
+    }
+
+    // Flyers: a jet thruster under the body, firing while they fly
+    if (size.wingSpan) {
+      canvas.set(0, size.bodyBottom + 1, 'O');
+      canvas.set(0, size.bodyBottom + 2, frameName === 'idle' ? 'M' : lit);
+    }
+  }
+
+  // ==========================================
   // Frames
   // ==========================================
   function paintFrame(genome, size, spots, eyes, frameName) {
@@ -356,6 +461,7 @@
     paintEyes(canvas, size, eyes, isAngry);
     paintMouth(canvas, size, eyes, isAngry);
     paintHeadgear(canvas, size);
+    if (genome.appearance.cyber) paintCyberware(canvas, size, eyes, frameName);
     canvas.addOutline();
     return canvas.toRows();
   }

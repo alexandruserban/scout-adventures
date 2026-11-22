@@ -178,7 +178,7 @@ LEVEL_ORDER.forEach(id => {
   });
 });
 
-/** Designed health range of a generated monster: size base + power share + 0-1 random (+ armour). */
+/** Designed health range of a generated monster: size base + power share + 0-1 random (+ armour, + cyber plating). */
 const SIZE_HP = { small: [1, 0.3], medium: [2, 0.5], large: [3, 0.8] };
 const SEEDS = 300;
 const averageHpByPower = [];
@@ -188,7 +188,8 @@ for (let power = 1; power <= WAVE_COUNT; power++) {
     const genome = Forge.generate({ seed, power });
     const [baseHp, hpPerPower] = SIZE_HP[genome.appearance.size];
     const armour = genome.abilities.includes('armored') ? 1 + Math.floor(power / 4) : 0;
-    const low = baseHp + Math.floor(power * hpPerPower) + armour;
+    const plating = genome.appearance.cyber ? 1 : 0;
+    const low = baseHp + Math.floor(power * hpPerPower) + armour + plating;
     const hp = genome.stats.hp;
     check(`power ${power} seed ${seed}: ${genome.appearance.size} monster hp in designed range`, hp >= low && hp <= low + 1, `got ${hp}, expected ${low}-${low + 1}`);
     total += hp;

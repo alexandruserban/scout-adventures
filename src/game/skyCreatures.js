@@ -1160,9 +1160,13 @@
       this.fireballs = [];
     }
 
-    /** Lob a fireball in an arc so it comes down on (toX, toY) after `flightSeconds`. */
-    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage) {
+    /**
+     * Lob a fireball in an arc so it comes down on (toX, toY) after `flightSeconds`.
+     * @param {{tint?:number, trail?:string[]}} [style] recolour it (e.g. a cyber monster's rockets)
+     */
+    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS } = {}) {
       const mesh = createSpriteMesh(this.sprite, PIXEL_SCALE * 1.2);
+      if (tint !== undefined) mesh.material.color.setHex(tint);
       mesh.position.set(fromX, fromY, FIREBALL_Z);
       this.scene.add(mesh);
       this.fireballs.push({
@@ -1171,7 +1175,8 @@
         y: fromY,
         velocityX: (toX - fromX) / flightSeconds,
         velocityY: (toY - fromY + 0.5 * FIREBALL_GRAVITY * flightSeconds * flightSeconds) / flightSeconds,
-        damage
+        damage,
+        trail
       });
     }
 
@@ -1185,7 +1190,7 @@
         fireball.mesh.rotation.z += FIREBALL_SPIN_SPEED * deltaSeconds;
 
         if (Math.random() < 0.6) {
-          const color = FLAME_COLORS[Math.floor(Math.random() * FLAME_COLORS.length)];
+          const color = fireball.trail[Math.floor(Math.random() * fireball.trail.length)];
           this.particles.burst(fireball.x, fireball.y, 1, color, 0.3, 0.25);
         }
 

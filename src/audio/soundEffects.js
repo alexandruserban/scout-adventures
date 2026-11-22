@@ -207,6 +207,32 @@
 
     fireballImpact() {
       synth.playNoise({ duration: 0.25, filterType: 'lowpass', filterFrequency: 1600, endFilterFrequency: 150, volume: 0.22 });
+    },
+
+    /** Cyber monsters: a rising whine while a laser charges... */
+    laserCharge() {
+      synth.playTone({ wave: 'sawtooth', frequency: 300, endFrequency: 1400, duration: 0.6, volume: 0.07, endVolume: 0.03 });
+    },
+
+    /** ...and the beam itself. */
+    laserFire() {
+      synth.playTone({ wave: 'square', frequency: 1800, endFrequency: 220, duration: 0.28, volume: 0.13, endVolume: 0.01 });
+      synth.playNoise({ duration: 0.2, filterType: 'highpass', filterFrequency: 2500, volume: 0.1 });
+    },
+
+    rocketLaunch() {
+      synth.playNoise({ duration: 0.22, filterType: 'bandpass', filterFrequency: 1800, endFilterFrequency: 500, resonance: 3, volume: 0.16 });
+      synth.playTone({ wave: 'square', frequency: 520, endFrequency: 880, duration: 0.08, volume: 0.06 });
+    },
+
+    /** A sword bouncing off an energy shield. */
+    shieldBlock() {
+      synth.playTone({ wave: 'triangle', frequency: 1320, endFrequency: 990, duration: 0.18, volume: 0.14, endVolume: 0.005 });
+      synth.playTone({ wave: 'square', frequency: 660, endFrequency: 440, duration: 0.12, volume: 0.06 });
+    },
+
+    shieldUp() {
+      synth.playTone({ wave: 'sine', frequency: 440, endFrequency: 1320, duration: 0.25, volume: 0.09 });
     }
   };
 })(window.Forest);

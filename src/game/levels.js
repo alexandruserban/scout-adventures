@@ -426,7 +426,8 @@
       icon: '🌃',
       flavor: 'Wizard towers and hover-lights under a synthwave sun. The streets hum with magic!',
       theme: 'neon',
-      boss: { kind: 'mutant', power: 7, movement: 'flyer', seed: 7071, name: 'THE NEON WYRM', flavor: 'A glowing dragon made of pure electric spellfire!', sizeScale: 1.9 }
+      future: true,
+      boss: { kind: 'mutant', power: 7, movement: 'flyer', seed: 7071, cyber: true, name: 'THE NEON WYRM', flavor: 'A glowing dragon made of pure electric spellfire!', sizeScale: 1.9 }
     },
     {
       id: 'crystal',
@@ -434,6 +435,7 @@
       icon: '💎',
       flavor: 'Enchanted crystals wired with ancient circuits. They hum and glow in the dark.',
       theme: 'crystal',
+      future: true,
       boss: { kind: 'golem', name: 'THE CRYSTAL SENTINEL', flavor: 'A guardian of living crystal and fire boots up!', sizeScale: 1.2 }
     },
     {
@@ -442,6 +444,7 @@
       icon: '⚙️',
       flavor: 'A brass citadel floating on steam and sorcery. Mind the steam gusts!',
       theme: 'clockwork',
+      future: true,
       hazard: 'wind',
       boss: { kind: 'thornback', name: 'THE BRASS BEETLE TITAN', flavor: 'A wind-up war beetle the size of a house! Jump its charge!', sizeScale: 2.1 }
     },
@@ -451,6 +454,7 @@
       icon: '🔱',
       flavor: 'A sunken city of glass domes and sea magic. Down here you float with every jump!',
       theme: 'atlantis',
+      future: true,
       physics: { gravityScale: 0.75 },
       boss: { kind: 'jelly', name: 'THE ABYSSAL MEGAJELLY', flavor: 'The city\'s power core has come alive... and it stings!', sizeScale: 1.9 }
     },
@@ -460,6 +464,7 @@
       icon: '🍄',
       flavor: 'Glowing mushrooms and hologram fairies. Bounce on the springy caps!',
       theme: 'fae',
+      future: true,
       layout: { bouncy: true },
       boss: { kind: 'gloomwing', name: 'THE PIXIE MOTH EMPRESS', flavor: 'Wings of light and a temper to match! Strike as she dives!', sizeScale: 2.3 }
     },
@@ -469,6 +474,7 @@
       icon: '🐉',
       flavor: 'A steel castle guarded by dragon drones. Smash the plasma bombs they drop!',
       theme: 'mechKeep',
+      future: true,
       hazard: 'lavaBombs',
       boss: { kind: 'golem', name: 'THE DRAGON MECH', flavor: 'Half dragon, half war machine, all fire!', sizeScale: 1.45 }
     },
@@ -478,8 +484,9 @@
       icon: '🌀',
       flavor: 'Floating islands torn from time. Gravity glitches here: soar across the void!',
       theme: 'rift',
+      future: true,
       physics: { gravityScale: 0.6 },
-      boss: { kind: 'mutant', power: 9, movement: 'walker', seed: 3141, name: 'THE VOID KNIGHT', flavor: 'A warrior from between the worlds steps through the portal!', sizeScale: 1.9 }
+      boss: { kind: 'mutant', power: 9, movement: 'walker', seed: 3141, cyber: true, name: 'THE VOID KNIGHT', flavor: 'A warrior from between the worlds steps through the portal!', sizeScale: 1.9 }
     },
     {
       id: 'station',
@@ -487,8 +494,9 @@
       icon: '🛸',
       flavor: 'An orbital tower of rune engines. The decks are polished slick: careful how you stop!',
       theme: 'station',
+      future: true,
       physics: { slippery: true },
-      boss: { kind: 'mutant', power: 10, movement: 'flyer', seed: 2077, name: 'THE COSMIC ARCHMAGE', flavor: 'The station\'s mad wizard-machine wakes! Dodge its spells!', sizeScale: 2.0 }
+      boss: { kind: 'mutant', power: 10, movement: 'flyer', seed: 2077, cyber: true, name: 'THE COSMIC ARCHMAGE', flavor: 'The station\'s mad wizard-machine wakes! Dodge its spells!', sizeScale: 2.0 }
     }
   ].map(theme => Object.freeze(theme));
 

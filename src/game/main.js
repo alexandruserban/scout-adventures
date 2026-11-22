@@ -18,6 +18,8 @@
   const LEVEL_PATROL_DISTANCE = 3;
   /** Chance that an enemy with a ledge above its spot lands on the ledge instead of the ground. */
   const LEDGE_LANDING_CHANCE = 0.5;
+  /** Share of mutants that come with cybernetic implants in the future-tech worlds (elsewhere it depends on power). */
+  const FUTURE_CYBER_CHANCE = 0.6;
 
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
 
@@ -362,7 +364,9 @@
     const options = { x: entry.x, onDefeated: onEnemyDefeated, allowLedges };
     if (entry.kind === 'mutant') {
       // A new random monster every time, so the scrapbook keeps filling up
-      const genome = Forest.MonsterForge.generate({ power: entry.power });
+      // The future-tech worlds are crawling with cybernetic mutants
+      const cyber = level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined;
+      const genome = Forest.MonsterForge.generate({ power: entry.power, cyber });
       addEnemy(Forest.MonsterForge.create(world, { ...options, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) }));
       return;
     }
@@ -415,7 +419,7 @@
     const bossOptions = { x: bossData.x, stats, sizeScale: bossData.sizeScale, onDefeated: onBossDefeated };
     if (bossData.kind === 'mutant') {
       // A fixed seed, so the same monster guards this level every time
-      const genome = Forest.MonsterForge.generate({ power: bossData.power, movement: bossData.movement, seed: bossData.seed });
+      const genome = Forest.MonsterForge.generate({ power: bossData.power, movement: bossData.movement, seed: bossData.seed, cyber: Boolean(bossData.cyber) });
       boss = Forest.MonsterForge.create(world, { ...bossOptions, genome });
     } else {
       boss = new Forest.SkyCreatures[bossData.kind](world, bossOptions);

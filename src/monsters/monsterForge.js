@@ -329,7 +329,10 @@
     // Getting hit
     // ==========================================
     takeHit(damage, attackerX) {
-      if (this.isHittable) this.secondsSinceHit = 0;
+      if (!this.isHittable) return;
+      this.secondsSinceHit = 0;
+      // An energy shield (see MonsterAbilities.shield) can soak up the whole hit
+      if (this.passives.some(passive => passive.blockHit && passive.blockHit(this))) return;
       super.takeHit(damage, attackerX);
     }
 

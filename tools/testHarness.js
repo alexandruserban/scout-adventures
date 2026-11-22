@@ -99,7 +99,7 @@ function createWorld(input = { horizontalDirection: () => 0, isPressingLeftOrRig
     input,
     sprites: { boy: fakeSprites(24, 24), mushroom: fakeSprites(20, 18), skyCreatures: new Proxy({}, { get: () => fakeSprites(16, 16) }) },
     particles: { burst: noop },
-    effects: { spawnRing: noop, spawnDisc: noop },
+    effects: { spawnRing: noop, spawnDisc: noop, spawnBeam: noop },
     hitStop: { trigger: noop },
     cameraController: { shake: noop },
     projectiles: { launchFireball: noop },

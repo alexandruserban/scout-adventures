@@ -43,11 +43,27 @@
     regenerate: { id: 'regenerate', label: 'Regenerate', type: 'passive', cost: 2, minPower: 3, movements: ALL_MOVEMENTS },
     blink: { id: 'blink', label: 'Blink', type: 'passive', cost: 2, minPower: 3, movements: ALL_MOVEMENTS },
     armored: { id: 'armored', label: 'Armored', type: 'passive', cost: 3, minPower: 4, movements: ALL_MOVEMENTS },
-    splitter: { id: 'splitter', label: 'Splitter', type: 'passive', cost: 3, minPower: 4, movements: ALL_MOVEMENTS }
+    splitter: { id: 'splitter', label: 'Splitter', type: 'passive', cost: 3, minPower: 4, movements: ALL_MOVEMENTS },
+
+    // --- Cybernetic upgrades (only cyber monsters can roll these) ---
+    laser: { id: 'laser', label: 'Laser Beam', type: 'attack', cost: 3, minPower: 2, movements: ALL_MOVEMENTS, cyberOnly: true },
+    rockets: { id: 'rockets', label: 'Rocket Salvo', type: 'attack', cost: 3, minPower: 3, movements: ALL_MOVEMENTS, cyberOnly: true },
+    shield: { id: 'shield', label: 'Energy Shield', type: 'passive', cost: 2, minPower: 2, movements: ALL_MOVEMENTS, cyberOnly: true }
   });
 
+  /** Cyber monsters start showing up at this power, more often the stronger the wave. */
+  const CYBER_MIN_POWER = 2;
+  const CYBER_BASE_CHANCE = 0.08;
+  const CYBER_CHANCE_PER_POWER = 0.04;
+  const CYBER_MAX_CHANCE = 0.5;
+  /** How a cyber monster's face is upgraded: a visor band, glowing lenses, or a metal jaw grille. */
+  const CYBER_IMPLANTS = ['visor', 'lenses', 'grille'];
+  const CYBER_GLOWS = ['#4df2ff', '#ff3b6b', '#7dff6a', '#ffe14d', '#c86bff'];
+  /** Salt for the cyber dice, so the rest of a seed's monster looks the same with or without implants. */
+  const CYBER_SEED_SALT = 0x5bd1e995;
+
   /** Abilities a mini monster (from Brood or Splitter) never inherits, so they can't multiply forever. */
-  const NO_MINI_ABILITIES = ['brood', 'splitter', 'regenerate'];
+  const NO_MINI_ABILITIES = ['brood', 'splitter', 'regenerate', 'shield'];
 
   const MAX_ABILITIES = 4;
 
@@ -160,17 +176,58 @@
     };
   }
 
+  /** Chance that a random monster of this power comes with cybernetic implants. */
+  function cyberChance(power) {
+    if (power < CYBER_MIN_POWER) return 0;
+    return Math.min(CYBER_MAX_CHANCE, CYBER_BASE_CHANCE + power * CYBER_CHANCE_PER_POWER);
+  }
+
+  /**
+   * Bolt cybernetics onto an appearance: a face implant, a chest plate with a glowing core, and
+   * metal horns, claws, legs and jet wings (by recolouring those parts' palette letters).
+   */
+  function addCyberImplants(dice, appearance) {
+    const glow = dice.pick(CYBER_GLOWS);
+    const metalHue = dice.range(190, 230);
+    appearance.cyber = {
+      implant: dice.pick(CYBER_IMPLANTS),
+      /** Chest plate with a glowing power core. */
+      hasCore: dice.chance(0.75),
+      /** A little antenna mast with a light on top (only on monsters with nothing else on their head). */
+      hasMast: appearance.headgear === 'none' && dice.chance(0.7),
+      glow
+    };
+    appearance.palette = {
+      ...appearance.palette,
+      M: hslToHex(metalHue, 0.12, 0.78), // polished metal
+      G: hslToHex(metalHue, 0.14, 0.52), // metal
+      O: hslToHex(metalHue, 0.2, 0.26), // dark metal, seams and rivets
+      L: glow, // LEDs, visor, power core
+      n: hslToHex(metalHue, 0.14, 0.6), // horns, spikes, claws, feet become metal
+      N: glow, // ...with glowing tips
+      w: hslToHex(metalHue, 0.16, 0.42), // wings become metal jet fins
+      v: glow // ...with glowing edges
+    };
+  }
+
   /**
    * Spend the power budget: one attack the monster can afford first (if any), then a random mix.
    * Hoppers and walkers can end up with no attack at all; their body is the weapon.
    */
-  function rollAbilities(dice, movement, power) {
+  function rollAbilities(dice, movement, power, isCyber) {
     let budget = 2 + Math.floor(power / 2);
-    const affordable = ability => ability.movements.includes(movement) && ability.minPower <= power && ability.cost <= budget;
+    const affordable = ability => ability.movements.includes(movement) && ability.minPower <= power && ability.cost <= budget
+      && (isCyber || !ability.cyberOnly);
     const chosen = [];
 
     const attacks = Object.values(ABILITIES).filter(ability => ability.type === 'attack' && affordable(ability));
-    if (attacks.length > 0) {
+    // Cyber monsters always lead with one of their built-in weapons
+    const cyberAttacks = attacks.filter(ability => ability.cyberOnly);
+    if (isCyber && cyberAttacks.length > 0) {
+      const first = dice.pick(cyberAttacks);
+      chosen.push(first.id);
+      budget -= first.cost;
+    } else if (attacks.length > 0) {
       const first = dice.pick(attacks);
       chosen.push(first.id);
       budget -= first.cost;
@@ -191,6 +248,7 @@
     const sizeSpec = SIZES[appearance.size];
     let hp = sizeSpec.baseHp + Math.floor(power * sizeSpec.hpPerPower) + dice.int(0, 1);
     if (abilities.includes('armored')) hp += 1 + Math.floor(power / 4);
+    if (appearance.cyber) hp += 1; // metal plating
 
     let speed = sizeSpec.speed * dice.range(0.85, 1.15);
     if (abilities.includes('swift')) speed *= 1.3;
@@ -209,18 +267,23 @@
    * @param {string} [options.movement] force a Movement value
    * @param {string[]} [options.abilities] force exactly these ability ids
    * @param {string} [options.name] override the scientific name
+   * @param {boolean} [options.cyber] force cybernetic implants on (true) or off (false); when left
+   *   out, stronger monsters are more likely to be cyber
    * @returns {object} genome (plain data, safe to JSON.stringify). `species` is an id into
    *   Forest.MonsterSpecies; `name` is the individual's scientific name, e.g. "Boingus mohawkensis majoris".
    */
-  function generate({ seed = randomSeed(), power = 1, movement, abilities, name } = {}) {
+  function generate({ seed = randomSeed(), power = 1, movement, abilities, name, cyber } = {}) {
     const dice = createDice(seed);
     const level = Math.max(1, power);
 
     const chosenMovement = movement || dice.weighted({ walker: 4.5, hopper: 3, flyer: 2.5 });
     const appearance = rollAppearance(dice, chosenMovement, level);
+    const cyberDice = createDice((seed ^ CYBER_SEED_SALT) >>> 0);
+    const isCyber = cyber !== undefined ? Boolean(cyber) : cyberDice.chance(cyberChance(level));
+    if (isCyber) addCyberImplants(cyberDice, appearance);
     const chosenAbilities = abilities
       ? abilities.filter(id => ABILITIES[id])
-      : rollAbilities(dice, chosenMovement, level);
+      : rollAbilities(dice, chosenMovement, level, isCyber);
     const stats = rollStats(dice, appearance, chosenAbilities, level);
 
     const genome = {

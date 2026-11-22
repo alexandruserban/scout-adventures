@@ -332,9 +332,203 @@
   };
 
   // ==========================================
+  // Cybernetic attacks
+  // ==========================================
+  /** Colour of a cyber monster's LEDs, visor and lasers. */
+  function glowColor(monster) {
+    return monster.genome.appearance.palette.L || '#ff3b6b';
+  }
+
+  /** Where the laser comes out: the monster's eyes. */
+  function laserOrigin(monster) {
+    return { x: monster.x + monster.facing * monster.width * 0.15, y: monster.y + monster.height * 0.62 };
+  }
+
+  /** Shortest distance from point (px, py) to the segment from a to b. */
+  function distanceToSegment(px, py, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = clamp(((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+    return Math.hypot(px - (a.x + dx * t), py - (a.y + dy * t));
+  }
+
+  /**
+   * Lock on with a flickering targeting line, then fire a laser along it. The aim is fixed when the
+   * line appears, so the boy has the wind-up to jump over it or get out of the way.
+   */
+  const laser = {
+    cooldown: [2.4, 3.6],
+    range: 10,
+    /** How close the beam has to pass to the boy's body to hit. */
+    hitDistance: 0.3,
+
+    canStart(monster, player) {
+      const distance = Math.abs(player.x - monster.x);
+      return distance > 1.5 && distance < 8 && (monster.isOnGround || monster.isFlying);
+    },
+
+    start(monster, player) {
+      monster.facing = directionTowards(monster.x, player.x);
+      monster.state = CreatureState.TELEGRAPH;
+      monster.stateTimer = 0.85 / Math.sqrt(monster.speed);
+      monster.attackPhase = 'aim';
+      monster.showFrame('attack');
+      const origin = laserOrigin(monster);
+      // Aim through the boy's middle, but never steeper than 45 degrees (flyers sweep down at him)
+      const aimY = player.y + player.height * 0.5;
+      const slope = clamp((aimY - origin.y) / Math.max(0.5, Math.abs(player.x - origin.x)), -1, 1);
+      monster.laserDirection = { x: monster.facing / Math.hypot(1, slope), y: slope / Math.hypot(1, slope) };
+      monster.laserFlicker = 0;
+      Sfx.laserCharge();
+    },
+
+    beamEnd(origin, monster) {
+      return { x: origin.x + monster.laserDirection.x * this.range, y: origin.y + monster.laserDirection.y * this.range };
+    },
+
+    update(monster, deltaSeconds, player) {
+      const origin = laserOrigin(monster);
+      const end = this.beamEnd(origin, monster);
+      const color = glowColor(monster);
+      if (monster.attackPhase === 'aim') {
+        monster.tint = Math.sin(monster.stateTimer * 40) > 0 ? GLOW_TINT : WHITE;
+        monster.laserFlicker -= deltaSeconds;
+        if (monster.laserFlicker <= 0) {
+          monster.laserFlicker = 0.06;
+          monster.effects.spawnBeam({ color, fromX: origin.x, fromY: origin.y, toX: end.x, toY: end.y, thickness: 0.05, lifetime: 0.07, opacity: 0.7 });
+        }
+        if (monster.stateTimer <= 0) this.fire(monster, player, origin, end, color);
+        return false;
+      }
+      return monster.stateTimer <= 0;
+    },
+
+    fire(monster, player, origin, end, color) {
+      monster.effects.spawnBeam({ color, fromX: origin.x, fromY: origin.y, toX: end.x, toY: end.y, thickness: 0.4, lifetime: 0.3 });
+      monster.effects.spawnBeam({ color: '#ffffff', fromX: origin.x, fromY: origin.y, toX: end.x, toY: end.y, thickness: 0.14, lifetime: 0.25, z: 0.63 });
+      monster.effects.spawnDisc({ color, x: origin.x, y: origin.y, fromScale: 0.3, toScale: 0.9, lifetime: 0.15 });
+      monster.setSquash(0.9, 1.1);
+      monster.cameraController.shake(0.05, 0.12);
+      Sfx.laserFire();
+
+      if (!player.isDefeated) {
+        // Test the boy's feet, middle and head against the beam
+        const isHit = [0.15, 0.5, 0.85].some(share =>
+          distanceToSegment(player.x, player.y + player.height * share, origin, end) < this.hitDistance + player.width * 0.25);
+        if (isHit) player.takeDamage(monster.damage, monster.x);
+      }
+      monster.tint = monster.restingTint;
+      monster.attackPhase = 'recover';
+      monster.stateTimer = 0.35;
+    }
+  };
+
+  /** Rocket pods pop open, then a salvo of rockets arcs down on the boy. Smash them! */
+  const rockets = {
+    cooldown: [2.8, 4.0],
+    secondsBetweenRockets: 0.22,
+    flightSeconds: 1.15,
+    tint: 0xc8dcff,
+
+    canStart(monster, player) {
+      const distance = Math.abs(player.x - monster.x);
+      return distance > 1.2 && distance < 9 && (monster.isOnGround || monster.isFlying);
+    },
+
+    start(monster, player) {
+      monster.facing = directionTowards(monster.x, player.x);
+      monster.state = CreatureState.THROW;
+      monster.stateTimer = 0.55 / Math.sqrt(monster.speed);
+      monster.attackPhase = 'windup';
+      monster.rocketsLeft = monster.genome.isMini || monster.genome.power < 6 ? 2 : 3;
+      monster.showFrame('attack');
+      Sfx.beetleGrowl();
+    },
+
+    update(monster, deltaSeconds, player) {
+      if (monster.attackPhase === 'windup') {
+        shudder(monster, GLOW_TINT);
+        if (Math.random() < 0.5) monster.particles.burst(monster.x, monster.y + monster.height, 1, '#d8d8e0', 0.6, 0.4);
+        if (monster.stateTimer <= 0) {
+          monster.attackPhase = 'firing';
+          monster.stateTimer = 0;
+          monster.offsetX = 0;
+        }
+        return false;
+      }
+      if (monster.attackPhase === 'firing') {
+        if (monster.stateTimer > 0) return false;
+        const fromY = monster.y + monster.height * 0.95;
+        const targetX = (player.isDefeated ? monster.x : player.x) + randomBetween(-1.2, 1.2);
+        monster.world.projectiles.launchFireball(monster.x, fromY, targetX, monster.floorY + 0.3, this.flightSeconds, monster.damage,
+          { tint: this.tint, trail: ['#d8d8e0', '#9aa3b2', glowColor(monster)] });
+        monster.particles.burst(monster.x, fromY, 6, glowColor(monster), 1.0, 0.3);
+        monster.setSquash(1.08, 0.92);
+        Sfx.rocketLaunch();
+        monster.rocketsLeft--;
+        monster.stateTimer = this.secondsBetweenRockets;
+        if (monster.rocketsLeft <= 0) {
+          monster.tint = monster.restingTint;
+          monster.attackPhase = 'recover';
+          monster.stateTimer = 0.4;
+        }
+        return false;
+      }
+      return monster.stateTimer <= 0;
+    }
+  };
+
+  // ==========================================
   // Passives
   // ==========================================
   const swift = {}; // all in the stats (see MonsterGenome)
+
+  /**
+   * A bubble of energy soaks up one hit completely, then takes a few seconds to recharge.
+   * Hit it once to pop the shield, then strike again before it comes back!
+   */
+  const shield = {
+    rechargeSeconds: 5,
+    pulseSeconds: 0.45,
+
+    setup(monster) {
+      monster.isShieldUp = true;
+      monster.shieldTimer = 0;
+      monster.shieldPulse = 0;
+    },
+
+    update(monster, deltaSeconds) {
+      const color = glowColor(monster);
+      if (!monster.isShieldUp) {
+        monster.shieldTimer -= deltaSeconds;
+        if (monster.shieldTimer > 0) return;
+        monster.isShieldUp = true;
+        monster.effects.spawnRing({ color, x: monster.x, y: monster.centerY, fromScale: monster.width * 2.4, toScale: monster.width * 1.6, lifetime: 0.3 });
+        Sfx.shieldUp();
+        return;
+      }
+      // A faint ring pulsing around it shows the shield is up
+      monster.shieldPulse -= deltaSeconds;
+      if (monster.shieldPulse > 0) return;
+      monster.shieldPulse = this.pulseSeconds;
+      const size = Math.max(monster.width, monster.height) * 1.5;
+      monster.effects.spawnRing({ color, x: monster.x, y: monster.centerY, fromScale: size, toScale: size * 1.1, lifetime: this.pulseSeconds, opacity: 0.55 });
+    },
+
+    /** Called before a hit lands; returns true when the shield takes it instead. */
+    blockHit(monster) {
+      if (!monster.isShieldUp) return false;
+      const color = glowColor(monster);
+      monster.isShieldUp = false;
+      monster.shieldTimer = this.rechargeSeconds;
+      const size = Math.max(monster.width, monster.height) * 1.5;
+      monster.effects.spawnDisc({ color, x: monster.x, y: monster.centerY, fromScale: size, toScale: size * 1.4, lifetime: 0.2, opacity: 0.6 });
+      monster.particles.burst(monster.x, monster.centerY, 14, color, 1.8, 0.4);
+      monster.setSquash(1.1, 0.9);
+      Sfx.shieldBlock();
+      return true;
+    }
+  };
 
   /** At half health it roars, glows red and speeds up. */
   const enrage = {
@@ -412,7 +606,7 @@
     }
   };
 
-  const behaviours = { charge, leap, spit, swoop, nova, brood, swift, enrage, regenerate, blink, armored, splitter };
+  const behaviours = { charge, leap, spit, swoop, nova, brood, laser, rockets, swift, enrage, regenerate, blink, armored, splitter, shield };
 
   // Every ability in the genome catalogue needs a behaviour here, and vice versa
   Object.keys(Forest.MonsterGenome.ABILITIES).forEach(id => {

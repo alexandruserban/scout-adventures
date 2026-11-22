@@ -95,6 +95,7 @@
       this.debrisGeometry = new THREE.PlaneGeometry(1, 1);
       this.fadingSprites = [];
       this.debris = [];
+      this.beams = [];
     }
 
     /** Solid disc that grows and fades: flashes and smoke puffs. */
@@ -195,6 +196,37 @@
     update(deltaSeconds) {
       this.updateFadingSprites(deltaSeconds);
       this.updateDebris(deltaSeconds);
+      this.updateBeams(deltaSeconds);
+    }
+
+    /**
+     * A straight beam of light from one point to another that thins out and fades (lasers).
+     * @param {{color:string, fromX:number, fromY:number, toX:number, toY:number, thickness:number,
+     *   lifetime:number, opacity?:number, z?:number}} options
+     */
+    spawnBeam({ color, fromX, fromY, toX, toY, thickness, lifetime, opacity = 1, z = 0.62 }) {
+      const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+      mesh.position.set((fromX + toX) / 2, (fromY + toY) / 2, z);
+      mesh.scale.set(Math.hypot(toX - fromX, toY - fromY), thickness, 1);
+      mesh.rotation.z = Math.atan2(toY - fromY, toX - fromX);
+      this.scene.add(mesh);
+      this.beams.push({ mesh, remainingLife: lifetime, lifetime, thickness, startOpacity: opacity });
+    }
+
+    updateBeams(deltaSeconds) {
+      for (let i = this.beams.length - 1; i >= 0; i--) {
+        const beam = this.beams[i];
+        beam.remainingLife -= deltaSeconds;
+        if (beam.remainingLife <= 0) {
+          removeMesh(this.scene, beam.mesh, { disposeGeometry: true });
+          this.beams.splice(i, 1);
+          continue;
+        }
+        const life = beam.remainingLife / beam.lifetime;
+        beam.mesh.scale.y = beam.thickness * (0.4 + 0.6 * life);
+        beam.mesh.material.opacity = beam.startOpacity * life;
+      }
     }
 
     updateFadingSprites(deltaSeconds) {
@@ -246,8 +278,10 @@
     clear() {
       this.fadingSprites.forEach(sprite => removeMesh(this.scene, sprite.mesh, { disposeGeometry: true }));
       this.debris.forEach(chunk => removeMesh(this.scene, chunk.mesh));
+      this.beams.forEach(beam => removeMesh(this.scene, beam.mesh, { disposeGeometry: true }));
       this.fadingSprites.length = 0;
       this.debris.length = 0;
+      this.beams.length = 0;
     }
   }
 

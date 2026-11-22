@@ -4,7 +4,8 @@
  * A random monster's species comes from its body plan:
  *   genus   = how it moves + its body shape   (3 x 4 = 12 genera)
  *   epithet = what grows on its head          (5 epithets)
- * so there are 60 random species to find, plus the 6 hand-made creatures of the forest.
+ * so there are 60 random species to find, each also in a cybernetic version (another 60), plus the
+ * 6 hand-made creatures of the forest.
  * Colours, size, eyes and abilities vary between individuals of the same species.
  *
  * Pure data (no canvas, no Three.js), so the scrapbook can list species it has never seen.
@@ -86,33 +87,58 @@
     return hash >>> 0;
   }
 
-  function buildRandomSpecies(movement, shape, headgear) {
+  /** Field notes for the cybernetically upgraded versions. */
+  const CYBER_NOTES = [
+    'Runs on batteries and pure spite.',
+    'Its warranty expired centuries ago.',
+    'Beeps politely before lasering you.',
+    'Half monster, half toaster, all trouble.',
+    'Downloads a firmware update every full moon.',
+    'Its laser eye was a gift from a wizard. Nobody knows which one.',
+    'Recharges by sitting in thunderstorms.',
+    'Squeaks when it walks. Oil it at your own risk.'
+  ];
+
+  const CYBER_SUFFIX = '-cyber';
+
+  function buildRandomSpecies(movement, shape, headgear, isCyber) {
     const genus = GENERA[movement][shape];
     const epithet = EPITHETS[headgear];
-    const id = `${movement}-${shape}-${headgear}`;
+    const id = `${movement}-${shape}-${headgear}${isCyber ? CYBER_SUFFIX : ''}`;
+    // Cyber genera: "Waddlus" becomes "Cyberwaddlus", the Waddler a Cyber-Waddler
+    const genusLatin = isCyber ? `Cyber${genus.latin.toLowerCase()}` : genus.latin;
+    const notes = isCyber ? CYBER_NOTES : FIELD_NOTES;
     return {
       id,
-      latin: `${genus.latin} ${epithet.latin}`,
-      common: `${epithet.adjective} ${genus.common}`,
-      genus: genus.latin,
+      latin: `${genusLatin} ${epithet.latin}`,
+      common: `${epithet.adjective} ${isCyber ? 'Cyber-' : ''}${genus.common}`,
+      genus: genusLatin,
       isNative: false,
-      note: `${MOVEMENT_NOTES[movement]} ${FIELD_NOTES[hashString(id) % FIELD_NOTES.length]}`
+      isCyber,
+      note: `${MOVEMENT_NOTES[movement]} ${notes[hashString(id) % notes.length]}`
     };
   }
 
-  /** Every species, natives first, then the random ones grouped by genus. */
-  const ALL_SPECIES = [
-    ...NATIVE_SPECIES.map(species => ({ ...species, genus: species.latin.split(' ')[0], isNative: true })),
-    ...Object.keys(GENERA).flatMap(movement =>
+  /** Every random species of one kind (plain or cyber), grouped by genus. */
+  function randomSpecies(isCyber) {
+    return Object.keys(GENERA).flatMap(movement =>
       Object.keys(GENERA[movement]).flatMap(shape =>
-        Object.keys(EPITHETS).map(headgear => buildRandomSpecies(movement, shape, headgear))))
+        Object.keys(EPITHETS).map(headgear => buildRandomSpecies(movement, shape, headgear, isCyber))));
+  }
+
+  /** Every species: natives first, then the random ones, then their cyber versions. */
+  const ALL_SPECIES = [
+    ...NATIVE_SPECIES.map(species => ({ ...species, genus: species.latin.split(' ')[0], isNative: true, isCyber: false })),
+    ...randomSpecies(false),
+    ...randomSpecies(true)
   ].map(Object.freeze);
 
   const BY_ID = new Map(ALL_SPECIES.map(species => [species.id, species]));
 
   /** Species of a random monster's genome. */
   function forGenome(genome) {
-    return BY_ID.get(`${genome.movement}-${genome.appearance.shape}-${genome.appearance.headgear}`);
+    const look = genome.appearance;
+    return BY_ID.get(`${genome.movement}-${look.shape}-${look.headgear}${look.cyber ? CYBER_SUFFIX : ''}`);
   }
 
   /**

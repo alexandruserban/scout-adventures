@@ -11,9 +11,9 @@
     'H': '#2e1a07', // Hair dark shadow
     'h': '#59321f', // Hair base brown
     'j': '#804c2b', // Hair light highlight
-    'C': '#a81c2b', // Cap dark red
-    'c': '#e63946', // Cap vibrant red
-    'v': '#ff6b6b', // Cap highlight
+    'C': '#4c1d7a', // Cap dark purple
+    'c': '#7b3fc4', // Cap vibrant purple
+    'v': '#a879e8', // Cap highlight
     'S': '#d6946e', // Skin shadow & solid defined nose tip
     's': '#fcd5b5', // Skin base peach
     'b': '#f59e8b', // Skin blush
@@ -23,8 +23,8 @@
     'J': '#1c2e4a', // Jacket dark navy
     'k': '#2d4b75', // Jacket blue
     'l': '#466fa8', // Jacket light blue
-    'F': '#e07a22', // Scarf orange
-    'f': '#f79f48', // Scarf light
+    'F': '#d1b000', // Scarf yellow
+    'f': '#ffe94d', // Scarf light
     'P': '#5e432f', // Pants dark khaki
     'p': '#8c684a', // Pants khaki
     'B': '#2a1a11', // Boots dark

@@ -50,7 +50,7 @@
   /** Left edge of the 12-pixel-wide head and torso. */
   const HEAD_X = 6;
 
-  // Red cap with forward brim, brown hair at the back, one clear eye,
+  // Purple cap with forward brim, brown hair at the back, one clear eye,
   // a small nose that sticks out, blush and a mouth.
   const HEADS = {
     normal: [

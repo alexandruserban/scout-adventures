@@ -35,6 +35,29 @@
   /** Helpers are this much smaller than ordinary mutants, with this share of their health. */
   const HELPER_SIZE = 0.7;
   const HELPER_HP_SHARE = 0.6;
+  /** The Monster Forge ability most like each hand-made boss's attack (its helpers won't get it). */
+  const NATIVE_BOSS_ABILITIES = {
+    golem: ['spit'], // hurls fireballs
+    thornback: ['charge'],
+    gloomwing: ['swoop'],
+    jelly: ['leap', 'splitter'], // jumps down with a shockwave, splits in two
+    nutling: ['leap']
+  };
+  /**
+   * The boy's jump, as in player.js: a double jump peaks this high and he drifts this fast in the
+   * air. A ground boss he can't clear with a double jump (see bossIsTooBigToJump) gets footholds.
+   */
+  const DOUBLE_JUMP_PEAK = 3.39;
+  const PLAYER_GRAVITY = 25;
+  const PLAYER_AIR_SPEED = 4.6;
+  /** Clear the boss's body by at least this much, with this much spare distance across. */
+  const JUMP_CLEARANCE_MARGIN = 0.3;
+  const JUMP_DISTANCE_MARGIN = 1.2;
+  /** Each kind's touch box (see their isTouching): top as a share of its height, half-width of its width. */
+  const BOSS_TOUCH_TOP = { jelly: 1.4, golem: 1 };
+  const DEFAULT_BOSS_TOUCH_TOP = 0.85;
+  const BOSS_TOUCH_HALF_WIDTH = { golem: 0.3 };
+  const DEFAULT_BOSS_TOUCH_HALF_WIDTH = 0.35;
   const MUTANT_BOSS_TITLES = ['THE GREAT', 'THE MIGHTY', 'KING', 'QUEEN', 'THE ANCIENT', 'THE COLOSSAL'];
 
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
@@ -454,9 +477,47 @@
       boss = new Forest.SkyCreatures[bossData.kind](world, bossOptions);
     }
     addEnemy(boss);
+    if (bossIsTooBigToJump()) addFootholds();
     summonCompanions(level.number <= COMPANION_EXTRA_FROM_LEVEL ? BOSS_COMPANIONS : BOSS_COMPANIONS + 1);
     Sfx.waveStart();
     hud.showBanner({ title: `BOSS: ${bossName}`, subtitle: `${bossData.flavor} It brought little helpers!`, variant: 'boss', seconds: 3.2 });
+  }
+
+  /**
+   * True when the boy can't double-jump over the boss from the ground: it's too tall or too wide.
+   * Flying bosses don't count, since he can run underneath them.
+   */
+  function bossIsTooBigToJump() {
+    if (boss.isFlyer || boss.kind === 'gloomwing') return false;
+    const gravityScale = world.levelPhysics.gravityScale || 1;
+    const peak = DOUBLE_JUMP_PEAK / gravityScale;
+    const clearHeight = boss.height * (BOSS_TOUCH_TOP[boss.kind] || DEFAULT_BOSS_TOUCH_TOP) + JUMP_CLEARANCE_MARGIN;
+    if (clearHeight >= peak) return true;
+    // How long a perfect double jump keeps his feet above the body, and how far he drifts meanwhile,
+    // against how far it is from touching it on one side to touching it on the other
+    const secondsAbove = 2 * Math.sqrt((2 * (peak - clearHeight)) / (PLAYER_GRAVITY * gravityScale));
+    const touchSpan = 2 * boss.width * (BOSS_TOUCH_HALF_WIDTH[boss.kind] || DEFAULT_BOSS_TOUCH_HALF_WIDTH) + player.width * 0.5;
+    return PLAYER_AIR_SPEED * secondsAbove < touchSpan * JUMP_DISTANCE_MARGIN;
+  }
+
+  /**
+   * Three ledges in the arena: one low on each side and a higher one in the middle, so the boy can
+   * get above a giant boss and jump over it (or strike it from above).
+   */
+  function addFootholds() {
+    const { arena } = level;
+    const lift = Math.min(1.4, Math.sqrt(1 / (world.levelPhysics.gravityScale || 1)));
+    const center = (arena.start + arena.end) / 2;
+    const ledges = [
+      { x: arena.start + 3.5, y: 2.0 * lift, width: 3 },
+      { x: arena.end - 6.5, y: 2.0 * lift, width: 3 },
+      { x: center - 1.75, y: 3.9 * lift, width: 3.5 }
+    ];
+    ledges.forEach(ledge => {
+      const surface = world.terrain.addPlatform(ledge);
+      scenery.addPlatform(ledge, surface);
+      particles.burst(ledge.x + ledge.width / 2, ledge.y, 10, '#ffffff', 1.2, 0.4);
+    });
   }
 
   /** A title for a randomly picked mutant boss, from its species: e.g. "THE GREAT SPIKY CYBER-BIGHEAD". */
@@ -471,9 +532,23 @@
   }
 
   /**
+   * Every trick the boss has, as Monster Forge ability ids, so its helpers can be given different
+   * ones: a mutant boss's own abilities plus the weapons its rage unlocks, or for the hand-made
+   * bosses the ability closest to their signature attack.
+   */
+  function bossAbilityIds() {
+    if (!boss) return [];
+    if (boss.genome) {
+      const rageWeapons = boss.genome.appearance.cyber ? ['laser', 'rockets'] : ['spit', 'nova'];
+      return [...new Set([...boss.genome.abilities, ...rageWeapons])];
+    }
+    return NATIVE_BOSS_ABILITIES[boss.kind] || [];
+  }
+
+  /**
    * Small helper mutants that drop in to fight beside the boss, landing away from the boy. A mutant
-   * boss brings little look-alikes of its own species (each with its own colours and tricks); the
-   * other bosses bring small random mutants (often cybernetic in the future-tech worlds).
+   * boss brings little look-alikes of its own species; the other bosses bring small random mutants
+   * (often cybernetic in the future-tech worlds). Helpers never share the boss's abilities.
    */
   function summonCompanions(count) {
     const { arena } = level;
@@ -485,7 +560,7 @@
       let x = arena.start + 3 + ((i + Math.random()) / count) * (arena.end - arena.start - 6);
       if (Math.abs(x - player.x) < COMPANION_MIN_DISTANCE) x = player.x + (x >= player.x ? 1 : -1) * COMPANION_MIN_DISTANCE;
       const look = bossLook || { cyber: level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined };
-      const genome = Forest.MonsterForge.generate({ power, ...look });
+      const genome = Forest.MonsterForge.generate({ power, ...look, excludeAbilities: bossAbilityIds() });
       const stats = Forest.MonsterForge.statsFor(genome, Difficulty.current);
       const companion = Forest.MonsterForge.create(world, {
         genome, x, allowLedges: false, onDefeated: onEnemyDefeated, sizeScale: HELPER_SIZE,

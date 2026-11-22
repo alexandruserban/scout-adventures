@@ -15,6 +15,23 @@
   const LANDING_MIN_WIDTH = 2.4;
   const LANDING_MAX_HEIGHT = 5;
 
+  /** A platform's surface, from its level data. */
+  function createPlatform({ x, y, width, bouncy = false, move = null }) {
+    return {
+      left: x,
+      right: x + width,
+      top: y,
+      isGround: false,
+      isBouncy: bouncy,
+      move,
+      start: { x, y },
+      width,
+      /** How far it moved during the last update (to carry riders along). */
+      deltaX: 0,
+      deltaY: 0
+    };
+  }
+
   class Terrain {
     /**
      * @param {object} level
@@ -28,22 +45,22 @@
       this.ground = ground
         .map(([left, right]) => ({ left, right, top: GROUND_Y, isGround: true }))
         .sort((a, b) => a.left - b.left);
-      this.platforms = platforms.map(({ x, y, width, bouncy = false, move = null }) => ({
-        left: x,
-        right: x + width,
-        top: y,
-        isGround: false,
-        isBouncy: bouncy,
-        move,
-        start: { x, y },
-        width,
-        /** How far it moved during the last update (to carry riders along). */
-        deltaX: 0,
-        deltaY: 0
-      }));
+      this.platforms = platforms.map(createPlatform);
       this.movingPlatforms = this.platforms.filter(platform => platform.move);
       this.surfaces = [...this.ground, ...this.platforms];
       this.elapsed = 0;
+    }
+
+    /**
+     * Add a still ledge after the level was built (e.g. footholds over a boss too big to jump).
+     * @param {{x:number, y:number, width:number}} platform
+     * @returns {object} its surface
+     */
+    addPlatform(platform) {
+      const surface = createPlatform(platform);
+      this.platforms.push(surface);
+      this.surfaces.push(surface);
+      return surface;
     }
 
     /** Move the ferries and lifts along their paths. */

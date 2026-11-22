@@ -214,10 +214,10 @@
    * Spend the power budget: one attack the monster can afford first (if any), then a random mix.
    * Hoppers and walkers can end up with no attack at all; their body is the weapon.
    */
-  function rollAbilities(dice, movement, power, isCyber) {
+  function rollAbilities(dice, movement, power, isCyber, excluded = []) {
     let budget = 2 + Math.floor(power / 2);
     const affordable = ability => ability.movements.includes(movement) && ability.minPower <= power && ability.cost <= budget
-      && (isCyber || !ability.cyberOnly);
+      && (isCyber || !ability.cyberOnly) && !excluded.includes(ability.id);
     const chosen = [];
 
     const attacks = Object.values(ABILITIES).filter(ability => ability.type === 'attack' && affordable(ability));
@@ -271,10 +271,11 @@
    *   out, stronger monsters are more likely to be cyber
    * @param {string} [options.shape] force the body shape and [options.headgear] what grows on its head
    *   (with movement and cyber, that picks the species: e.g. a boss's look-alike helpers)
+   * @param {string[]} [options.excludeAbilities] never roll these (e.g. a boss's helpers don't copy its tricks)
    * @returns {object} genome (plain data, safe to JSON.stringify). `species` is an id into
    *   Forest.MonsterSpecies; `name` is the individual's scientific name, e.g. "Boingus mohawkensis majoris".
    */
-  function generate({ seed = randomSeed(), power = 1, movement, abilities, name, cyber, shape, headgear } = {}) {
+  function generate({ seed = randomSeed(), power = 1, movement, abilities, name, cyber, shape, headgear, excludeAbilities = [] } = {}) {
     const dice = createDice(seed);
     const level = Math.max(1, power);
 
@@ -287,7 +288,7 @@
     if (isCyber) addCyberImplants(cyberDice, appearance);
     const chosenAbilities = abilities
       ? abilities.filter(id => ABILITIES[id])
-      : rollAbilities(dice, chosenMovement, level, isCyber);
+      : rollAbilities(dice, chosenMovement, level, isCyber, excludeAbilities);
     const stats = rollStats(dice, appearance, chosenAbilities, level);
 
     const genome = {

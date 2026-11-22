@@ -9,7 +9,7 @@
     PIXEL_SCALE: 1 / 16,
 
     /** Width of the retro internal resolution. The height follows the window's aspect ratio. */
-    VIEW_WIDTH_PIXELS: 320,
+    VIEW_WIDTH_PIXELS: 368,
 
     /** Height of the grass surface everything stands on. */
     GROUND_Y: 0,

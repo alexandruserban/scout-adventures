@@ -39,8 +39,9 @@
     return Math.hypot(player.x - monster.x, player.y + player.height / 2 - monster.centerY);
   }
 
-  function isStandingOnGrass(player) {
-    return player && !player.isDefeated && player.y < GROUND_Y + 0.25;
+  /** True when the boy is standing on the same ground (or ledge) as the monster. */
+  function isStandingOnGrass(player, monster) {
+    return player && !player.isDefeated && Math.abs(player.y - monster.floorY) < 0.25;
   }
 
   /** Shake on the spot, blinking between two tints: the "something is coming" tell. */
@@ -73,7 +74,7 @@
       if (monster.state === CreatureState.TELEGRAPH) {
         shudder(monster, ANGRY_TINT);
         if (Math.random() < 0.3) {
-          monster.particles.burst(monster.x - monster.facing * monster.width * 0.4, GROUND_Y + 0.05, 1, '#8d6849', 0.6, 0.3);
+          monster.particles.burst(monster.x - monster.facing * monster.width * 0.4, monster.floorY + 0.05, 1, '#8d6849', 0.6, 0.3);
         }
         if (monster.stateTimer <= 0) {
           monster.state = CreatureState.CHARGE;
@@ -87,7 +88,7 @@
       const hitEdge = monster.moveHorizontally(monster.facing * 8 * monster.speed * deltaSeconds);
       monster.animate(deltaSeconds, 0.05, 'attack', 'move');
       if (Math.random() < 0.5) {
-        monster.particles.burst(monster.x - monster.facing * monster.width * 0.5, GROUND_Y + 0.05, 1, '#8d6849', 0.5, 0.3);
+        monster.particles.burst(monster.x - monster.facing * monster.width * 0.5, monster.floorY + 0.05, 1, '#8d6849', 0.5, 0.3);
       }
       if (hitEdge) {
         Sfx.creatureLand();
@@ -144,14 +145,14 @@
 
       const radius = clamp(monster.width * 1.4, 1.3, 3.2);
       monster.setSquash(1.4, 0.6);
-      monster.effects.spawnRing({ color: monster.colors.accent, x: monster.x, y: GROUND_Y + 0.15, fromScale: 0.4, toScale: radius * 2, lifetime: 0.3 });
-      monster.effects.spawnRing({ color: '#ffeaa7', x: monster.x, y: GROUND_Y + 0.15, fromScale: 0.3, toScale: radius * 1.4, lifetime: 0.4 });
-      monster.particles.burst(monster.x, GROUND_Y + 0.1, 12, '#8d6849', 1.6, 0.5);
+      monster.effects.spawnRing({ color: monster.colors.accent, x: monster.x, y: monster.floorY + 0.15, fromScale: 0.4, toScale: radius * 2, lifetime: 0.3 });
+      monster.effects.spawnRing({ color: '#ffeaa7', x: monster.x, y: monster.floorY + 0.15, fromScale: 0.3, toScale: radius * 1.4, lifetime: 0.4 });
+      monster.particles.burst(monster.x, monster.floorY + 0.1, 12, '#8d6849', 1.6, 0.5);
       monster.cameraController.shake(0.06 + monster.width * 0.04, 0.18);
       if (monster.width > 1.1) Sfx.golemLand(); else Sfx.creatureLand();
 
       const player = monster.target;
-      if (isStandingOnGrass(player) && Math.abs(player.x - monster.x) < radius) {
+      if (isStandingOnGrass(player, monster) && Math.abs(player.x - monster.x) < radius) {
         player.takeDamage(monster.damage, monster.x);
       }
       return true;
@@ -188,7 +189,7 @@
           const mouthY = monster.y + monster.height * 0.5;
           for (let i = 0; i < count; i++) {
             const targetX = player.x + (i - (count - 1) / 2) * 1.5;
-            monster.world.projectiles.launchFireball(mouthX, mouthY, targetX, GROUND_Y + 0.3, 1.0, monster.damage);
+            monster.world.projectiles.launchFireball(mouthX, mouthY, targetX, monster.floorY + 0.3, 1.0, monster.damage);
           }
           Sfx.fireballLaunch();
           monster.setSquash(0.85, 1.15);
@@ -219,7 +220,7 @@
         startX: monster.x,
         startY: monster.y,
         distanceX: (player.x - monster.x) * 2,
-        depth: Math.max(0.5, monster.y - (GROUND_Y + 0.3))
+        depth: Math.max(0.5, monster.y - (monster.floorY + 0.3))
       };
       monster.tint = NOVA_TINT;
       monster.showFrame('attack');

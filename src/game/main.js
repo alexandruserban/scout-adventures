@@ -16,6 +16,8 @@
   const TRAINING_PATROL_DISTANCE = 3.5;
   /** Mushrooms placed in a level patrol this far either side of where they appear. */
   const LEVEL_PATROL_DISTANCE = 3;
+  /** Chance that an enemy with a ledge above its spot lands on the ledge instead of the ground. */
+  const LEDGE_LANDING_CHANCE = 0.5;
 
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
 
@@ -330,11 +332,13 @@
 
   function spawnLevelEnemy(entry) {
     const difficulty = Difficulty.current;
+    // About half of them may come down on a ledge above, the rest land on the ground
+    const allowLedges = Math.random() < LEDGE_LANDING_CHANCE;
     if (entry.kind === 'mushroom') {
-      addEnemy(new Forest.EvilMushroom(world, { x: entry.x, patrolDistance: LEVEL_PATROL_DISTANCE }, onEnemyDefeated));
+      addEnemy(new Forest.EvilMushroom(world, { x: entry.x, patrolDistance: LEVEL_PATROL_DISTANCE, allowLedges }, onEnemyDefeated));
       return;
     }
-    const options = { x: entry.x, onDefeated: onEnemyDefeated };
+    const options = { x: entry.x, onDefeated: onEnemyDefeated, allowLedges };
     if (entry.kind === 'mutant') {
       // A new random monster every time, so the scrapbook keeps filling up
       const genome = Forest.MonsterForge.generate({ power: entry.power });

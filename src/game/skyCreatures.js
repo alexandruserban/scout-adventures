@@ -114,8 +114,9 @@
      * @param {{y:number, velocityX:number, velocityY:number}} [options.launch]
      *   start mid-air with this motion instead of dropping from the sky
      * @param {number} [options.sizeScale] makes it bigger (bosses)
+     * @param {boolean} [options.allowLedges] false: it always lands on the ground, never on a ledge
      */
-    constructor(world, { kind, frames, x, stats, spriteScale, fallFrame, colors, onDefeated, launch, sizeScale = 1 }) {
+    constructor(world, { kind, frames, x, stats, spriteScale, fallFrame, colors, onDefeated, launch, sizeScale = 1, allowLedges = true }) {
       this.world = world;
       this.scene = world.scene;
       this.particles = world.particles;
@@ -150,10 +151,15 @@
       this.damage = stats.damage;
       this.hpBar = this.maxHp >= 3 ? this.createHpBar() : null;
 
-      // It roams only its own stretch of ground, so it never wanders into a pit
-      const range = world.terrain ? world.terrain.walkableRange(x) : { minX: LEVEL_START_X, maxX: LEVEL_END_X };
-      this.minX = range.minX + LEVEL_MARGIN;
-      this.maxX = Math.max(this.minX, range.maxX - LEVEL_MARGIN);
+      // It lands on whatever is under it (the ground or a ledge) and roams only that stretch,
+      // so it never wanders into a pit or off a ledge
+      const surface = world.terrain
+        ? world.terrain.landingSurfaceAt(x, launch ? launch.y : Infinity, allowLedges) || world.terrain.nearestGround(x)
+        : { left: LEVEL_START_X, right: LEVEL_END_X, top: GROUND_Y };
+      /** Height of the ground or ledge it stands on. */
+      this.floorY = surface.top;
+      this.minX = surface.left + LEVEL_MARGIN;
+      this.maxX = Math.max(this.minX, surface.right - LEVEL_MARGIN);
       this.x = clamp(x, this.minX, this.maxX);
       this.facing = randomDirection();
       this.scaleX = 1;
@@ -180,7 +186,7 @@
         this.velocityY = launch.velocityY;
         this.state = CreatureState.JUMP;
       } else {
-        this.y = GROUND_Y + SPAWN_HEIGHT;
+        this.y = this.floorY + SPAWN_HEIGHT;
         this.velocityX = 0;
         this.velocityY = FALL_START_SPEED;
         this.state = CreatureState.FALLING;
@@ -201,7 +207,7 @@
     }
 
     get isOnGround() {
-      return this.y <= GROUND_Y;
+      return this.y <= this.floorY;
     }
 
     get centerY() {
@@ -305,7 +311,7 @@
 
     /** Height at which the fall ends (flying creatures stop in mid-air). */
     fallStopHeight() {
-      return GROUND_Y;
+      return this.floorY;
     }
 
     emitFallTrail() {
@@ -317,9 +323,9 @@
     /** Touchdown at the end of the fall from the sky. */
     land() {
       this.setSquash(1.35, 0.65);
-      this.particles.burst(this.x, GROUND_Y + 0.1, 8, '#8d6849', 1.2, 0.4);
+      this.particles.burst(this.x, this.floorY + 0.1, 8, '#8d6849', 1.2, 0.4);
       this.effects.spawnRing({
-        color: '#ffeaa7', x: this.x, y: GROUND_Y + 0.1,
+        color: '#ffeaa7', x: this.x, y: this.floorY + 0.1,
         fromScale: 0.3, toScale: this.width * 1.6, lifetime: 0.25
       });
       Sfx.creatureLand();
@@ -353,16 +359,16 @@
         this.velocityX *= damping;
         this.velocityY *= damping;
         this.x += this.velocityX * deltaSeconds;
-        this.y = Math.max(GROUND_Y + 0.2, this.y + this.velocityY * deltaSeconds);
+        this.y = Math.max(this.floorY + 0.2, this.y + this.velocityY * deltaSeconds);
       } else {
-        const wasAirborne = this.y > GROUND_Y;
+        const wasAirborne = this.y > this.floorY;
         this.velocityY -= GRAVITY * deltaSeconds;
         this.x += this.velocityX * deltaSeconds;
         this.y += this.velocityY * deltaSeconds;
 
-        if (this.y <= GROUND_Y) {
+        if (this.y <= this.floorY) {
           const impactSpeed = -this.velocityY;
-          this.y = GROUND_Y;
+          this.y = this.floorY;
           this.velocityY = 0;
           this.velocityX *= GROUND_FRICTION;
           if (wasAirborne) this.onTouchGround(impactSpeed);
@@ -467,11 +473,11 @@
 
     /** The shadow grows and darkens as the creature approaches the grass; it glows red while falling. */
     syncShadow() {
-      const altitude = Math.max(0, this.y - GROUND_Y);
+      const altitude = Math.max(0, this.y - this.floorY);
       const closeness = clamp(1 - altitude / SPAWN_HEIGHT, 0, 1);
       const size = this.width * (0.5 + 0.7 * closeness);
       this.shadow.scale.set(size, size * 0.3, 1);
-      this.shadow.position.set(this.x, GROUND_Y + 0.04, SHADOW_Z);
+      this.shadow.position.set(this.x, this.floorY + 0.04, SHADOW_Z);
       this.shadow.material.opacity = 0.18 + 0.35 * closeness;
       this.shadow.material.color.setHex(this.state === CreatureState.FALLING ? 0x9a0000 : 0x000000);
     }
@@ -613,7 +619,7 @@
       this.offsetX = Math.sin(this.stateTimer * 70) * 0.05;
       this.tint = Math.sin(this.stateTimer * 30) > 0 ? BEETLE_ANGRY_TINT : WHITE;
       if (Math.random() < 0.3) {
-        this.particles.burst(this.x - this.facing * this.width * 0.4, GROUND_Y + 0.05, 1, '#8d6849', 0.6, 0.3);
+        this.particles.burst(this.x - this.facing * this.width * 0.4, this.floorY + 0.05, 1, '#8d6849', 0.6, 0.3);
       }
       if (this.stateTimer <= 0) {
         this.state = CreatureState.CHARGE;
@@ -627,7 +633,7 @@
       const hitEdge = this.moveHorizontally(this.facing * BEETLE_CHARGE_SPEED * this.speed * deltaSeconds);
       this.animateLegs(deltaSeconds, BEETLE_CHARGE_FRAME_SECONDS);
       if (Math.random() < 0.5) {
-        this.particles.burst(this.x - this.facing * this.width * 0.5, GROUND_Y + 0.05, 1, '#8d6849', 0.5, 0.3);
+        this.particles.burst(this.x - this.facing * this.width * 0.5, this.floorY + 0.05, 1, '#8d6849', 0.5, 0.3);
       }
 
       if (hitEdge) {
@@ -692,7 +698,7 @@
         colors: { main: '#6a35a0', accent: '#ff9de2' }
       });
       this.contactScale = MOTH_CONTACT_SCALE;
-      this.hoverY = GROUND_Y + MOTH_HOVER_HEIGHT + randomBetween(-0.2, 0.5);
+      this.hoverY = this.floorY + MOTH_HOVER_HEIGHT + randomBetween(-0.2, 0.5);
       this.side = randomDirection();
       this.flapTimer = 0;
       this.time = Math.random() * 10;
@@ -771,7 +777,7 @@
       this.swoopStartX = this.x;
       this.swoopStartY = this.y;
       this.swoopDistanceX = (player.x - this.x) * 2;
-      this.swoopDepth = Math.max(0.5, this.y - (GROUND_Y + MOTH_DIVE_BOTTOM));
+      this.swoopDepth = Math.max(0.5, this.y - (this.floorY + MOTH_DIVE_BOTTOM));
       this.tint = MOTH_DIVE_TINT;
       this.showFrame('up');
       Sfx.swoopScreech();
@@ -932,17 +938,17 @@
     shockwave() {
       const radius = JELLY_SHOCK_RADIUS * this.sizeFactor;
       this.setSquash(1.4, 0.6);
-      this.effects.spawnRing({ color: '#ffe14d', x: this.x, y: GROUND_Y + 0.15, fromScale: 0.4, toScale: radius * 2, lifetime: 0.3 });
-      this.effects.spawnRing({ color: '#8ff0ff', x: this.x, y: GROUND_Y + 0.15, fromScale: 0.3, toScale: radius * 1.4, lifetime: 0.4 });
+      this.effects.spawnRing({ color: '#ffe14d', x: this.x, y: this.floorY + 0.15, fromScale: 0.4, toScale: radius * 2, lifetime: 0.3 });
+      this.effects.spawnRing({ color: '#8ff0ff', x: this.x, y: this.floorY + 0.15, fromScale: 0.3, toScale: radius * 1.4, lifetime: 0.4 });
       for (let i = 0; i < 6; i++) {
         const sparkX = this.x + randomBetween(-radius, radius);
-        this.particles.burst(sparkX, GROUND_Y + 0.1, 2, i % 2 ? '#ffe14d' : '#ffffff', 1.0, 0.3);
+        this.particles.burst(sparkX, this.floorY + 0.1, 2, i % 2 ? '#ffe14d' : '#ffffff', 1.0, 0.3);
       }
       Sfx.jellyZap();
       this.cameraController.shake(0.07 * this.sizeFactor, 0.15);
 
       const player = this.target;
-      const playerIsOnGrass = player && player.y < GROUND_Y + 0.25;
+      const playerIsOnGrass = player && Math.abs(player.y - this.floorY) < 0.25;
       if (playerIsOnGrass && Math.abs(player.x - this.x) < radius) {
         player.takeDamage(this.damage, this.x);
       }
@@ -1028,13 +1034,13 @@
       this.cameraController.shake(0.3, 0.5);
       this.hitStop.trigger(0.08);
       Sfx.golemLand();
-      this.effects.spawnRing({ color: '#ff5a1f', x: this.x, y: GROUND_Y + 0.2, fromScale: 0.5, toScale: GOLEM_LANDING_RADIUS * 2, lifetime: 0.4 });
-      this.effects.spawnRing({ color: '#ffb347', x: this.x, y: GROUND_Y + 0.2, fromScale: 0.4, toScale: GOLEM_LANDING_RADIUS * 1.4, lifetime: 0.55 });
-      this.particles.burst(this.x, GROUND_Y + 0.2, 18, '#ff5a1f', 2.4, 0.6);
-      this.particles.burst(this.x, GROUND_Y + 0.2, 14, '#8d6849', 2.0, 0.6);
+      this.effects.spawnRing({ color: '#ff5a1f', x: this.x, y: this.floorY + 0.2, fromScale: 0.5, toScale: GOLEM_LANDING_RADIUS * 2, lifetime: 0.4 });
+      this.effects.spawnRing({ color: '#ffb347', x: this.x, y: this.floorY + 0.2, fromScale: 0.4, toScale: GOLEM_LANDING_RADIUS * 1.4, lifetime: 0.55 });
+      this.particles.burst(this.x, this.floorY + 0.2, 18, '#ff5a1f', 2.4, 0.6);
+      this.particles.burst(this.x, this.floorY + 0.2, 14, '#8d6849', 2.0, 0.6);
 
       const player = this.target;
-      const playerIsOnGrass = player && player.y < GROUND_Y + 0.25;
+      const playerIsOnGrass = player && Math.abs(player.y - this.floorY) < 0.25;
       if (playerIsOnGrass && Math.abs(player.x - this.x) < GOLEM_LANDING_RADIUS) {
         player.takeDamage(this.damage, this.x);
       }
@@ -1066,7 +1072,7 @@
         this.stepTimer -= GOLEM_STEP_SECONDS;
         Sfx.golemStep();
         this.cameraController.shake(0.03, 0.08);
-        this.particles.burst(this.x, GROUND_Y + 0.05, 3, '#8d6849', 0.7, 0.3);
+        this.particles.burst(this.x, this.floorY + 0.05, 3, '#8d6849', 0.7, 0.3);
       }
 
       this.throwTimer -= deltaSeconds * pace;
@@ -1106,7 +1112,7 @@
       const handY = this.y + this.height * 0.95;
       for (let i = 0; i < count; i++) {
         const targetX = player.x + (i - (count - 1) / 2) * FIREBALL_SPREAD;
-        this.world.projectiles.launchFireball(this.x, handY, targetX, GROUND_Y + 0.3, FIREBALL_FLIGHT_SECONDS, this.damage);
+        this.world.projectiles.launchFireball(this.x, handY, targetX, this.floorY + 0.3, FIREBALL_FLIGHT_SECONDS, this.damage);
       }
       Sfx.fireballLaunch();
     }

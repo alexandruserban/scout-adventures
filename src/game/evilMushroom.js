@@ -87,13 +87,17 @@
       this.kind = 'mushroom';
 
       // Stays on its own stretch of ground, so it never walks into a pit
-      const range = world.terrain ? world.terrain.walkableRange(spawn.x) : { minX: -Infinity, maxX: Infinity };
-      this.minX = range.minX + EDGE_MARGIN;
-      this.maxX = Math.max(this.minX, range.maxX - EDGE_MARGIN);
+      const surface = world.terrain
+        ? world.terrain.landingSurfaceAt(spawn.x, Infinity, spawn.allowLedges !== false) || world.terrain.nearestGround(spawn.x)
+        : { left: -Infinity, right: Infinity, top: GROUND_Y };
+      /** Height of the ground or ledge it patrols. */
+      this.floorY = surface.top;
+      this.minX = surface.left + EDGE_MARGIN;
+      this.maxX = Math.max(this.minX, surface.right - EDGE_MARGIN);
       this.x = Math.min(this.maxX, Math.max(this.minX, spawn.x));
       this.spawnX = this.x;
       this.patrolDistance = spawn.patrolDistance;
-      this.y = GROUND_Y;
+      this.y = this.floorY;
       this.velocityX = 0;
       this.velocityY = 0;
       this.facing = randomDirection();
@@ -200,8 +204,8 @@
       this.x += this.velocityX * deltaSeconds;
       this.y += this.velocityY * deltaSeconds;
 
-      if (this.y <= GROUND_Y) {
-        this.y = GROUND_Y;
+      if (this.y <= this.floorY) {
+        this.y = this.floorY;
         this.velocityY = 0;
         this.velocityX *= GROUND_FRICTION;
       }
@@ -254,9 +258,9 @@
         this.showFrame(isAngryFrame ? this.sprites.aggro : this.sprites.walk[this.animationFrame]);
       }
 
-      const isOnGround = this.y === GROUND_Y;
+      const isOnGround = this.y === this.floorY;
       // No hopping up into the boy while he is jumping over it
-      const canHop = isOnGround && !player.isAboveGround;
+      const canHop = isOnGround && player.y <= this.floorY + 0.01;
       if (distanceToPlayer < HOP_RANGE && canHop && Math.random() < HOP_CHANCE_PER_FRAME) {
         this.velocityY = HOP_SPEED;
       }

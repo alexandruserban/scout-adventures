@@ -122,7 +122,7 @@
      * @param {{hp:number, damage:number, speed:number}} [options.stats] defaults to statsFor(genome)
      * @param {{y:number, velocityX:number, velocityY:number}} [options.launch] start mid-air instead of falling
      */
-    constructor(world, { genome, x, stats, onDefeated, launch, sizeScale }) {
+    constructor(world, { genome, x, stats, onDefeated, launch, sizeScale, allowLedges }) {
       const art = acquireArt(genome);
       super(world, {
         kind: 'monster',
@@ -134,7 +134,8 @@
         colors: { main: genome.appearance.palette.b, accent: genome.appearance.palette.s },
         onDefeated,
         launch,
-        sizeScale
+        sizeScale,
+        allowLedges
       });
       this.artKey = art.key;
       this.genome = genome;
@@ -156,7 +157,7 @@
       this.time = Math.random() * 10;
       /** Flyers hover on this side of the boy (1 = right, -1 = left). */
       this.side = randomDirection();
-      this.hoverY = GROUND_Y + HOVER_HEIGHT * (genome.isMini ? 0.75 : 1) + randomBetween(-0.2, 0.5);
+      this.hoverY = this.floorY + HOVER_HEIGHT * (genome.isMini ? 0.75 : 1) + randomBetween(-0.2, 0.5);
 
       this.passives.forEach(passive => passive.setup && passive.setup(this));
 
@@ -194,7 +195,7 @@
     // Arriving
     // ==========================================
     fallStopHeight() {
-      return this.isFlyer ? this.hoverY : GROUND_Y;
+      return this.isFlyer ? this.hoverY : this.floorY;
     }
 
     land() {

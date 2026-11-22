@@ -353,6 +353,14 @@
   // ==========================================
   // Shaping every level: narrower pits and high routes
   // ==========================================
+  // High route towers: steps start this high, rise about this much each, in two columns this far apart
+  const TOWER_FIRST_STEP_Y = 1.5;
+  const TOWER_STEP_RISE = 1.4;
+  const TOWER_COLUMN_OFFSET = 2.4;
+  /** Platforms closer than this across, and this in height, look stacked: the original one is dropped. */
+  const CROWDING_MARGIN = 0.4;
+  const CROWDING_HEIGHT = 1.8;
+
   /** Pits are shrunk to this fraction of their drawn width (never below MIN_PIT_WIDTH). */
   const PIT_SCALE = 0.65;
   const MIN_PIT_WIDTH = 1.6;
@@ -371,9 +379,9 @@
   }
 
   /**
-   * A route high above the level: a way up (a zig-zag tower of ledges, or a lift), then a run of
-   * ledges of all sizes and ferries gliding back and forth, ending in a stash of coins. Fall off and
-   * you drop back down into whatever is below.
+   * A route high above the level: a way up (a zig-zag tower of ledges, or a lift), then a tricky run
+   * of narrow ledges at uneven heights, ferries gliding back and forth and ledges bobbing up and down,
+   * ending in a stash of coins. Fall off and you drop back down into whatever is below.
    * @param {{x:number, height:number, length:number, climb:'tower'|'lift'}} route
    * @param {number} jumpScale how much higher and further he jumps here (low gravity)
    * @param {number} limitX the route must end before this x (the boss arena)
@@ -385,43 +393,52 @@
     const coins = [];
 
     // The way up
-    let startX;
+    let cursor;
     if (climb === 'lift') {
-      const lift = { x, y: 0.6, width: 2.4, move: { dx: 0, dy: height - 0.6, period: 7 } };
-      platforms.push(lift);
+      platforms.push({ x, y: 0.6, width: 2.4, move: { dx: 0, dy: height - 0.6, period: 7 } });
       coins.push(...coinRow(x + 0.85, height + 1.4, 2));
-      startX = x + 3.6;
+      cursor = x + 2.4;
     } else {
-      const rise = 1.4 * jumpScale;
-      let step = 0;
-      for (let y = 1.5; y < height - 0.01; y += rise, step++) {
-        platforms.push({ x: x + (step % 2) * 2.4, y, width: 2.0 });
+      // Evenly spaced steps in two columns; the top one is the start of the route
+      const steps = Math.max(1, Math.ceil((height - TOWER_FIRST_STEP_Y) / (TOWER_STEP_RISE * jumpScale)));
+      const rise = (height - TOWER_FIRST_STEP_Y) / steps;
+      for (let step = 0; step <= steps; step++) {
+        platforms.push({ x: x + (step % 2) * TOWER_COLUMN_OFFSET, y: TOWER_FIRST_STEP_Y + step * rise, width: 2.0 });
       }
-      platforms.push({ x: x + (step % 2) * 2.4, y: height, width: 2.0 });
-      startX = x + 2.4 * ((step % 2) + 1) + 0.6;
+      // Start clear of both columns, so no ledge hangs right above a step
+      cursor = x + TOWER_COLUMN_OFFSET + 2.0;
     }
 
     // The route across
-    let cursor = startX;
     let previousY = height;
-    const endX = Math.min(startX + length, limitX - 4);
-    while (cursor < endX) {
-      const isFerry = platforms.length > 2 && random() < 0.25;
-      if (isFerry) {
-        const travel = 2.6 * jumpScale;
-        platforms.push({ x: cursor, y: previousY, width: 2.0, move: { dx: travel, dy: 0, period: 3.6 } });
-        coins.push({ x: cursor + 1 + travel / 2, y: previousY + 1.2 });
-        cursor += 2.0 + travel;
+    const endX = Math.min(cursor + length, limitX - 4);
+    while (true) {
+      const gap = (1.6 + random() * 1.0) * jumpScale;
+      cursor += gap;
+      if (cursor >= endX) break;
+      // Long gaps never climb much, so every hop stays possible (with a double jump at worst)
+      const maxRise = gap > 2.2 * jumpScale ? 0.5 : 1.0;
+      const y = Math.min(previousY + maxRise, Math.max(height - 1.4, Math.min(height + 1.4, previousY + (random() - 0.5) * 2.2)));
+      const roll = random();
+      if (roll < 0.3) {
+        // Ferry: rides back and forth across the next stretch
+        const travel = 3.0 * jumpScale;
+        platforms.push({ x: cursor, y, width: 1.8, move: { dx: travel, dy: 0, period: 3.2 } });
+        coins.push({ x: cursor + 0.9 + travel / 2, y: y + 1.2 });
+        cursor += 1.8 + travel;
+      } else if (roll < 0.5) {
+        // Bobber: rises and sinks, so time the landing
+        platforms.push({ x: cursor, y: y - 0.7, width: 1.8, move: { dx: 0, dy: 1.4, period: 3.0 } });
+        coins.push({ x: cursor + 0.9, y: y + 1.6 });
+        cursor += 1.8;
       } else {
-        const width = 2.0 + random() * 1.8;
-        const y = Math.max(height - 1.2, Math.min(height + 1.2, previousY + (random() - 0.5) * 1.8));
+        const width = 1.2 + random() * 1.0;
         const ledge = { x: cursor, y, width };
         platforms.push(ledge);
-        coins.push(...coinsOn(ledge, width > 2.6 ? 3 : 2));
-        previousY = y;
+        coins.push(...coinsOn(ledge, 2));
         cursor += width;
       }
-      cursor += (1.1 + random() * 1.3) * jumpScale;
+      previousY = y;
     }
 
     // The stash at the end
@@ -431,20 +448,43 @@
     return { platforms, coins };
   }
 
-  /** Apply the shaping to a level: narrow its pits, add its high routes and lay out its coins. */
+  /** The box a platform sweeps through (moving ones cover their whole path). */
+  function platformSpan({ x, y, width, move }) {
+    const dx = move ? move.dx : 0;
+    const dy = move ? move.dy : 0;
+    return { left: x + Math.min(0, dx), right: x + width + Math.max(0, dx), bottom: y + Math.min(0, dy), top: y + Math.max(0, dy) };
+  }
+
+  /** True when two platforms would look stacked or crowded (overlapping across, close in height). */
+  function isCrowding(a, b) {
+    const spanA = platformSpan(a);
+    const spanB = platformSpan(b);
+    const overlapX = Math.min(spanA.right, spanB.right) - Math.max(spanA.left, spanB.left);
+    const gapY = Math.max(spanA.bottom, spanB.bottom) - Math.min(spanA.top, spanB.top);
+    return overlapX > -CROWDING_MARGIN && gapY < CROWDING_HEIGHT;
+  }
+
+  /**
+   * Apply the shaping to a level: narrow its pits, add its high routes (dropping any original ledge
+   * that would crowd them) and lay out its coins.
+   */
   function finishLevel(level) {
     const gravityScale = (level.physics && level.physics.gravityScale) || 1;
     const jumpScale = Math.min(1.8, 1 / gravityScale);
     const ground = narrowPits(level.ground);
-    const platforms = [...level.platforms];
+    const routePlatforms = [];
     const routeCoins = [];
     (level.routes || []).forEach(route => {
       const built = buildHighRoute(route, jumpScale, level.arena.start);
-      platforms.push(...built.platforms);
+      routePlatforms.push(...built.platforms);
       routeCoins.push(...built.coins);
     });
-    const shaped = { ...level, ground, platforms };
-    const baseCoins = level.autoCoins ? autoCoins({ ...shaped, platforms: level.platforms }, jumpScale) : level.coins;
+    const dropped = level.platforms.filter(platform => routePlatforms.some(other => isCrowding(platform, other)));
+    const kept = level.platforms.filter(platform => !dropped.includes(platform));
+    const isOnDropped = coin => dropped.some(p => coin.x >= p.x - 0.1 && coin.x <= p.x + p.width + 0.1 && coin.y > p.y && coin.y < p.y + 1.2);
+
+    const shaped = { ...level, ground, platforms: [...kept, ...routePlatforms] };
+    const baseCoins = level.autoCoins ? autoCoins({ ...shaped, platforms: kept }, jumpScale) : level.coins.filter(coin => !isOnDropped(coin));
     return Object.freeze({ ...shaped, coins: [...baseCoins, ...routeCoins] });
   }
 

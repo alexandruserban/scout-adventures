@@ -11,6 +11,9 @@
 
   /** Tops within this distance below the feet still count as "under" them (avoids jitter). */
   const SURFACE_TOLERANCE = 0.001;
+  /** Monsters only land on ledges at least this wide, and no higher than this. */
+  const LANDING_MIN_WIDTH = 2.4;
+  const LANDING_MAX_HEIGHT = 5;
 
   class Terrain {
     /**
@@ -69,6 +72,24 @@
       for (const surface of this.surfaces) {
         if (x + halfWidth <= surface.left || x - halfWidth >= surface.right) continue;
         if (surface.top > fromY + SURFACE_TOLERANCE) continue;
+        if (!best || surface.top > best.top) best = surface;
+      }
+      return best;
+    }
+
+    /**
+     * Where something dropping down at x (from below fromY) comes to rest: the highest ground or
+     * still, roomy ledge under it, up to LANDING_MAX_HEIGHT (narrow sky-route ledges are left alone).
+     * @param {boolean} [allowLedges] false: only the ground counts
+     * @returns {object|null} null over a pit
+     */
+    landingSurfaceAt(x, fromY = Infinity, allowLedges = true) {
+      let best = null;
+      for (const surface of this.surfaces) {
+        if (x < surface.left || x > surface.right || surface.top > fromY) continue;
+        const isRoomyLedge = !surface.isGround && !surface.move && !surface.isBouncy
+          && surface.width >= LANDING_MIN_WIDTH && surface.top <= LANDING_MAX_HEIGHT;
+        if (!surface.isGround && !(allowLedges && isRoomyLedge)) continue;
         if (!best || surface.top > best.top) best = surface;
       }
       return best;

@@ -1,12 +1,53 @@
 /**
- * Background music: plays soundtrack.mp3 on loop, falling back to a procedural
- * chiptune if the file can't be played.
+ * Background music: each world plays its own MIDI soundtrack (src/level-soundtrack) on loop.
+ * Without a level track it plays soundtrack.mp3, and falls back to a procedural chiptune
+ * if that file can't be played.
  */
 (function (Forest) {
   const synth = Forest.Synth;
+  const { Midi, LevelTracks } = Forest;
 
   const SOUNDTRACK_URL = 'soundtrack.mp3';
   const SOUNDTRACK_VOLUME = 0.55;
+  const LEVEL_TRACK_VOLUME = 0.6;
+
+  /** Which file in src/level-soundtrack each world (theme id) plays. */
+  const LEVEL_TRACK_BY_THEME = Object.freeze({
+    forest: '01_The_Whispering_Forest',
+    dungeon: '02_The_Sunken_Dungeon',
+    treetops: '03_The_Cloud_Canopy',
+    desert: '04_The_Scorching_Dunes',
+    ice: '05_The_Frozen_Peaks',
+    volcano: '06_The_Molten_Core',
+    candy: '07_The_Candy_Kingdom',
+    moon: '08_The_Silent_Moon',
+    neon: '09_Neon_Spell_City_SciFi',
+    crystal: '10_The_Circuit_Crystal_Caves_SciFi',
+    clockwork: '11_The_Clockwork_Sky_Citadel_SciFi',
+    atlantis: '12_Techno_Atlantis_SciFi',
+    fae: '13_The_Holo_Fae_Garden_SciFi',
+    mechKeep: '14_The_Mech_Dragon_Keep_SciFi',
+    rift: '15_The_Quantum_Rift_SciFi',
+    station: '16_The_Starwizard_Station_SciFi'
+  });
+
+  const parsedSongs = new Map();
+
+  /** The parsed MIDI song for a world, or null if it has none (or it can't be read). */
+  function songForTheme(themeId) {
+    const key = LEVEL_TRACK_BY_THEME[themeId];
+    if (!key || !LevelTracks || !LevelTracks[key]) return null;
+    if (!parsedSongs.has(key)) {
+      let song = null;
+      try {
+        song = Midi.parse(Midi.bytesFromBase64(LevelTracks[key]));
+      } catch (error) {
+        console.warn(`Level track ${key} could not be read, using the default soundtrack`, error);
+      }
+      parsedSongs.set(key, song);
+    }
+    return parsedSongs.get(key);
+  }
 
   // ==========================================
   // Fallback chiptune: driving battle theme in D minor, 150 BPM, 16th-note steps
@@ -87,6 +128,31 @@
       this.isPlaying = false;
       this.chiptuneTimer = null;
       this.soundtrack = this.createSoundtrackElement();
+      this.themeId = null;
+      this.levelLoop = null;
+    }
+
+    /** Switch to a world's soundtrack (theme id); restarts the music if it's playing. */
+    setLevel(themeId) {
+      if (themeId === this.themeId) return;
+      this.themeId = themeId;
+      if (this.isPlaying) this.start();
+    }
+
+    /** Play the current world's MIDI track. Returns false if it has none. */
+    startLevelTrack() {
+      const song = songForTheme(this.themeId);
+      if (!song || !song.notes.length) return false;
+      try {
+        this.levelLoop = new Midi.MidiLoop(synth.resume(), song, LEVEL_TRACK_VOLUME);
+        this.levelLoop.setMuted(synth.muted, LEVEL_TRACK_VOLUME);
+        this.levelLoop.start();
+        return true;
+      } catch (error) {
+        console.warn('Level track playback failed, using the default soundtrack', error);
+        this.levelLoop = null;
+        return false;
+      }
     }
 
     createSoundtrackElement() {
@@ -116,6 +182,8 @@
       this.stop();
       this.isPlaying = true;
 
+      if (this.startLevelTrack()) return;
+
       if (!this.soundtrack) {
         this.soundtrack = this.createSoundtrackElement();
       }
@@ -137,6 +205,10 @@
     }
 
     stop() {
+      if (this.levelLoop) {
+        this.levelLoop.dispose();
+        this.levelLoop = null;
+      }
       if (this.soundtrack) {
         this.soundtrack.pause();
         this.soundtrack.currentTime = 0;
@@ -151,6 +223,9 @@
     setMuted(muted) {
       if (this.soundtrack) {
         this.soundtrack.muted = muted;
+      }
+      if (this.levelLoop) {
+        this.levelLoop.setMuted(muted, LEVEL_TRACK_VOLUME);
       }
     }
 

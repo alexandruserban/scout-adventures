@@ -322,6 +322,7 @@
   function buildLevel(levelData, { hp, maxHp }) {
     clearWorld();
     level = levelData;
+    Forest.Music.setLevel(level.theme); // each world has its own soundtrack
     world.terrain = new Forest.Terrain(level);
     world.levelPhysics = { gravityScale: 1, slippery: false, windSpeed: 0, ...(level.physics || {}) };
     levelTime = 0;

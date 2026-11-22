@@ -44,7 +44,7 @@
   // --- Jumping ---
   const GRAVITY = 25.0;
   const JUMP_SPEED = 9.2;
-  const DOUBLE_JUMP_SPEED = 8.6;
+  const DOUBLE_JUMP_SPEED = 9.2;
   /** Upward speed kept when jump is released early (variable jump height). */
   const JUMP_CUT_SPEED = 3.5;
   const MAX_JUMPS = 2;

@@ -235,7 +235,7 @@
     coins.place(level.coins);
 
     pendingEnemies = level.enemies
-      .map((entry, index) => ({ ...entry, seed: level.number * 1000 + index, triggerX: entry.x - spawnDistanceFor(entry) }))
+      .map(entry => ({ ...entry, triggerX: entry.x - spawnDistanceFor(entry) }))
       .sort((a, b) => a.triggerX - b.triggerX);
     boss = null;
     arenaState = ArenaState.CLOSED;
@@ -299,7 +299,8 @@
     }
     const options = { x: entry.x, onDefeated: onEnemyDefeated };
     if (entry.kind === 'mutant') {
-      const genome = Forest.MonsterForge.generate({ power: entry.power, seed: entry.seed });
+      // A new random monster every time, so the scrapbook keeps filling up
+      const genome = Forest.MonsterForge.generate({ power: entry.power });
       addEnemy(Forest.MonsterForge.create(world, { ...options, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) }));
       return;
     }

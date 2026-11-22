@@ -6,7 +6,8 @@
  *  - platforms: one-way ledges { x: left edge, y: top, width }
  *  - coins:     { x, y } centre of each coin
  *  - enemies:   { kind, x } each drops in when the boy gets close. kind is 'mushroom', a sky creature
- *               (nutling, thornback, gloomwing, jelly) or 'mutant' (a Monster Forge monster of `power`)
+ *               (nutling, thornback, gloomwing, jelly) or 'mutant': a freshly rolled Monster Forge monster
+ *               of `power`, so every run can turn up scrapbook species not met before
  *  - arena:     the boss fight at the end. Walking in locks the camera and drops the boss
  *
  * Jump reach, for laying out gaps and ledges: a single jump peaks ~1.7 high and clears ~3.4 across,
@@ -86,19 +87,19 @@
     ],
     enemies: [
       { kind: 'mushroom', x: 16 },
-      { kind: 'mushroom', x: 34 },
+      { kind: 'mutant', x: 34, power: 1 },
       { kind: 'nutling', x: 41 },
-      { kind: 'mushroom', x: 52 },
-      { kind: 'thornback', x: 57 },
-      { kind: 'nutling', x: 72 },
+      { kind: 'mutant', x: 52, power: 1 },
+      { kind: 'mutant', x: 57, power: 2 },
+      { kind: 'mutant', x: 72, power: 2 },
       { kind: 'mushroom', x: 80 },
-      { kind: 'mushroom', x: 93 },
+      { kind: 'mutant', x: 93, power: 2 },
       { kind: 'gloomwing', x: 97 },
-      { kind: 'thornback', x: 112 },
-      { kind: 'mutant', x: 119, power: 2 },
-      { kind: 'mushroom', x: 131 },
-      { kind: 'nutling', x: 137 },
-      { kind: 'gloomwing', x: 143 }
+      { kind: 'mutant', x: 112, power: 2 },
+      { kind: 'mutant', x: 119, power: 3 },
+      { kind: 'thornback', x: 131 },
+      { kind: 'mutant', x: 137, power: 3 },
+      { kind: 'mutant', x: 143, power: 3 }
     ],
     arena: { start: 150, end: 176 },
     boss: {
@@ -173,19 +174,19 @@
       ...coinsOn(dungeonPlatforms.last2, 4)
     ],
     enemies: [
-      { kind: 'thornback', x: 15 },
+      { kind: 'mutant', x: 15, power: 3 },
       { kind: 'nutling', x: 26 },
       { kind: 'mutant', x: 39, power: 3 },
-      { kind: 'nutling', x: 49 },
+      { kind: 'mutant', x: 49, power: 3 },
       { kind: 'thornback', x: 61 },
-      { kind: 'jelly', x: 68 },
-      { kind: 'gloomwing', x: 77 },
-      { kind: 'mushroom', x: 90 },
+      { kind: 'mutant', x: 66, power: 4 },
+      { kind: 'mutant', x: 77, power: 4 },
+      { kind: 'jelly', x: 90 },
       { kind: 'mutant', x: 95, power: 4 },
-      { kind: 'thornback', x: 114 },
-      { kind: 'jelly', x: 121 },
-      { kind: 'nutling', x: 131 },
-      { kind: 'gloomwing', x: 144 },
+      { kind: 'mutant', x: 114, power: 4 },
+      { kind: 'mutant', x: 121, power: 5 },
+      { kind: 'gloomwing', x: 131 },
+      { kind: 'mutant', x: 144, power: 5 },
       { kind: 'mutant', x: 151, power: 5 }
     ],
     arena: { start: 158, end: 184 },
@@ -260,21 +261,21 @@
       ...coinsOn(treetopPlatforms.summit2, 4)
     ],
     enemies: [
-      { kind: 'nutling', x: 10 },
+      { kind: 'mutant', x: 10, power: 5 },
       { kind: 'gloomwing', x: 23 },
-      { kind: 'nutling', x: 33 },
-      { kind: 'thornback', x: 45 },
-      { kind: 'gloomwing', x: 56 },
+      { kind: 'mutant', x: 33, power: 5 },
+      { kind: 'mutant', x: 45, power: 5 },
+      { kind: 'mutant', x: 56, power: 6 },
       { kind: 'jelly', x: 69 },
-      { kind: 'mutant', x: 80, power: 5 },
-      { kind: 'nutling', x: 90 },
+      { kind: 'mutant', x: 80, power: 6 },
+      { kind: 'mutant', x: 90, power: 6 },
       { kind: 'thornback', x: 94 },
-      { kind: 'gloomwing', x: 105 },
-      { kind: 'jelly', x: 117 },
-      { kind: 'mutant', x: 129, power: 6 },
-      { kind: 'gloomwing', x: 145 },
-      { kind: 'nutling', x: 150 },
-      { kind: 'thornback', x: 157 }
+      { kind: 'mutant', x: 105, power: 6 },
+      { kind: 'mutant', x: 117, power: 7 },
+      { kind: 'mutant', x: 129, power: 7 },
+      { kind: 'nutling', x: 145 },
+      { kind: 'mutant', x: 150, power: 7 },
+      { kind: 'mutant', x: 157, power: 7 }
     ],
     arena: { start: 166, end: 192 },
     boss: {

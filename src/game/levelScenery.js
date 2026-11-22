@@ -25,6 +25,8 @@
   const FILL_DEPTH = 30;
   const EDGE_WIDTH = 0.12;
   const FLOWER_SCALE = 1.1;
+  /** Each decoration sits this much in front of the previous one (see decorationCount). */
+  const DECORATION_DEPTH_STEP = 0.0003;
 
   const THEME_STYLE = {
     forest: { fill: '#290f02', edge: '#170800', pit: '#080402' },
@@ -66,8 +68,9 @@
      * @param {THREE.Scene} scene
      * @param {object} sprites result of Forest.loadGameSprites()
      * @param {object} level an entry of Forest.Levels
+     * @param {Forest.Terrain} terrain the level's terrain (moving platforms follow it)
      */
-    constructor(scene, sprites, level) {
+    constructor(scene, sprites, level, terrain) {
       this.scene = scene;
       this.sprites = sprites;
       this.tiles = getThemeTiles(sprites);
@@ -76,11 +79,15 @@
       this.group = new THREE.Group();
       /** Textures made for this level only (shared sprite textures are not disposed). */
       this.ownTextures = [];
+      /** Meshes of moving platforms, with the terrain surface each one follows. */
+      this.movingMeshes = [];
+      /** Gives every decoration its own depth, so overlapping props never flicker. */
+      this.decorationCount = 0;
 
       const segments = [...level.ground].sort((a, b) => a[0] - b[0]);
       segments.forEach(([left, right], index) => this.addGroundSegment(left, right, index));
       if (this.style.pit) this.addPits(segments);
-      level.platforms.forEach(platform => this.addPlatform(platform));
+      level.platforms.forEach((platform, index) => this.addPlatform(platform, terrain.platforms[index]));
       scene.add(this.group);
     }
 
@@ -161,7 +168,15 @@
       }
     }
 
-    addPlatform({ x, y, width, bouncy }) {
+    /** Keep the moving platforms' meshes on their terrain surfaces. */
+    update() {
+      this.movingMeshes.forEach(({ mesh, surface, offsetY }) => {
+        mesh.position.x = surface.left + surface.width / 2;
+        mesh.position.y = surface.top + offsetY;
+      });
+    }
+
+    addPlatform({ x, y, width, bouncy }, surface) {
       const widthPixels = Math.round(width / PIXEL_SCALE);
       const painters = { forest: Art.createForestLedge, dungeon: Art.createStoneSlab, treetops: Art.createCloudPlatform, ...WorldArt.platforms };
       const paint = bouncy ? WorldArt.createMarshmallowPad : painters[this.theme];
@@ -170,7 +185,9 @@
       this.ownTextures.push(sprite.texture);
       const mesh = createSpriteMesh(sprite, PIXEL_SCALE);
       const heightUnits = canvas.height * PIXEL_SCALE;
-      this.add(mesh, x + width / 2, y + surfaceRow * PIXEL_SCALE - heightUnits / 2, PLATFORM_Z);
+      const offsetY = surfaceRow * PIXEL_SCALE - heightUnits / 2;
+      this.add(mesh, x + width / 2, y + offsetY, PLATFORM_Z);
+      if (surface && surface.move) this.movingMeshes.push({ mesh, surface, offsetY });
     }
 
     // ==========================================
@@ -179,7 +196,8 @@
     addSprite(sprite, scale, x, bottomY, z) {
       const mesh = createSpriteMesh(sprite, PIXEL_SCALE * scale);
       const height = sprite.height * PIXEL_SCALE * scale;
-      return this.add(mesh, x, bottomY + height / 2, z);
+      this.decorationCount++;
+      return this.add(mesh, x, bottomY + height / 2, z + this.decorationCount * DECORATION_DEPTH_STEP);
     }
 
     decorateForest(left, right, index) {

@@ -2,8 +2,9 @@
  * The solid parts of a level: ground segments (with pits between them) and floating platforms.
  *
  * Ground segments are solid blocks whose top is the grass line (GROUND_Y). Platforms are one-way:
- * you can jump up through them from below and land on top. Everything the boy stands on, and the
- * stretch of ground each enemy is allowed to roam, is answered from here.
+ * you can jump up through them from below and land on top. Some platforms move back and forth
+ * (ferries) or up and down (lifts), carrying whoever stands on them. Everything the boy stands on,
+ * and the stretch of ground each enemy is allowed to roam, is answered from here.
  */
 (function (Forest) {
   const { GROUND_Y } = Forest.Config;
@@ -15,15 +16,48 @@
     /**
      * @param {object} level
      * @param {Array<[number, number]>} level.ground [left, right] of every ground segment
-     * @param {Array<{x:number, y:number, width:number, bouncy?:boolean}>} [level.platforms] x is the left edge,
-     *   y the top; bouncy ones launch whoever lands on them
+     * @param {Array<{x:number, y:number, width:number, bouncy?:boolean,
+     *   move?:{dx:number, dy:number, period:number}}>} [level.platforms]
+     *   x is the left edge, y the top. Bouncy ones launch whoever lands on them; moving ones travel
+     *   (dx, dy) away from their start and back again every `period` seconds
      */
     constructor({ ground, platforms = [] }) {
       this.ground = ground
         .map(([left, right]) => ({ left, right, top: GROUND_Y, isGround: true }))
         .sort((a, b) => a.left - b.left);
-      this.platforms = platforms.map(({ x, y, width, bouncy = false }) => ({ left: x, right: x + width, top: y, isGround: false, isBouncy: bouncy }));
+      this.platforms = platforms.map(({ x, y, width, bouncy = false, move = null }) => ({
+        left: x,
+        right: x + width,
+        top: y,
+        isGround: false,
+        isBouncy: bouncy,
+        move,
+        start: { x, y },
+        width,
+        /** How far it moved during the last update (to carry riders along). */
+        deltaX: 0,
+        deltaY: 0
+      }));
+      this.movingPlatforms = this.platforms.filter(platform => platform.move);
       this.surfaces = [...this.ground, ...this.platforms];
+      this.elapsed = 0;
+    }
+
+    /** Move the ferries and lifts along their paths. */
+    update(deltaSeconds) {
+      this.elapsed += deltaSeconds;
+      this.movingPlatforms.forEach(platform => {
+        const { dx, dy, period } = platform.move;
+        // 0 at the start of the path, 1 at the far end, easing in and out at both ends
+        const travel = 0.5 - 0.5 * Math.cos((this.elapsed / period) * Math.PI * 2);
+        const left = platform.start.x + dx * travel;
+        const top = platform.start.y + dy * travel;
+        platform.deltaX = left - platform.left;
+        platform.deltaY = top - platform.top;
+        platform.left = left;
+        platform.right = left + platform.width;
+        platform.top = top;
+      });
     }
 
     /**
@@ -63,6 +97,16 @@
         }
       }
       return best;
+    }
+
+    /** The first spot at least `margin` onto solid ground at or after x (for respawning). */
+    safeGroundFrom(x, margin = 1) {
+      for (const segment of this.ground) {
+        if (segment.right - margin < x) continue;
+        if (segment.right - segment.left < margin * 2) continue;
+        return Math.max(x, segment.left + margin);
+      }
+      return x;
     }
 
     /** Where a ground creature near x may roam: the ends of its ground segment. */

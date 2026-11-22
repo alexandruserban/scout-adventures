@@ -55,6 +55,11 @@
   const FOOT_HALF_WIDTH = 0.22;
   /** Just after walking off a ledge, a jump still counts as jumping from the ground. */
   const COYOTE_SECONDS = 0.1;
+  /**
+   * Feet this far below a surface still land on it, so rounding (or a lift moving down under him)
+   * never lets him slip through the floor.
+   */
+  const GROUND_SNAP_DISTANCE = 0.08;
   /** Respawn points (after falling in a pit) are at least this far from the edge of the ground. */
   const SAFE_EDGE_DISTANCE = 1.0;
   /** Blinking, untouchable time after climbing back out of a pit. */
@@ -169,6 +174,8 @@
       this.velocityY = 0;
       this.facing = 1; // 1 = right, -1 = left
       this.isGrounded = true;
+      /** What he's standing on (so a moving platform can carry him). */
+      this.groundSurface = null;
       this.coyoteSeconds = 0;
       /** Last spot safely on solid ground, where he comes back after falling in a pit. */
       this.safeX = x;
@@ -332,6 +339,7 @@
         return;
       }
       this.x = this.safeX;
+      this.groundSurface = null;
       this.y = this.safeY;
       this.velocityX = 0;
       this.velocityY = 0;
@@ -372,6 +380,7 @@
     // Per-frame update
     // ==========================================
     update(deltaSeconds) {
+      this.rideMovingPlatform();
       const previousY = this.y;
       this.applyGravity(deltaSeconds);
       if (this.jumpBufferSeconds > 0) this.jumpBufferSeconds -= deltaSeconds;
@@ -405,7 +414,7 @@
     resolveGround(previousY) {
       const terrain = this.world.terrain;
       const surface = terrain
-        ? terrain.surfaceBelow(this.x, previousY, FOOT_HALF_WIDTH)
+        ? terrain.surfaceBelow(this.x, previousY + GROUND_SNAP_DISTANCE, FOOT_HALF_WIDTH)
         : { top: GROUND_Y, isGround: true, left: -Infinity, right: Infinity };
       if (surface && this.velocityY <= 0 && this.y <= surface.top) {
         this.touchGround(surface);
@@ -421,8 +430,17 @@
       }
     }
 
+    /** Standing on a ferry or lift: move along with it. */
+    rideMovingPlatform() {
+      const surface = this.groundSurface;
+      if (!this.isGrounded || !surface || !surface.move) return;
+      this.x += surface.deltaX;
+      this.y = surface.top;
+    }
+
     touchGround(surface) {
       const impactSpeed = -this.velocityY;
+      this.groundSurface = surface;
       this.y = surface.top;
       this.velocityY = 0;
       this.isGrounded = true;

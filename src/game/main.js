@@ -36,8 +36,10 @@
    */
   const MUSHROOM_SPAWN_DISTANCE = 14;
   const SKY_SPAWN_DISTANCE = 10;
+  /** How far back (from the furthest point reached) the boy may walk. */
+  const BACKTRACK_DISTANCE = 6;
   /** Enemies left this far behind are quietly removed. */
-  const DESPAWN_DISTANCE = 30;
+  const DESPAWN_DISTANCE = 16;
   /** The boss fight starts once the boy is this far into the arena. */
   const ARENA_TRIGGER_INSET = 1.5;
   const NEXT_LEVEL_DELAY_SECONDS = 4.5;
@@ -196,6 +198,8 @@
   let nextLevelTimer = 0;
   /** Seconds since the level started (drives the sandstorm gusts). */
   let levelTime = 0;
+  /** Furthest x the boy has reached in this level (see limitBacktracking). */
+  let furthestX = 0;
   let lavaBombTimer = 0;
   /** Restored when the level is retried after a defeat. */
   let levelStart = { points: 0, coins: 0, maxHp: 0 };
@@ -263,7 +267,7 @@
     lavaBombTimer = LAVA_BOMB_INTERVAL[1];
     effects.terrain = world.terrain;
     if (scenery) scenery.dispose();
-    scenery = new Forest.LevelScenery(stage.scene, sprites, level);
+    scenery = new Forest.LevelScenery(stage.scene, sprites, level, world.terrain);
     background.setTheme(level.theme);
     stage.scene.background = new THREE.Color(background.topColor);
     ambientLeaves.setColors(THEME_LEAF_COLORS[level.theme]);
@@ -278,6 +282,7 @@
     nextLevelTimer = 0;
 
     player.reset(level.playerStartX, maxHp);
+    furthestX = level.playerStartX;
     player.hp = Math.min(hp, maxHp);
     player.setBounds(0, level.arena.end);
     cameraController.setBounds(0, level.arena.end);
@@ -319,6 +324,18 @@
 
   function spawnDistanceFor(entry) {
     return entry.kind === 'mushroom' ? MUSHROOM_SPAWN_DISTANCE : SKY_SPAWN_DISTANCE;
+  }
+
+  /**
+   * Like the classic side-scrollers, the boy can only walk back a few paces from the furthest point
+   * he has reached (the arena locks its own bounds).
+   */
+  function limitBacktracking() {
+    if (arenaState !== ArenaState.CLOSED) return;
+    furthestX = Math.max(furthestX, player.x);
+    const leftLimit = Math.max(0, furthestX - BACKTRACK_DISTANCE);
+    player.setBounds(leftLimit, level.arena.end);
+    cameraController.setBounds(leftLimit - 1, level.arena.end);
   }
 
   /** Drop in every enemy the boy has come close enough to. */
@@ -497,6 +514,11 @@
   function checkPitFall() {
     if (player.isDefeated || player.y >= PIT_Y) return;
     player.fallIntoPit();
+    // His last safe spot may be behind the backtracking limit: use the first solid ground ahead of it
+    if (!player.isDefeated && player.x < player.minX + 0.5) {
+      player.x = world.terrain.safeGroundFrom(player.minX + 0.5);
+      player.y = Config.GROUND_Y;
+    }
     cameraController.snapTo(player);
   }
 
@@ -688,7 +710,8 @@
   function runFrame(timestamp) {
     requestAnimationFrame(runFrame);
 
-    const realDeltaSeconds = Math.min((timestamp - lastTimestamp) / 1000, Config.MAX_FRAME_SECONDS);
+    // Browsers can hand the first frame a timestamp slightly before the start clock: never step backwards
+    const realDeltaSeconds = Math.max(0, Math.min((timestamp - lastTimestamp) / 1000, Config.MAX_FRAME_SECONDS));
     lastTimestamp = timestamp;
     if (isPaused) {
       stage.render();
@@ -697,8 +720,11 @@
     // Gameplay freezes during hit-stop, but the camera keeps shaking
     const gameDeltaSeconds = hitStop.consume(realDeltaSeconds);
 
+    world.terrain.update(gameDeltaSeconds);
+    scenery.update();
     player.update(gameDeltaSeconds);
     checkPitFall();
+    if (!isTraining) limitBacktracking();
     if (!player.isDefeated) {
       if (isTraining) waves.update(gameDeltaSeconds);
       else spawnApproachingEnemies();
@@ -803,6 +829,11 @@
      */
     goToLevel(number) {
       startLevel(Math.max(0, Math.min(Levels.list.length - 1, number - 1)), player.maxHp, player.maxHp);
+    },
+
+    /** The current level's ground and platforms (read-only, for the console and tests). */
+    get terrain() {
+      return world.terrain;
     },
 
     /** The current level's data (read-only). */

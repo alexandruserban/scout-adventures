@@ -6,6 +6,8 @@
   const LOOK_AHEAD = 1.3;
   /** Camera height above the player's feet while jumping. */
   const HEIGHT_ABOVE_PLAYER = 2.0;
+  /** Above this height the camera follows him upwards even past its usual height cap. */
+  const CLIMB_FOLLOW_HEIGHT = 1.8;
   const FOLLOW_SPEED_X = 4.5;
   const FOLLOW_SPEED_Y = 4.0;
   /** How far the view may go past each end of the level. */
@@ -77,12 +79,15 @@
     /** @param {{x:number, y:number, facing:number}} target */
     update(target, deltaSeconds) {
       const targetX = target.x + target.facing * LOOK_AHEAD;
-      const targetY = Math.min(this.maxY, Math.max(CAMERA_REST_Y, target.y + HEIGHT_ABOVE_PLAYER));
+      // The height cap (which keeps the soil behind the touch buttons) rises once he climbs high,
+      // so the view follows him up and the ground scrolls away below
+      const ceiling = this.maxY + Math.max(0, target.y - CLIMB_FOLLOW_HEIGHT);
+      const targetY = Math.min(ceiling, Math.max(CAMERA_REST_Y, target.y + HEIGHT_ABOVE_PLAYER));
 
       this.focusX += (targetX - this.focusX) * FOLLOW_SPEED_X * deltaSeconds;
       this.focusY += (targetY - this.focusY) * FOLLOW_SPEED_Y * deltaSeconds;
       this.focusX = clamp(this.focusX, this.minX, this.maxX);
-      this.focusY = Math.min(this.focusY, this.maxY);
+      this.focusY = Math.min(this.focusY, ceiling);
 
       const shake = this.nextShakeOffset(deltaSeconds);
       this.camera.position.x = this.focusX + shake.x;

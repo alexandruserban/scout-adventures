@@ -448,7 +448,7 @@
           follow: 0.75, bottomY: -1.4
         },
         { canvas: paintGears({ seed: 19, height: 96, count: 7, radius: [8, 18], colors: { body: '#c8913a', dark: '#7a4f1d', light: '#f2c96b' } }), follow: 0.55, bottomY: -2.0 },
-        { canvas: Painters.paintMist(), follow: 0.45, bottomY: -1.0, opacity: 0.3, drift: -12 }
+        { canvas: Painters.paintMist(), follow: 0.45, bottomY: -1.0, opacity: 0.3, windDrift: 7 }
       ],
       motes: { count: 22, colors: ['#ffd25e', '#ffffff'], rise: 0.3 }
     },

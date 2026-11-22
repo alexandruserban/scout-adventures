@@ -24,7 +24,8 @@
    * Layer options:
    *   follow  how much the layer moves with the camera (1 = infinitely far, 0 = part of the world)
    *   bottomY world height of the layer's bottom edge when the camera is at rest
-   *   drift   constant scroll in pixels per second (wind)
+   *   drift   constant scroll in pixels per second
+   *   windDrift scroll in pixels per second for each unit of the level's wind (see setWind)
    *   breathe opacity slowly pulses (light shafts); flicker: it flickers quickly (torchlight)
    */
   const THEMES = {
@@ -83,7 +84,7 @@
         { canvas: World.paintMesas(), follow: 0.92, bottomY: -1.0 },
         { canvas: World.paintFarDunes(), follow: 0.82, bottomY: -2.0 },
         { canvas: World.paintPyramids(), follow: 0.75, bottomY: -0.6 },
-        { canvas: Painters.paintMist(), follow: 0.65, bottomY: -0.4, opacity: 0.25, drift: -14 },
+        { canvas: Painters.paintMist(), follow: 0.65, bottomY: -0.4, opacity: 0.25, windDrift: 8 },
         { canvas: World.paintCactusRow(), follow: 0.5, bottomY: -1.2 },
         { canvas: World.paintNearDunes(), follow: 0.35, bottomY: -2.2 }
       ],
@@ -159,11 +160,18 @@
       this.cameraRestY = cameraRestY;
       this.planeWidth = viewWidthUnits + SHAKE_MARGIN;
       this.elapsed = 0;
+      /** The level's wind (negative blows left), which pushes windDrift layers along. */
+      this.wind = 0;
       /** theme name -> painted layer list, so revisiting a level doesn't repaint it. */
       this.paintedLayers = {};
       this.meshes = [];
       this.themeName = null;
       this.setTheme(theme);
+    }
+
+    /** Blowing haze follows the wind: `speed` in world units per second, negative = to the left. */
+    setWind(speed) {
+      this.wind = speed;
     }
 
     /** Colour behind everything (the scene's clear colour) for the current theme. */
@@ -224,7 +232,7 @@
       return this.addMesh(mesh);
     }
 
-    addLayer({ canvas, follow, bottomY, renderOrder, opacity = 1, additive = false, drift = 0, breathe = false, flicker = false }) {
+    addLayer({ canvas, follow, bottomY, renderOrder, opacity = 1, additive = false, drift = 0, windDrift = 0, breathe = false, flicker = false }) {
       const repeatX = this.planeWidth / this.pixelScale / Painters.LAYER_WIDTH;
       const texture = createPixelTexture(canvas, { repeatX, exactColors: true });
       const material = new THREE.MeshBasicMaterial({
@@ -245,6 +253,7 @@
         baseY: bottomY + heightUnits / 2,
         z: renderOrder,
         drift,
+        windDrift,
         driftedPixels: 0,
         baseOpacity: opacity,
         breathe,
@@ -294,7 +303,7 @@
       if (this.sun) this.sun.position.set(cameraX - this.viewWidthUnits * 0.04, this.snapToPixel(6.0 + cameraRise * 0.95), SUN_DEPTH);
 
       this.layers.forEach(layer => {
-        layer.driftedPixels += layer.drift * deltaSeconds;
+        layer.driftedPixels += (layer.drift + layer.windDrift * this.wind) * deltaSeconds;
         // Scroll the texture (in whole pixels) instead of moving the mesh, so it tiles forever
         const scrollPixels = Math.round((cameraX * (1 - layer.follow)) / this.pixelScale + layer.driftedPixels);
         layer.texture.offset.x = scrollPixels / Painters.LAYER_WIDTH;

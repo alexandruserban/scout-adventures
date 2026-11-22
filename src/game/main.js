@@ -88,10 +88,13 @@
   const RAMP_PER_LEVEL = 0.16;
 
   // --- Level hazards ---
-  /** Sandstorm: a light headwind, with a strong gust every WIND_GUST_PERIOD seconds. */
-  const WIND_BASE_SPEED = -0.3;
-  const WIND_GUST_SPEED = -1.7;
-  const WIND_GUST_PERIOD = 7;
+  /**
+   * Sandstorm (and steam gusts): the wind swings back and forth. Over every WIND_GUST_PERIOD seconds
+   * it builds to a strong gust one way, dies down to a calm, then gusts the other way.
+   */
+  const WIND_BASE_SPEED = 0.3;
+  const WIND_GUST_SPEED = 1.7;
+  const WIND_GUST_PERIOD = 9;
   /** Lava bombs fall from the sky this often (seconds, random in the range). */
   const LAVA_BOMB_INTERVAL = [1.8, 3.2];
   const LAVA_BOMB_FLIGHT_SECONDS = 1.5;
@@ -254,6 +257,8 @@
   let nextLevelTimer = 0;
   /** Seconds since the level started (drives the sandstorm gusts). */
   let levelTime = 0;
+  /** Which way the first gust of a windy level blows (-1 = towards the left). */
+  let windDirection = -1;
   let lavaBombTimer = 0;
   /** Restored when the level is retried after a defeat. */
   let levelStart = { points: 0, coins: 0, coinsOffered: 0, maxHp: 0 };
@@ -320,6 +325,8 @@
     world.terrain = new Forest.Terrain(level);
     world.levelPhysics = { gravityScale: 1, slippery: false, windSpeed: 0, ...(level.physics || {}) };
     levelTime = 0;
+    // Each windy level's first gust comes from a random side
+    windDirection = Math.random() < 0.5 ? -1 : 1;
     lavaBombTimer = LAVA_BOMB_INTERVAL[1];
     effects.terrain = world.terrain;
     if (scenery) scenery.dispose();
@@ -328,6 +335,7 @@
     stage.scene.background = new THREE.Color(background.topColor);
     ambientLeaves.setColors(THEME_LEAF_COLORS[level.theme]);
     ambientLeaves.setWind(0);
+    background.setWind(0);
     coins.place(level.coins);
 
     pendingEnemies = level.enemies
@@ -672,9 +680,11 @@
   function updateHazards(deltaSeconds) {
     levelTime += deltaSeconds;
     if (level.hazard === 'wind') {
-      const gust = Math.max(0, Math.sin((levelTime / WIND_GUST_PERIOD) * Math.PI * 2));
-      world.levelPhysics.windSpeed = player.isDefeated ? 0 : WIND_BASE_SPEED + WIND_GUST_SPEED * gust * gust;
+      // -1..1: which way it blows and how hard, easing through a calm each time it turns round
+      const swing = windDirection * Math.sin((levelTime / WIND_GUST_PERIOD) * Math.PI * 2);
+      world.levelPhysics.windSpeed = player.isDefeated ? 0 : WIND_BASE_SPEED * swing + WIND_GUST_SPEED * swing * Math.abs(swing);
       ambientLeaves.setWind(world.levelPhysics.windSpeed);
+      background.setWind(world.levelPhysics.windSpeed);
     } else if (level.hazard === 'lavaBombs' && arenaState !== ArenaState.CLEARED && !player.isDefeated) {
       lavaBombTimer -= deltaSeconds;
       if (lavaBombTimer <= 0) {

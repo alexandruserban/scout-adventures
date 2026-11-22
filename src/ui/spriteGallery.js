@@ -85,11 +85,11 @@
   }
 
   /**
-   * A fresh batch of random monsters every time; click one to summon it into the forest,
-   * or reroll the whole batch. (Forest.MonsterForge loads after this script, so it's looked up lazily.)
+   * A fresh batch of random monsters every time (display only - not clickable), with a button
+   * to reroll the whole batch. (Forest.MonsterForge loads after this script, so it's looked up lazily.)
    */
   function addMonsterForgeSection() {
-    const section = addSection('MONSTER FORGE (RANDOM MUTANTS) - CLICK ONE TO SUMMON IT', []);
+    const section = addSection('MONSTER FORGE (RANDOM MUTANTS)', []);
     const row = section.querySelector('.sprite-row');
 
     const rerollButton = createElement('button', 'pixel-btn', '🎲 REROLL MONSTERS');
@@ -106,8 +106,7 @@
     MONSTER_POWERS.forEach(power => {
       const genome = Forge.generate({ power });
       const box = createElement('div', 'sprite-box');
-      box.style.cursor = 'pointer';
-      box.title = `${Forge.describe(genome)}\nSeed ${genome.seed}, power ${power}. Click to summon.`;
+      box.title = `${Forge.describe(genome)}\nSeed ${genome.seed}, power ${power}.`;
 
       const frames = createElement('div', 'monster-frames');
       frames.style.cssText = 'display:flex; gap:6px; align-items:flex-end;';
@@ -125,11 +124,6 @@
       box.appendChild(createElement('div', 'sprite-caption', `HP ${hp} · DMG ${damage} · SPD ${speed.toFixed(2)}`));
       box.appendChild(createElement('div', 'sprite-caption', abilities));
 
-      box.addEventListener('click', () => {
-        if (!Forest.Game) return;
-        Forest.Game.summonMonster(genome);
-        close();
-      });
       row.appendChild(box);
     });
   }

@@ -1225,15 +1225,25 @@
       this.particles = world.particles;
       this.effects = world.effects;
       this.sprite = world.sprites.fireball;
+      this.variants = world.sprites.fireballVariants || [];
       this.fireballs = [];
     }
 
     /**
      * Lob a fireball in an arc so it comes down on (toX, toY) after `flightSeconds`.
-     * @param {{tint?:number, trail?:string[]}} [style] recolour it (e.g. a cyber monster's rockets)
+     * @param {{tint?:number, trail?:string[], randomColor?:boolean}} [style] recolour it (e.g. a cyber
+     *   monster's rockets); `randomColor` picks one of the coloured fireball variants at random
      */
-    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS } = {}) {
-      const mesh = createSpriteMesh(this.sprite, PIXEL_SCALE * 1.2);
+    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS, randomColor = false } = {}) {
+      let sprite = this.sprite;
+      let burstColors = ['#ffb347', '#ff5a1f'];
+      if (randomColor && this.variants.length) {
+        const variant = this.variants[Math.floor(Math.random() * this.variants.length)];
+        sprite = variant.sprite;
+        trail = variant.colors;
+        burstColors = [variant.colors[1], variant.colors[0]];
+      }
+      const mesh = createSpriteMesh(sprite, PIXEL_SCALE * 1.2);
       if (tint !== undefined) mesh.material.color.setHex(tint);
       mesh.position.set(fromX, fromY, FIREBALL_Z);
       this.scene.add(mesh);
@@ -1244,7 +1254,8 @@
         velocityX: (toX - fromX) / flightSeconds,
         velocityY: (toY - fromY + 0.5 * FIREBALL_GRAVITY * flightSeconds * flightSeconds) / flightSeconds,
         damage,
-        trail
+        trail,
+        burstColors
       });
     }
 
@@ -1295,8 +1306,9 @@
     }
 
     burst(fireball) {
-      this.effects.spawnDisc({ color: '#ffb347', x: fireball.x, y: fireball.y, fromScale: 0.3, toScale: 1.1, lifetime: 0.18 });
-      this.particles.burst(fireball.x, fireball.y, 8, '#ff5a1f', 1.2, 0.4);
+      const [discColor, sparkColor] = fireball.burstColors;
+      this.effects.spawnDisc({ color: discColor, x: fireball.x, y: fireball.y, fromScale: 0.3, toScale: 1.1, lifetime: 0.18 });
+      this.particles.burst(fireball.x, fireball.y, 8, sparkColor, 1.2, 0.4);
       Sfx.fireballImpact();
     }
 

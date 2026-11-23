@@ -189,7 +189,7 @@
           const mouthY = monster.y + monster.height * 0.5;
           for (let i = 0; i < count; i++) {
             const targetX = player.x + (i - (count - 1) / 2) * 1.5;
-            monster.world.projectiles.launchFireball(mouthX, mouthY, targetX, monster.floorY + 0.3, 1.0, monster.damage);
+            monster.world.projectiles.launchFireball(mouthX, mouthY, targetX, monster.floorY + 0.3, 1.0, monster.damage, { randomColor: true });
           }
           Sfx.fireballLaunch();
           monster.setSquash(0.85, 1.15);

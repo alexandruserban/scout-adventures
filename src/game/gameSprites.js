@@ -52,6 +52,11 @@
         Object.entries(SkyArt.creatures).map(([kind, art]) => [kind, loadCreatureFrames(art)])
       ),
       fireball: createSprite(asciiToCanvas(SkyArt.fireball.rows, 1, SkyArt.fireball.palette)),
+      /** The same fireball in several colours; `colors` (rim -> core) drives its trail and burst. */
+      fireballVariants: SkyArt.fireballColorPalettes.map(palette => ({
+        sprite: createSprite(asciiToCanvas(SkyArt.fireball.rows, 1, palette)),
+        colors: [palette.l, palette.L, palette.y]
+      })),
       oakTree: createSprite(Environment.createOakTree()),
       grassTile: createSprite(Environment.createGrassTile()),
       flowerTuft: createSprite(Environment.createFlowerTuft())

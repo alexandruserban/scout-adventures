@@ -332,9 +332,20 @@
     ])
   };
 
+  /** Recoloured fireballs for mutant spit: same shape, dark rim -> bright core. */
+  const fireballColorPalettes = [
+    { r: '#b3200b', l: '#ff5a1f', L: '#ffb347', y: '#fff3a0' }, // fire
+    { r: '#0b3fb3', l: '#1f8cff', L: '#47d4ff', y: '#d0f6ff' }, // ice blue
+    { r: '#127a12', l: '#2fd12f', L: '#8cff47', y: '#eaffb0' }, // toxic green
+    { r: '#5a0bb3', l: '#9a3fff', L: '#c98cff', y: '#f0dcff' }, // violet
+    { r: '#a80b6e', l: '#ff2fa8', L: '#ff8cd6', y: '#ffe0f4' }, // hot pink
+    { r: '#0b7a73', l: '#1fd1c3', L: '#7affef', y: '#e0fffb' }  // teal
+  ];
+
   Forest.SkyCreatureSprites = Object.freeze({
     /** In the order the waves introduce them, weakest first. */
     creatures: { nutling, thornback, gloomwing, jelly, golem },
+    fireballColorPalettes,
     fireball
   });
 })(window.Forest);

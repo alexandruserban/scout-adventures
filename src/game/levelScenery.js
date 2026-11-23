@@ -27,6 +27,8 @@
   const FLOWER_SCALE = 1.1;
   /** Each decoration sits this much in front of the previous one (see decorationCount). */
   const DECORATION_DEPTH_STEP = 0.0003;
+  /** About how long each brazier flame frame shows. */
+  const BRAZIER_FRAME_SECONDS = 0.12;
 
   const THEME_STYLE = {
     forest: { fill: '#290f02', edge: '#170800', pit: '#080402' },
@@ -47,7 +49,7 @@
         dungeon: createSprite(Art.createDungeonFloorTile()),
         treetops: createSprite(Art.createBranchTile()),
         leafClump: createSprite(Art.createLeafClump()),
-        brazier: createSprite(Art.createBrazier()),
+        brazier: Array.from({ length: Art.BRAZIER_FRAME_COUNT }, (_, frame) => createSprite(Art.createBrazier(frame))),
         bones: createSprite(Art.createBones())
       };
       Object.entries(WorldArt.tiles).forEach(([theme, paint]) => { themeTiles[theme] = createSprite(paint()); });
@@ -81,6 +83,8 @@
       this.ownTextures = [];
       /** Meshes of moving platforms, with the terrain surface each one follows. */
       this.movingMeshes = [];
+      /** Brazier meshes whose flames flicker, each on its own clock. */
+      this.braziers = [];
       /** Gives every decoration its own depth, so overlapping props never flicker. */
       this.decorationCount = 0;
 
@@ -168,11 +172,20 @@
       }
     }
 
-    /** Keep the moving platforms' meshes on their terrain surfaces. */
-    update() {
+    /** Keep the moving platforms' meshes on their terrain surfaces and flicker the brazier flames. */
+    update(deltaSeconds = 0) {
       this.movingMeshes.forEach(({ mesh, surface, offsetY }) => {
         mesh.position.x = surface.left + surface.width / 2;
         mesh.position.y = surface.top + offsetY;
+      });
+      const frames = this.tiles.brazier;
+      this.braziers.forEach(brazier => {
+        brazier.timer -= deltaSeconds;
+        if (brazier.timer > 0) return;
+        // Random hold time and never the same frame twice, so the fire looks alive, not looped
+        brazier.timer = BRAZIER_FRAME_SECONDS * (0.7 + Math.random() * 0.6);
+        brazier.frame = (brazier.frame + 1 + Math.floor(Math.random() * (frames.length - 1))) % frames.length;
+        brazier.mesh.material.map = frames[brazier.frame].texture;
       });
     }
 
@@ -214,7 +227,9 @@
 
     decorateDungeon(left, right, index) {
       for (let x = left + 2.5; x < right - 2; x += 12 + hash(index * 17 + x) * 4) {
-        this.addSprite(this.tiles.brazier, 1.4, x, GROUND_Y - 0.05, DECOR_Z);
+        const frame = Math.floor(hash(x * 13) * this.tiles.brazier.length);
+        const mesh = this.addSprite(this.tiles.brazier[frame], 1.4, x, GROUND_Y - 0.05, DECOR_Z);
+        this.braziers.push({ mesh, frame, timer: hash(x * 19) * BRAZIER_FRAME_SECONDS });
       }
       for (let x = left + 1.5; x < right - 1; x += 7 + hash(x * 5) * 6) {
         if (hash(x * 11) < 0.5) this.addSprite(this.tiles.bones, 1, x, GROUND_Y - 0.05, FRONT_DECOR_Z);

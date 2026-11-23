@@ -915,7 +915,7 @@
     const gameDeltaSeconds = hitStop.consume(realDeltaSeconds);
 
     world.terrain.update(gameDeltaSeconds);
-    scenery.update();
+    scenery.update(gameDeltaSeconds);
     player.update(gameDeltaSeconds);
     checkPitFall();
     if (!player.isDefeated) {

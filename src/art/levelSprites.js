@@ -225,15 +225,46 @@
     return canvas;
   }
 
-  /** Iron brazier with a fire in it (14x18). */
-  function createBrazier() {
-    return asciiToCanvas([
+  /** Flickering flame frames above the brazier bowl (6 rows each, 14 wide). */
+  const BRAZIER_FLAMES = [
+    [
       '....y..f......',
       '...fyf.ff.....',
       '..fyYyffyf....',
       '..fYWYyfyyf...',
       '.ffyYYyyYyf...',
-      '.frryyyyyrrf..',
+      '.frryyyyyrrf..'
+    ],
+    [
+      '.......y..f...',
+      '..f..fyf.f....',
+      '..ffyYyfyf....',
+      '.fyYWYyyyf....',
+      '.fyYYYyYyyf...',
+      '.frryyyyyrrf..'
+    ],
+    [
+      '..f....y......',
+      '...f..yfy.f...',
+      '..fyf.yYyff...',
+      '..fyYWYYyyf...',
+      '.ffyYYYyyyff..',
+      '.frryyyyyrrf..'
+    ],
+    [
+      '......f..y....',
+      '...y.fyf.f....',
+      '..fyfyYyfyf...',
+      '.ffyYWYyyYf...',
+      '.fyyYYyyYyf...',
+      '.frryyyyyrrf..'
+    ]
+  ];
+
+  /** Iron brazier with a fire in it (14x18); `frame` picks one of BRAZIER_FLAMES. */
+  function createBrazier(frame = 0) {
+    return asciiToCanvas([
+      ...BRAZIER_FLAMES[frame % BRAZIER_FLAMES.length],
       'IIIIIIIIIIIIII',
       '.iIIIIIIIIIIi.',
       '..iIIIIIIIIi..',
@@ -272,6 +303,7 @@
     createCloudPlatform,
     createCoin,
     createLeafClump,
+    BRAZIER_FRAME_COUNT: BRAZIER_FLAMES.length,
     createBrazier,
     createBones
   };

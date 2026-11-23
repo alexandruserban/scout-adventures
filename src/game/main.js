@@ -41,7 +41,10 @@
     thornback: ['charge'],
     gloomwing: ['swoop'],
     jelly: ['leap', 'splitter'], // jumps down with a shockwave, splits in two
-    nutling: ['leap']
+    nutling: ['leap'],
+    spider: ['leap'],
+    crawler: ['spit', 'charge'],
+    octorocker: ['spit', 'leap']
   };
   /**
    * The boy's jump, as in player.js: a double jump peaks this high and he drifts this fast in the
@@ -115,7 +118,13 @@
     fae: ['#ff9cf0', '#b4ffef', '#9af08f'],
     mechKeep: ['#6b5b58', '#ff6a1f', '#8a92a3'],
     rift: ['#00f0ff', '#c86bff'],
-    station: []
+    station: [],
+    noir: ['#ffffff', '#9a9a9a'],
+    mothership: [],
+    rainbow: ['#ff4d4d', '#ffe14d', '#5fe07a', '#4fb6ff', '#9a6bff'],
+    rising: [],
+    kitchen: ['#f4c27a', '#ffffff'],
+    concert: ['#ff4fd8', '#4fe8ff', '#ffe14d', '#7dff6a']
   };
 
   const ArenaState = Object.freeze({
@@ -334,6 +343,8 @@
     scenery = new Forest.LevelScenery(stage.scene, sprites, level, world.terrain);
     background.setTheme(level.theme);
     stage.scene.background = new THREE.Color(background.topColor);
+    // The silent film turns the whole picture black and white, with flickering old-film grain
+    document.body.classList.toggle('screen-noir', level.screen === 'noir');
     ambientLeaves.setColors(THEME_LEAF_COLORS[level.theme]);
     ambientLeaves.setWind(0);
     background.setWind(0);
@@ -692,7 +703,7 @@
         lavaBombTimer = Forest.MathUtils.randomBetween(...LAVA_BOMB_INTERVAL);
         const fromX = player.x + Forest.MathUtils.randomBetween(-3, 9);
         const targetX = player.x + Forest.MathUtils.randomBetween(-2.5, 4);
-        world.projectiles.launchFireball(fromX, stage.camera.position.y + stage.viewHeightUnits / 2 + 1, targetX, Config.GROUND_Y + 0.3, LAVA_BOMB_FLIGHT_SECONDS, 1);
+        world.projectiles.launchFireball(fromX, stage.camera.position.y + stage.viewHeightUnits / 2 + 1, targetX, Config.GROUND_Y + 0.3, LAVA_BOMB_FLIGHT_SECONDS, 1, level.bombStyle);
         Sfx.skyWhistle();
       }
     }
@@ -1017,7 +1028,7 @@
     },
 
     /**
-     * Jump straight to a level of this adventure (1-16), e.g. from the console: Forest.Game.goToLevel(3)
+     * Jump straight to a level of this adventure (1-22), e.g. from the console: Forest.Game.goToLevel(3)
      * @param {number} number
      */
     goToLevel(number) {

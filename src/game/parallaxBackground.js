@@ -27,6 +27,8 @@
    *   drift   constant scroll in pixels per second
    *   windDrift scroll in pixels per second for each unit of the level's wind (see setWind)
    *   breathe opacity slowly pulses (light shafts); flicker: it flickers quickly (torchlight)
+   *   rise    scrolls upwards forever, in pixels per second (the layer must wrap vertically)
+   *   pulse   { bpm, pixels, phase? } bounces up and down to a beat (the band, the crowd)
    */
   const THEMES = {
     forest: {
@@ -141,7 +143,9 @@
       motes: { count: 20, colors: ['#ffffff', '#cfe3ff'], rise: 0 }
     },
     // The future-meets-fantasy worlds (see futurePainters.js)
-    ...Forest.FutureThemes
+    ...Forest.FutureThemes,
+    // The strange worlds (see strangePainters.js)
+    ...Forest.StrangeThemes
   };
 
   class ParallaxBackground {
@@ -232,9 +236,10 @@
       return this.addMesh(mesh);
     }
 
-    addLayer({ canvas, follow, bottomY, renderOrder, opacity = 1, additive = false, drift = 0, windDrift = 0, breathe = false, flicker = false }) {
+    addLayer({ canvas, follow, bottomY, renderOrder, opacity = 1, additive = false, drift = 0, windDrift = 0, breathe = false, flicker = false, rise = 0, pulse = null }) {
       const repeatX = this.planeWidth / this.pixelScale / Painters.LAYER_WIDTH;
       const texture = createPixelTexture(canvas, { repeatX, exactColors: true });
+      if (rise) texture.wrapT = THREE.RepeatWrapping;
       const material = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
@@ -257,7 +262,11 @@
         driftedPixels: 0,
         baseOpacity: opacity,
         breathe,
-        flicker
+        flicker,
+        rise,
+        risenPixels: 0,
+        heightPixels: canvas.height,
+        pulse
       });
     }
 
@@ -307,7 +316,18 @@
         // Scroll the texture (in whole pixels) instead of moving the mesh, so it tiles forever
         const scrollPixels = Math.round((cameraX * (1 - layer.follow)) / this.pixelScale + layer.driftedPixels);
         layer.texture.offset.x = scrollPixels / Painters.LAYER_WIDTH;
-        layer.mesh.position.set(cameraX, layer.baseY + cameraRise * layer.follow, layer.z);
+        if (layer.rise) {
+          // Moving the texture down the plane makes everything on it float up
+          layer.risenPixels = (layer.risenPixels + layer.rise * deltaSeconds) % layer.heightPixels;
+          layer.texture.offset.y = -Math.round(layer.risenPixels) / layer.heightPixels;
+        }
+        let bounceY = 0;
+        if (layer.pulse) {
+          const { bpm, pixels, phase = 0 } = layer.pulse;
+          const beat = Math.abs(Math.sin(Math.PI * ((this.elapsed * bpm) / 60 + phase)));
+          bounceY = Math.round(beat * pixels) * this.pixelScale;
+        }
+        layer.mesh.position.set(cameraX, layer.baseY + cameraRise * layer.follow + bounceY, layer.z);
 
         if (layer.breathe) {
           layer.mesh.material.opacity = layer.baseOpacity * (0.75 + 0.25 * Math.sin(this.elapsed * 0.6));

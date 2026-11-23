@@ -28,7 +28,13 @@
     fae: '13_The_Holo_Fae_Garden_SciFi',
     mechKeep: '14_The_Mech_Dragon_Keep_SciFi',
     rift: '15_The_Quantum_Rift_SciFi',
-    station: '16_The_Starwizard_Station_SciFi'
+    station: '16_The_Starwizard_Station_SciFi',
+    noir: '17_The_Silent_Film',
+    mothership: '18_The_Alien_Mothership',
+    rainbow: '19_The_Rainbow_Of_Webs',
+    rising: '20_The_World_That_Falls_Up',
+    kitchen: '21_The_Giants_Kitchen',
+    concert: '22_The_Octopus_Rock_Concert'
   });
 
   const parsedSongs = new Map();

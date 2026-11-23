@@ -1,10 +1,12 @@
 /**
- * The sixteen side-scrolling worlds (plus a flat training ground), and the generator that lays a
+ * The twenty-two side-scrolling worlds (plus a flat training ground), and the generator that lays a
  * fresh course out for each of them every time it is played.
  *
  * A world (an entry of Forest.Levels.themes) only fixes the look, the rules and the boss: `theme`
  * picks the art, `physics` can make it slippery or lower the gravity, `hazard` adds sandstorm wind
- * or falling bombs, and `layout.bouncy` scatters bounce pads. Forest.Levels.generate() then rolls
+ * or falling bombs (`bombStyle` recolours them), `layout.bouncy` scatters bounce pads,
+ * `layout.rising` makes the ledges float up, `layout.beat` makes them bob to the music, `natives`
+ * fills the world with its own creatures and `screen` gives the whole screen a look (black and white). Forest.Levels.generate() then rolls
  * the course itself: where the ground breaks into pits, the ledges, stairs and stepping stones, the
  * high route, the enemies and the coins. An adventure visits every world once, in a shuffled order
  * (Forest.Levels.createRun), and the monsters and bosses get tougher with each world visited.
@@ -285,10 +287,13 @@
     // Enemies, only over solid ground, getting stronger towards the arena and with every world
     const enemies = [];
     const basePower = FIRST_POWER + Math.floor(position * POWER_PER_LEVEL);
+    // Some worlds are crawling with their own creatures (spiders on the rainbow, crawlers on the ship)
+    const natives = theme.natives || null;
     for (let x = between(12, 16); x < arena.start - 4; x += between(6, 9)) {
       if (!ground.some(([l, r]) => x > l + 1 && x < r - 1)) continue;
       const roll = random();
-      if (roll < 0.08) enemies.push({ kind: 'mushroom', x });
+      if (natives && random() < natives.share) enemies.push({ kind: pick(natives.kinds), x });
+      else if (roll < 0.08) enemies.push({ kind: 'mushroom', x });
       else if (roll < 0.36) enemies.push({ kind: pick(SKY_KINDS), x });
       else enemies.push({ kind: 'mutant', x, power: Math.min(MAX_POWER, basePower + Math.floor((x / arena.start) * 2.5)) });
     }
@@ -311,7 +316,26 @@
     });
     const kept = level.platforms.filter(platform => platform.essential || !routePlatforms.some(other => isCrowding(platform, other)));
     const coins = [...autoCoins({ ...level, platforms: kept }, jumpScale), ...routeCoins];
-    return Object.freeze({ ...level, platforms: [...kept, ...routePlatforms], coins });
+    const allPlatforms = [...kept, ...routePlatforms].map(platform => animatePlatform(platform, level.layout, random));
+    return Object.freeze({ ...level, platforms: allPlatforms, coins });
+  }
+
+  /** Still ledges in the rising world float up (and pop back down); on the concert stage they bob to the beat. */
+  const RISE_DISTANCE = 1.4;
+  const RISE_PERIOD = [3.5, 5.5];
+  const BEAT_BOB_HEIGHT = 0.22;
+
+  function animatePlatform(platform, layout, random) {
+    if (!layout || platform.move || platform.bouncy) return platform;
+    if (layout.rising) {
+      return { ...platform, move: { rise: RISE_DISTANCE, period: RISE_PERIOD[0] + random() * (RISE_PERIOD[1] - RISE_PERIOD[0]), phase: random() } };
+    }
+    if (layout.beat) {
+      // One bob every two beats, alternating ledges moving in opposite directions
+      const period = (60 / layout.beat) * 2;
+      return { ...platform, y: platform.y - BEAT_BOB_HEIGHT / 2, move: { dx: 0, dy: BEAT_BOB_HEIGHT, period, phase: random() < 0.5 ? 0 : 0.5 } };
+    }
+    return platform;
   }
 
   /** Share of levels guarded by a brand-new random mutant; the rest get a signature boss from any world. */
@@ -536,6 +560,67 @@
       future: true,
       physics: { slippery: true },
       boss: { kind: 'mutant', power: 10, movement: 'flyer', seed: 2077, cyber: true, name: 'THE COSMIC ARCHMAGE', flavor: 'The station\'s mad wizard-machine wakes! Dodge its spells!', sizeScale: 2.0 }
+    },
+    // --- The strange worlds ---
+    {
+      id: 'noir',
+      name: 'THE SILENT FILM',
+      icon: '🎞️',
+      flavor: 'You fell into an old cartoon. Everything is black and white... even you!',
+      theme: 'noir',
+      screen: 'noir',
+      boss: { kind: 'golem', name: 'THE INK BLOT GOLEM', flavor: 'A giant of spilled ink stomps out of the film reel!', sizeScale: 1.25 }
+    },
+    {
+      id: 'mothership',
+      name: 'THE ALIEN MOTHERSHIP',
+      icon: '👽',
+      flavor: 'Beamed aboard! The corridors are crawling with acid-spitting crawlers.',
+      theme: 'mothership',
+      future: true,
+      natives: { kinds: ['crawler'], share: 0.55 },
+      boss: { kind: 'crawler', name: 'THE HIVE QUEEN', flavor: 'The mother of all crawlers skitters out of the dark! Jump her dash!', sizeScale: 2.6 }
+    },
+    {
+      id: 'rainbow',
+      name: 'THE RAINBOW OF WEBS',
+      icon: '🌈',
+      flavor: 'Run along a rainbow above the clouds. Spiders drop in on silk threads!',
+      theme: 'rainbow',
+      layout: { bouncy: true },
+      natives: { kinds: ['spider'], share: 0.55 },
+      boss: { kind: 'spider', name: 'THE PRISM WIDOW', flavor: 'A colossal spider spins down from the rainbow! Dodge her pounce!', sizeScale: 2.6 }
+    },
+    {
+      id: 'rising',
+      name: 'THE WORLD THAT FALLS UP',
+      icon: '🎈',
+      flavor: 'Houses, cows, ledges... everything here is floating up into the sky!',
+      theme: 'rising',
+      physics: { gravityScale: 0.8 },
+      layout: { rising: true },
+      boss: { kind: 'mutant', power: 9, movement: 'flyer', seed: 6174, name: 'THE GRAVITY THIEF', flavor: 'It stole the world\'s gravity, and now it wants yours!', sizeScale: 2.0 }
+    },
+    {
+      id: 'kitchen',
+      name: 'THE GIANT\'S KITCHEN',
+      icon: '🍪',
+      flavor: 'You\'ve shrunk to the size of a crumb! Peas are rolling off the giant\'s plate!',
+      theme: 'kitchen',
+      hazard: 'lavaBombs',
+      bombStyle: { colorIndex: 2 },
+      layout: { bouncy: true },
+      boss: { kind: 'jelly', name: 'THE MIGHTY JELLO', flavor: 'Dessert has come alive! It wobbles, it zaps, it splits!', sizeScale: 2.0 }
+    },
+    {
+      id: 'concert',
+      name: 'THE OCTOPUS ROCK CONCERT',
+      icon: '🐙',
+      flavor: 'An octopus band is rocking the stage! Bounce on the speakers and ride the beat!',
+      theme: 'concert',
+      layout: { bouncy: true, beat: 140 },
+      natives: { kinds: ['octorocker'], share: 0.3 },
+      boss: { kind: 'octorocker', name: 'THE TENTACLE KING OF ROCK', flavor: 'The lead singer crowd-surfs right at you! Dodge the notes!', sizeScale: 2.2 }
     }
   ].map(theme => Object.freeze(theme));
 

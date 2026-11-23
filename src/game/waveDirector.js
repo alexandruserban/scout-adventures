@@ -18,11 +18,14 @@
     thornback: { hp: 2, damage: 1 },
     gloomwing: { hp: 2, damage: 1 },
     jelly: { hp: 3, damage: 1 },
-    golem: { hp: 10, damage: 1 }
+    golem: { hp: 10, damage: 1 },
+    spider: { hp: 2, damage: 1 },
+    crawler: { hp: 2, damage: 1 },
+    octorocker: { hp: 4, damage: 1 }
   };
 
   /** Extra health per completed cycle of five waves. */
-  const HP_PER_CYCLE = { nutling: 1, thornback: 1, gloomwing: 1, jelly: 2, golem: 4 };
+  const HP_PER_CYCLE = { nutling: 1, thornback: 1, gloomwing: 1, jelly: 2, golem: 4, spider: 1, crawler: 1, octorocker: 2 };
 
   /** Kinds that can appear as random escorts in later cycles (the golem is only ever the boss). */
   const ESCORT_KINDS = ['nutling', 'thornback', 'gloomwing', 'jelly'];

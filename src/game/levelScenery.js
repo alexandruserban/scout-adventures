@@ -29,6 +29,9 @@
   const DECORATION_DEPTH_STEP = 0.0003;
   /** About how long each brazier flame frame shows. */
   const BRAZIER_FRAME_SECONDS = 0.12;
+  /** Props in the rising world float this high (units) before reappearing on the ground, at about this speed. */
+  const FLOAT_HEIGHT = 9;
+  const FLOAT_SPEED = 0.9;
 
   const THEME_STYLE = {
     forest: { fill: '#290f02', edge: '#170800', pit: '#080402' },
@@ -38,7 +41,10 @@
   };
 
   /** Lava pits: a bright crust on top of a molten glow. */
-  const LAVA_COLORS = { crust: '#ffd25e', top: '#ff8a2a', body: '#e0400f' };
+  const LAVA_COLORS = { crust: '#ffd25e', top: '#ff8a2a', body: '#e0400f', rim: '#2a0a05' };
+  /** Glowing alien goo in the mothership's pits. */
+  const GOO_COLORS = { crust: '#e8ff9a', top: '#9aff4a', body: '#2f9a1a', rim: '#06200a' };
+  const MOLTEN_PITS = { lava: LAVA_COLORS, goo: GOO_COLORS };
 
   /** Painted once and shared by every level that needs them. */
   let themeTiles = null;
@@ -85,6 +91,8 @@
       this.movingMeshes = [];
       /** Brazier meshes whose flames flicker, each on its own clock. */
       this.braziers = [];
+      /** Props that float up off the ground (the rising world). */
+      this.floaters = [];
       /** Gives every decoration its own depth, so overlapping props never flicker. */
       this.decorationCount = 0;
 
@@ -160,12 +168,13 @@
         if (right <= left) continue;
         const width = right - left + 0.02;
         const centerX = (left + right) / 2;
-        if (this.style.pit === 'lava') {
+        const molten = MOLTEN_PITS[this.style.pit];
+        if (molten) {
           // Molten lava a little below the rim, glowing up the walls
-          this.solidRect(LAVA_COLORS.body, width, FILL_DEPTH, centerX, GROUND_Y - 1.1 - FILL_DEPTH / 2, PIT_Z);
-          this.solidRect(LAVA_COLORS.top, width, 0.25, centerX, GROUND_Y - 1.0, PIT_Z + 0.001);
-          this.solidRect(LAVA_COLORS.crust, width, 0.1, centerX, GROUND_Y - 0.88, PIT_Z + 0.002);
-          this.solidRect('#2a0a05', width, 0.8, centerX, GROUND_Y - 0.4, PIT_Z);
+          this.solidRect(molten.body, width, FILL_DEPTH, centerX, GROUND_Y - 1.1 - FILL_DEPTH / 2, PIT_Z);
+          this.solidRect(molten.top, width, 0.25, centerX, GROUND_Y - 1.0, PIT_Z + 0.001);
+          this.solidRect(molten.crust, width, 0.1, centerX, GROUND_Y - 0.88, PIT_Z + 0.002);
+          this.solidRect(molten.rim, width, 0.8, centerX, GROUND_Y - 0.4, PIT_Z);
         } else {
           this.solidRect(this.style.pit, width, FILL_DEPTH, centerX, GROUND_Y - FILL_DEPTH / 2 - 0.3, PIT_Z);
         }
@@ -186,6 +195,14 @@
         brazier.timer = BRAZIER_FRAME_SECONDS * (0.7 + Math.random() * 0.6);
         brazier.frame = (brazier.frame + 1 + Math.floor(Math.random() * (frames.length - 1))) % frames.length;
         brazier.mesh.material.map = frames[brazier.frame].texture;
+      });
+      this.floaters.forEach(floater => {
+        floater.climbed = (floater.climbed + floater.speed * deltaSeconds) % FLOAT_HEIGHT;
+        const t = floater.climbed / FLOAT_HEIGHT;
+        floater.mesh.position.y = floater.baseY + floater.climbed;
+        floater.mesh.rotation.z = Math.sin(floater.climbed * 1.3) * 0.25;
+        // Fade in as it lifts off and out as it reaches the clouds
+        floater.mesh.material.opacity = Math.min(1, t * 8, (1 - t) * 4);
       });
     }
 
@@ -254,7 +271,9 @@
       const props = this.tiles.worldDecor[this.theme];
       for (let x = left + 1.8; x < right - 1.2; x += 4.5 + hash(index * 13 + x) * 4) {
         const prop = props[Math.floor(hash(x * 7) * props.length)];
-        this.addSprite(prop, 1.3 + hash(x) * 0.4, x, GROUND_Y - 0.05, hash(x * 3) < 0.6 ? DECOR_Z : FRONT_DECOR_Z);
+        const mesh = this.addSprite(prop, 1.3 + hash(x) * 0.4, x, GROUND_Y - 0.05, hash(x * 3) < 0.6 ? DECOR_Z : FRONT_DECOR_Z);
+        // In the world that falls up, the props drift off the ground into the sky, over and over
+        if (this.theme === 'rising') this.floaters.push({ mesh, baseY: mesh.position.y, climbed: hash(x * 23) * FLOAT_HEIGHT, speed: FLOAT_SPEED * (0.7 + hash(x * 29) * 0.6) });
       }
     }
 

@@ -57,6 +57,9 @@
         sprite: createSprite(asciiToCanvas(SkyArt.fireball.rows, 1, palette)),
         colors: [palette.l, palette.L, palette.y]
       })),
+      /** The Octo-Rocker's music notes and the raging spider's web balls (thrown like fireballs). */
+      musicNote: createSprite(asciiToCanvas(Forest.StrangeCreatureSprites.musicNote.rows, 1, Forest.StrangeCreatureSprites.musicNote.palette)),
+      webBall: createSprite(asciiToCanvas(Forest.StrangeCreatureSprites.webBall.rows, 1, Forest.StrangeCreatureSprites.webBall.palette)),
       oakTree: createSprite(Environment.createOakTree()),
       grassTile: createSprite(Environment.createGrassTile()),
       flowerTuft: createSprite(Environment.createFlowerTuft())

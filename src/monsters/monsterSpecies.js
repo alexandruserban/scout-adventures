@@ -75,7 +75,10 @@
     { id: 'thornback', latin: 'Beetlus stampedius', common: 'Thornback', note: 'Growls before charging. Polite, in its own way.' },
     { id: 'gloomwing', latin: 'Sporewingus divebombus', common: 'Gloomwing', note: 'Circles overhead, then dives without warning.' },
     { id: 'jelly', latin: 'Zappus wobblicus', common: 'Thunder Jelly', note: 'Splits in two when popped. Twice the wobble.' },
-    { id: 'golem', latin: 'Rockus flamboyantus', common: 'Cinder Golem', note: 'Arrives by meteor. Leaves in pieces.' }
+    { id: 'golem', latin: 'Rockus flamboyantus', common: 'Cinder Golem', note: 'Arrives by meteor. Leaves in pieces.' },
+    { id: 'spider', latin: 'Arachnus prismaticus', common: 'Rainbow Spider', note: 'Abseils in on a silk thread. Eight legs, zero manners.' },
+    { id: 'crawler', latin: 'Xenoscuttlus acidicus', common: 'Alien Crawler', note: 'Skitters along spaceship hulls and spits acid. Do not pet.' },
+    { id: 'octorocker', latin: 'Octopus shreddicus', common: 'Octo-Rocker', note: 'Plays guitar with four arms and drums with the other four.' }
   ];
 
   function hashString(text) {

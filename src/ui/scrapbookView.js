@@ -23,9 +23,9 @@
 
   const ZOOM = 3;
   /** The golem is much bigger than everyone else. */
-  const NATIVE_ZOOM = { golem: 2 };
+  const NATIVE_ZOOM = { golem: 2, octorocker: 2 };
   /** Which frame of each hand-made creature makes the best portrait. */
-  const NATIVE_PORTRAIT_FRAME = { nutling: 'hop1', thornback: 'walk1', gloomwing: 'up', jelly: 'idle', golem: 'stand' };
+  const NATIVE_PORTRAIT_FRAME = { nutling: 'hop1', thornback: 'walk1', gloomwing: 'up', jelly: 'idle', golem: 'stand', spider: 'walk1', crawler: 'walk1', octorocker: 'stand' };
 
   function open() {
     render();

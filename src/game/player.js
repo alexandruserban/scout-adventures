@@ -464,6 +464,8 @@
     rideMovingPlatform() {
       const surface = this.groundSurface;
       if (!this.isGrounded || !surface || !surface.move) return;
+      // A rising ledge that just popped back down leaves him in the air, to drop onto it again
+      if (surface.justWrapped) return;
       this.x += surface.deltaX;
       this.y = surface.top;
     }

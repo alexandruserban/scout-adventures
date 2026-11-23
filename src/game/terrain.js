@@ -37,9 +37,10 @@
      * @param {object} level
      * @param {Array<[number, number]>} level.ground [left, right] of every ground segment
      * @param {Array<{x:number, y:number, width:number, bouncy?:boolean,
-     *   move?:{dx:number, dy:number, period:number}}>} [level.platforms]
+     *   move?:{dx?:number, dy?:number, period:number, phase?:number, rise?:number}}>} [level.platforms]
      *   x is the left edge, y the top. Bouncy ones launch whoever lands on them; moving ones travel
-     *   (dx, dy) away from their start and back again every `period` seconds
+     *   (dx, dy) away from their start and back again every `period` seconds (starting `phase` of
+     *   the way through), or with `rise` float up through that height and pop back down
      */
     constructor({ ground, platforms = [] }) {
       this.ground = ground
@@ -67,9 +68,20 @@
     update(deltaSeconds) {
       this.elapsed += deltaSeconds;
       this.movingPlatforms.forEach(platform => {
-        const { dx, dy, period } = platform.move;
+        const { dx = 0, dy = 0, period, phase = 0, rise } = platform.move;
+        if (rise) {
+          // Floats steadily up through `rise` around its spot, then pops back to the bottom.
+          // The drop isn't carried over to a rider (see justWrapped): he drops and lands on it again.
+          const cycle = ((this.elapsed / period + phase) % 1 + 1) % 1;
+          const top = platform.start.y - rise / 2 + rise * cycle;
+          platform.deltaX = 0;
+          platform.justWrapped = top < platform.top;
+          platform.deltaY = platform.justWrapped ? 0 : top - platform.top;
+          platform.top = top;
+          return;
+        }
         // 0 at the start of the path, 1 at the far end, easing in and out at both ends
-        const travel = 0.5 - 0.5 * Math.cos((this.elapsed / period) * Math.PI * 2);
+        const travel = 0.5 - 0.5 * Math.cos((this.elapsed / period + phase) * Math.PI * 2);
         const left = platform.start.x + dx * travel;
         const top = platform.start.y + dy * travel;
         platform.deltaX = left - platform.left;

@@ -1231,14 +1231,17 @@
 
     /**
      * Lob a fireball in an arc so it comes down on (toX, toY) after `flightSeconds`.
-     * @param {{tint?:number, trail?:string[], randomColor?:boolean}} [style] recolour it (e.g. a cyber
-     *   monster's rockets); `randomColor` picks one of the coloured fireball variants at random
+     * @param {{tint?:number, trail?:string[], randomColor?:boolean, colorIndex?:number, sprite?:object}} [style]
+     *   recolour it (e.g. a cyber monster's rockets); `randomColor` picks one of the coloured fireball
+     *   variants at random and `colorIndex` a given one; `sprite` throws something else entirely
+     *   (music notes, web balls), bursting in its trail colours
      */
-    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS, randomColor = false } = {}) {
-      let sprite = this.sprite;
-      let burstColors = ['#ffb347', '#ff5a1f'];
-      if (randomColor && this.variants.length) {
-        const variant = this.variants[Math.floor(Math.random() * this.variants.length)];
+    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS, randomColor = false, colorIndex, sprite: customSprite } = {}) {
+      let sprite = customSprite || this.sprite;
+      let burstColors = customSprite ? [trail[0], trail[trail.length - 1]] : ['#ffb347', '#ff5a1f'];
+      const pickedIndex = colorIndex !== undefined ? colorIndex : (randomColor ? Math.floor(Math.random() * this.variants.length) : -1);
+      if (!customSprite && pickedIndex >= 0 && this.variants[pickedIndex]) {
+        const variant = this.variants[pickedIndex];
         sprite = variant.sprite;
         trail = variant.colors;
         burstColors = [variant.colors[1], variant.colors[0]];
@@ -1326,8 +1329,8 @@
   /** Base class, also used by the random monsters of the Monster Forge (src/monsters). */
   Forest.SkyCreature = SkyCreature;
   Forest.ProjectileSystem = ProjectileSystem;
-  /** Creature classes by kind, in the order the waves introduce them. */
-  Forest.SkyCreatures = Object.freeze({
+  /** Creature classes by kind, in the order the waves introduce them (strangeCreatures.js adds more). */
+  Forest.SkyCreatures = ({
     nutling: Nutling,
     thornback: Thornback,
     gloomwing: Gloomwing,

@@ -8,6 +8,8 @@
       /** @type {AudioContext|null} created lazily: browsers only allow audio after a user gesture */
       this.context = null;
       this.muted = false;
+      /** True while the app is in the background (or the tab hidden): all audio stays frozen. */
+      this.backgrounded = false;
     }
 
     /** Create the AudioContext on first use and wake it up if the browser suspended it. */
@@ -16,10 +18,19 @@
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         this.context = new AudioContextClass();
       }
-      if (this.context.state === 'suspended') {
+      // Never wake up behind the player's back while the app is in the background
+      if (this.context.state === 'suspended' && !this.backgrounded) {
         this.context.resume();
       }
       return this.context;
+    }
+
+    /** Freeze (true) or unfreeze (false) every sound, e.g. when the app goes to the background. */
+    setBackgrounded(backgrounded) {
+      this.backgrounded = backgrounded;
+      if (!this.context) return;
+      if (backgrounded) this.context.suspend();
+      else this.context.resume();
     }
 
     /**

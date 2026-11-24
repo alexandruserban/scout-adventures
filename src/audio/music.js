@@ -235,13 +235,28 @@
       }
     }
 
+    /**
+     * The app went to the background (true) or came back (false). The MIDI tracks and the chiptune
+     * run on the synth, which freezes by itself; the mp3 soundtrack has to be paused here.
+     */
+    setBackgrounded(backgrounded) {
+      synth.setBackgrounded(backgrounded);
+      if (!this.soundtrack || this.levelLoop || this.chiptuneTimer) return;
+      if (backgrounded) {
+        this.soundtrack.pause();
+      } else if (this.isPlaying) {
+        const playPromise = this.soundtrack.play();
+        if (playPromise) playPromise.catch(() => {});
+      }
+    }
+
     startChiptune() {
       this.stop();
       this.isPlaying = true;
       let step = 0;
       this.chiptuneTimer = setInterval(() => {
-        // While muted the song pauses in place rather than playing silently
-        if (synth.muted || !this.isPlaying) return;
+        // While muted (or in the background) the song pauses in place rather than playing silently
+        if (synth.muted || synth.backgrounded || !this.isPlaying) return;
         synth.resume();
         playChiptuneStep(step);
         step++;

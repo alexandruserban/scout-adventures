@@ -1001,6 +1001,16 @@
     },
 
     /**
+     * The app left the screen (true: home button, app switcher, exit) or came back (false).
+     * Freezes the game and every sound until it returns. Called by the Flutter app, and by the
+     * browser itself when the tab is hidden.
+     */
+    setBackgrounded(backgrounded) {
+      this.setPaused(backgrounded, 'background');
+      Forest.Music.setBackgrounded(backgrounded);
+    },
+
+    /**
      * Start (or restart) a training session with the creatures picked in the scrapbook.
      * @returns {boolean} false when nothing is picked (the game carries on as before)
      */
@@ -1075,6 +1085,11 @@
       return enemies;
     }
   };
+
+  // Hidden tab, minimised browser or (on phones) a WebView that reports it: go quiet until it's back
+  document.addEventListener('visibilitychange', () => Forest.Game.setBackgrounded(document.hidden));
+  window.addEventListener('pagehide', () => Forest.Game.setBackgrounded(true));
+  window.addEventListener('pageshow', () => Forest.Game.setBackgrounded(document.hidden));
 
   startAdventure();
   requestAnimationFrame(runFrame);

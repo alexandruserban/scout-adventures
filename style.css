@@ -386,6 +386,10 @@ body.screen-noir .film-overlay {
   --touch-size: clamp(44px, min(11vw, 14vh), 58px);
   /* Wide gaps also widen the invisible hit strips (each takes half the gap next to it) */
   --touch-gap: clamp(28px, 8vw, 60px);
+  /* Wider space between the left and right arrows; most of it belongs to the right arrow */
+  --arrow-gap: clamp(44px, 13vw, 96px);
+  /* The right arrow is the one players hold most, so it's drawn wider than the other buttons */
+  --right-arrow-width: calc(var(--touch-size) * 1.4);
   /* Lift off the bottom edge so thumbs don't have to reach into the screen corner */
   --touch-bottom: 30px;
   /* Extra space between â and â² on top of the normal gap */
@@ -463,6 +467,14 @@ body.screen-noir .film-overlay {
   position: relative;
 }
 
+#touch-controls .touch-cluster:first-child {
+  gap: var(--arrow-gap);
+}
+
+#btn-touch-right {
+  width: var(--right-arrow-width);
+}
+
 #btn-touch-left::before,
 #btn-touch-right::before,
 #btn-touch-jump::before {
@@ -472,16 +484,18 @@ body.screen-noir .film-overlay {
   bottom: -60px;
 }
 
-/* Left: from the screen's left edge across the gap to just short of â¶ */
+/* Left: from the screen's left edge into the gap toward the right arrow */
 #btn-touch-left::before {
   left: -100px;
-  right: calc((var(--touch-gap) - 6px) * -1 - 4px);
+  /* Only the first 30% of the gap, so most of it goes to the right arrow */
+  right: calc(var(--arrow-gap) * -0.3 - 4px);
 }
 
-/* Right: from just left of its own edge to a full gap past it (â° stays on top) */
+/* Right: most of the gap, itself, and a full gap past it (â° stays on top) */
 #btn-touch-right::before {
-  left: -10px;
-  right: calc(var(--touch-gap) * -1 - 4px);
+  /* The other 70% of the gap, the button itself, and a full gap past it */
+  left: calc(var(--arrow-gap) * -0.7 - 4px);
+  right: calc(var(--arrow-gap) * -1 - 4px);
 }
 
 /*

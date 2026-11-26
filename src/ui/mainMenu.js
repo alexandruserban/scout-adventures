@@ -88,7 +88,9 @@
     onPlay = options.onPlay;
     onNewGame = options.onNewGame || null;
     setPlayAction(isPause ? 'resume' : options.playAction || 'title', options.playDetail);
-    subtitleElement.textContent = isPause ? '⏸ PAUSED' : "THE BOY'S QUEST";
+    // Under the title: PAUSED on the pause menu, nothing on the title screen
+    subtitleElement.textContent = isPause ? '⏸ PAUSED' : '';
+    subtitleElement.style.display = isPause ? '' : 'none';
     newGameButton.style.display = onNewGame ? '' : 'none';
     if (options.getBestPoints) getBestPoints = options.getBestPoints;
     screen.style.display = 'flex';

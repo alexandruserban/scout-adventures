@@ -241,6 +241,34 @@
       synth.playNoise({ duration: 0.05, filterType: 'highpass', filterFrequency: 3500, volume: 0.05 });
     },
 
+    /** A spore puffball bursting in a cloud. */
+    trapPuff() {
+      synth.playNoise({ duration: 0.35, filterType: 'bandpass', filterFrequency: 700, endFilterFrequency: 1800, resonance: 2, volume: 0.12 });
+      synth.playTone({ wave: 'sine', frequency: 520, endFrequency: 260, duration: 0.3, volume: 0.06 });
+    },
+
+    /** Thrown back through a rift. */
+    trapWhoosh() {
+      synth.playNoise({ duration: 0.4, filterType: 'bandpass', filterFrequency: 400, endFilterFrequency: 3000, resonance: 4, volume: 0.13 });
+      synth.playTone({ wave: 'triangle', frequency: 200, endFrequency: 900, duration: 0.35, volume: 0.07 });
+    },
+
+    /** Skidding on a banana peel. */
+    trapSlip() {
+      synth.playTone({ wave: 'square', frequency: 900, endFrequency: 300, duration: 0.25, volume: 0.07 });
+      synth.playTone({ wave: 'sine', frequency: 1200, endFrequency: 1800, duration: 0.15, volume: 0.05 });
+    },
+
+    /** Air or steam hissing out (airlock vents, hot burners). */
+    trapHiss() {
+      synth.playNoise({ duration: 0.4, filterType: 'highpass', filterFrequency: 3000, volume: 0.07 });
+    },
+
+    /** A speaker's bass thump. */
+    trapThump() {
+      synth.playTone({ wave: 'sine', frequency: 110, endFrequency: 40, duration: 0.2, volume: 0.16, endVolume: 0.005 });
+    },
+
     /** A crumbling ledge giving way. */
     crumble() {
       synth.playNoise({ duration: 0.3, filterType: 'lowpass', filterFrequency: 900, endFilterFrequency: 200, volume: 0.12 });

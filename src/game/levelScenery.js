@@ -40,9 +40,12 @@
   /** Coming back, it fades in over this long. */
   const CRUMBLE_RETURN_FADE_SECONDS = 0.4;
   const CRACK_COLOR = 'rgba(25, 12, 6, 0.8)';
-  /** A sky island's slab of earth under its surface, then two narrower steps tapering away below. */
+  /**
+   * A sky island's slab of earth under its surface (when the level doesn't say how thick), then two
+   * narrower steps tapering away below: [width share, depth as a share of the slab].
+   */
   const ISLAND_DEPTH = 0.8;
-  const ISLAND_TAPERS = [[0.78, 0.35], [0.5, 0.3]];
+  const ISLAND_TAPERS = [[0.78, 0.45], [0.5, 0.35]];
 
   const THEME_STYLE = {
     forest: { fill: '#290f02', edge: '#170800', pit: '#080402' },
@@ -278,9 +281,9 @@
       });
     }
 
-    addPlatform({ x, y, width, bouncy, crumble, island }, surface) {
+    addPlatform({ x, y, width, bouncy, crumble, island, thickness }, surface) {
       if (island) {
-        this.addSkyIsland(x, y, width);
+        this.addSkyIsland(x, y, width, thickness);
         return;
       }
       const widthPixels = Math.round(width / PIXEL_SCALE);
@@ -304,24 +307,26 @@
      * slab of earth tapering away underneath (just the surface where the ground floats anyway),
      * with the world's trees and props on top.
      */
-    addSkyIsland(left, top, width) {
+    addSkyIsland(left, top, width, depth = ISLAND_DEPTH) {
       const tile = this.tiles[this.theme];
       const tileHeight = tile.height * PIXEL_SCALE;
       const centerX = left + width / 2;
       this.tiledStrip(tile, left, width, top);
       if (this.style.fill) {
         let bottom = top - tileHeight + PIXEL_SCALE;
-        this.solidRect(this.style.fill, width, ISLAND_DEPTH, centerX, bottom - ISLAND_DEPTH / 2, FILL_Z);
-        this.solidRect(this.style.edge, EDGE_WIDTH, ISLAND_DEPTH + tileHeight - 0.4, left + EDGE_WIDTH / 2, top - 0.4 - (ISLAND_DEPTH + tileHeight - 0.4) / 2, EDGE_Z);
-        this.solidRect(this.style.edge, EDGE_WIDTH, ISLAND_DEPTH + tileHeight - 0.4, left + width - EDGE_WIDTH / 2, top - 0.4 - (ISLAND_DEPTH + tileHeight - 0.4) / 2, EDGE_Z);
-        bottom -= ISLAND_DEPTH;
+        this.solidRect(this.style.fill, width, depth, centerX, bottom - depth / 2, FILL_Z);
+        const edgeHeight = Math.max(0.1, depth + tileHeight - 0.4);
+        this.solidRect(this.style.edge, EDGE_WIDTH, edgeHeight, left + EDGE_WIDTH / 2, top - 0.4 - edgeHeight / 2, EDGE_Z);
+        this.solidRect(this.style.edge, EDGE_WIDTH, edgeHeight, left + width - EDGE_WIDTH / 2, top - 0.4 - edgeHeight / 2, EDGE_Z);
+        bottom -= depth;
         let stepWidth = width;
-        ISLAND_TAPERS.forEach(([share, depth]) => {
+        ISLAND_TAPERS.forEach(([share, depthShare]) => {
+          const stepDepth = depth * depthShare;
           // A dark rim under each step, then the narrower step below it
           this.solidRect(this.style.edge, stepWidth, EDGE_WIDTH, centerX, bottom + EDGE_WIDTH / 2, EDGE_Z);
           stepWidth = width * share;
-          this.solidRect(this.style.fill, stepWidth, depth, centerX, bottom - depth / 2, FILL_Z);
-          bottom -= depth;
+          this.solidRect(this.style.fill, stepWidth, stepDepth, centerX, bottom - stepDepth / 2, FILL_Z);
+          bottom -= stepDepth;
         });
         this.solidRect(this.style.edge, stepWidth, EDGE_WIDTH, centerX, bottom + EDGE_WIDTH / 2, EDGE_Z);
       }

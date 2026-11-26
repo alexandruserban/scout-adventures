@@ -279,6 +279,8 @@
   let scenery = null;
   /** The current level's pop-up spikes (see Forest.SpikeTraps). */
   let spikeTraps = null;
+  /** The current world's own special trap (see Forest.WorldTraps). */
+  let worldTraps = null;
   /** Enemies not dropped in yet, in the order the boy will reach them. */
   let pendingEnemies = [];
   let boss = null;
@@ -375,6 +377,15 @@
     scenery = new Forest.LevelScenery(stage.scene, sprites, level, world.terrain);
     if (spikeTraps) spikeTraps.dispose();
     spikeTraps = new Forest.SpikeTraps(stage.scene, level.traps);
+    if (worldTraps) worldTraps.dispose();
+    worldTraps = new Forest.WorldTraps({
+      scene: stage.scene,
+      particles,
+      effects,
+      terrain: world.terrain,
+      say: (text, x, y, color) => floatingText.spawn(text, x, y, color),
+      snapCamera: () => cameraController.snapTo(player)
+    }, level.trap, level.specialTraps);
     background.setTheme(level.theme);
     stage.scene.background = new THREE.Color(background.topColor);
     // The silent film turns the whole picture black and white, with flickering old-film grain
@@ -424,7 +435,8 @@
       title: worldTheme.name,
       subtitle: worldTheme.flavor,
       story,
-      note,
+      // Every world warns about its own trap
+      note: [note, worldTheme.trapHint ? `⚠ ${worldTheme.trapHint}` : ''].filter(Boolean).join('<br>'),
       minSeconds: course ? RETRY_LOADING_SECONDS : LEVEL_LOADING_SECONDS,
       build: () => {
         const levelData = course || Levels.generate(worldTheme, { position: index });
@@ -552,10 +564,10 @@
     }
     const options = { x: entry.x, onDefeated: onEnemyDefeated, allowLedges };
     if (entry.kind === 'mutant') {
-      // A new random monster every time, so the scrapbook keeps filling up
-      // The future-tech worlds are crawling with cybernetic mutants
-      const cyber = level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined;
-      const genome = Forest.MonsterForge.generate({ power: entry.power, cyber });
+      // A new random monster every time, so the scrapbook keeps filling up, except the level's
+      // featured species (a fixed seed). The future-tech worlds are crawling with cybernetic mutants
+      const cyber = entry.cyber !== undefined ? entry.cyber : (level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined);
+      const genome = Forest.MonsterForge.generate({ power: entry.power, cyber, seed: entry.seed });
       addEnemy(Forest.MonsterForge.create(world, { ...options, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) }));
       return;
     }
@@ -1133,6 +1145,7 @@
     scenery.update(gameDeltaSeconds);
     player.update(gameDeltaSeconds);
     spikeTraps.update(gameDeltaSeconds, player);
+    worldTraps.update(gameDeltaSeconds, player);
     checkPitFall();
     checkStickyWebs();
     if (!player.isDefeated) {

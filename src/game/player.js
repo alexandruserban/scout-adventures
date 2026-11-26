@@ -19,6 +19,7 @@
     AIR_ATTACK: 'AIR_ATTACK',
     HIT_RECOIL: 'HIT_RECOIL',
     HIT_STAGGER: 'HIT_STAGGER',
+    SLIP: 'SLIP',
     DEFEATED: 'DEFEATED'
   });
 
@@ -97,6 +98,11 @@
   // --- Getting hit ---
   const HIT_RECOIL_SECONDS = 0.22;
   const HIT_STAGGER_SECONDS = 0.28;
+  /** Slipping (a banana peel): he skids along helplessly for this long, losing speed slowly. */
+  const SLIP_SECONDS = 0.8;
+  const SLIP_SPEED = 8;
+  const SLIP_FRICTION = 0.965;
+  const SLIP_WOBBLE = 0.5;
   const RECOIL_FLASH_RATE = 20;
   const INVULNERABLE_BLINK_RATE = 35;
 
@@ -205,6 +211,8 @@
       /** Seconds left stuck in spider web, and the share of his normal sideways speed meanwhile. */
       this.stuckSeconds = 0;
       this.stuckSpeedFactor = 1;
+      /** Dizzy (a fae spore puff): left and right are swapped while this runs down. */
+      this.dizzySeconds = 0;
       this.webStrandTimer = 0;
 
       this.state = PlayerState.IDLE;
@@ -228,7 +236,8 @@
     get isIncapacitated() {
       return this.state === PlayerState.DEFEATED
         || this.state === PlayerState.HIT_RECOIL
-        || this.state === PlayerState.HIT_STAGGER;
+        || this.state === PlayerState.HIT_STAGGER
+        || this.state === PlayerState.SLIP;
     }
 
     get isAirborne() {
@@ -428,6 +437,7 @@
       this.resolveGround(previousY);
 
       this.updateInvulnerability(deltaSeconds);
+      if (this.dizzySeconds > 0) this.dizzySeconds -= deltaSeconds;
       const xBeforeMove = this.x;
       this.updateState(deltaSeconds);
       this.updateStuck(deltaSeconds, xBeforeMove);
@@ -467,6 +477,32 @@
         this.particles.burst(this.x, this.y + Math.random() * this.height, 1, WEB_COLOR, 0.5, 0.35);
       }
       if (this.stuckSeconds <= 0) this.stuckSpeedFactor = 1;
+    }
+
+    /** Which way he's steering: the left/right buttons, swapped round while he's dizzy. */
+    steerDirection() {
+      const direction = this.input.horizontalDirection();
+      return this.dizzySeconds > 0 ? -direction : direction;
+    }
+
+    /** A spore puff: left and right are swapped for `seconds`. */
+    makeDizzy(seconds) {
+      if (this.isDefeated) return;
+      this.dizzySeconds = Math.max(this.dizzySeconds, seconds);
+    }
+
+    get isDizzy() {
+      return this.dizzySeconds > 0;
+    }
+
+    /** A banana peel: he skids off the way he was going, out of control for a moment. */
+    slip() {
+      if (this.isDefeated || this.isIncapacitated || !this.isGrounded) return false;
+      const direction = Math.abs(this.velocityX) > 0.5 ? Math.sign(this.velocityX) : this.facing;
+      this.enterState(PlayerState.SLIP, SLIP_SECONDS);
+      this.velocityX = direction * SLIP_SPEED;
+      this.showFrame(this.sprites.hitStagger);
+      return true;
     }
 
     /** Hills and cliff faces taller than his feet stop him (and his momentum, so ice can't push him through). */
@@ -597,6 +633,7 @@
         case PlayerState.AIR_ATTACK: this.updateAirSlash(deltaSeconds); break;
         case PlayerState.HIT_RECOIL: this.updateHitRecoil(deltaSeconds); break;
         case PlayerState.HIT_STAGGER: this.updateHitStagger(deltaSeconds); break;
+        case PlayerState.SLIP: this.updateSlip(deltaSeconds); break;
         case PlayerState.DEFEATED: this.updateDefeated(deltaSeconds); break;
       }
     }
@@ -612,7 +649,7 @@
     }
 
     updateWalk(deltaSeconds) {
-      const direction = this.input.horizontalDirection();
+      const direction = this.steerDirection();
       if (direction === 0) {
         this.state = PlayerState.IDLE;
         this.turnSeconds = 0;
@@ -649,7 +686,7 @@
 
     /** Steer left/right while in the air. */
     applyAirControl(deltaSeconds, canTurn = true) {
-      const direction = this.input.horizontalDirection();
+      const direction = this.steerDirection();
       // Turning around mid-air: flip the profile first and hang in place sideways for a moment
       if (canTurn && direction !== 0 && direction !== this.facing) {
         this.facing = direction;
@@ -817,6 +854,16 @@
       if (this.stateTimer <= 0) {
         this.state = this.isGrounded ? PlayerState.IDLE : PlayerState.FALL;
         if (this.jumpBufferSeconds > 0) this.tryJump(); // a jump pressed just as he recovers
+      }
+    }
+
+    updateSlip(deltaSeconds) {
+      this.slideWithFriction(SLIP_FRICTION, deltaSeconds);
+      this.stateTimer -= deltaSeconds;
+      this.bodyMesh.rotation.z = Math.sin(this.stateTimer * 30) * SLIP_WOBBLE * Math.min(1, this.stateTimer * 3);
+      if (this.stateTimer <= 0) {
+        this.bodyMesh.rotation.z = 0;
+        this.state = this.isGrounded ? PlayerState.IDLE : PlayerState.FALL;
       }
     }
 

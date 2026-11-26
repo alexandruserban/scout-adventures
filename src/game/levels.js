@@ -20,6 +20,10 @@
  *  - islands:   huge platforms high in the sky (platforms with `island`), a second ground level
  *               reached by the trampoline under their near end, with monsters of their own
  *  - coins:     { x, y } centre of each coin
+ *  - specialTraps: where the world's own trap goes (`trap`, see Forest.WorldTraps): { x, height,
+ *               left, right } with the ends of the ground it stands on
+ *  - featured:  the level's own creature, which makes up a good share of its enemies (a Monster
+ *               Forge species with a fixed seed, so it's the same monster each time, or a sky creature)
  *  - enemies:   { kind, x } each drops in when the boy gets close. kind is 'mushroom', a sky creature
  *               (nutling, thornback, gloomwing, jelly) or 'mutant': a freshly rolled Monster Forge monster
  *               of `power`, so every run can turn up scrapbook species not met before
@@ -239,11 +243,23 @@
   const SPIKES_FROM_X = 14;
   /** Sky islands: how many (rounded), how wide, how far apart, and never before this x. */
   const ISLAND_COUNT = [2, 3.4];
-  const ISLAND_WIDTH = [12, 20];
+  const ISLAND_WIDTH = [7, 28];
   const ISLAND_SPACING = 10;
   const ISLANDS_FROM_X = 20;
-  /** They float this far above their trampoline (times the jump scale): a bounce goes ~4.5. */
-  const ISLAND_RISE = 3.6;
+  /**
+   * They float this far above their trampoline (times the jump scale). A bounce alone goes ~4.5,
+   * and a double jump at the top of it ~1.7 more, so the highest ones need both.
+   */
+  const ISLAND_RISE = [2.6, 5.0];
+  /**
+   * How thick the slab under the surface is (the tapering steps below add 80% more), never so
+   * thick that the underside comes closer than ISLAND_HEADROOM to the ground below.
+   */
+  const ISLAND_THICKNESS = [0.3, 2.2];
+  const ISLAND_HEADROOM = 1.7;
+  /** Room taken by the surface tiles on top, and the share of the slab the tapering steps add. */
+  const ISLAND_SURFACE_DEPTH = 0.5;
+  const ISLAND_TAPER_SHARE = 0.8;
   /** And at least this far above any ground under them, so he can walk (and jump) underneath. */
   const ISLAND_CLEARANCE = 2.8;
   const TRAMPOLINE_WIDTH = 2.2;
@@ -251,7 +267,24 @@
   const TRAMPOLINE_INSET = 0.2;
   /** Share of the spots along the ground that get a trampoline (with a high ledge), outside the bouncy worlds. */
   const TRAMPOLINE_CHANCE = 0.14;
-  /** Monsters on each sky island: one per this many units of it, at least two. */
+  /** The ice world's thin ice: every this-many-th obstacle is thin ice, over a pit this wide. */
+  const THIN_ICE_EVERY = 3;
+  const THIN_ICE_WIDTH = [2.4, 3.2];
+  /** Each world's own trap: how many in a level (first world, later worlds), and how far apart at least. */
+  const SPECIAL_TRAP_COUNT = [4, 7];
+  const SPECIAL_TRAP_SPACING = 8;
+  const SPECIAL_TRAPS_FROM_X = 16;
+  /** How much clear ground each trap needs behind (to the left) and ahead (to the right) of its spot. */
+  const SPECIAL_TRAP_SPACE = {
+    flytrap: [1, 1], pendulum: [2, 2], thundercloud: [1.2, 1.2], quicksand: [0.3, 3.3],
+    geyser: [1, 1], jawbreaker: [2.5, 2.5], meteor: [1.5, 1.5], laserGate: [0.8, 0.8],
+    crystalArc: [0.6, 3.4], crusher: [1.4, 1.4], seaMine: [1, 1], spider: [1, 1], puffball: [1, 1],
+    flamethrower: [3.5, 1], rift: [1, 1], airlockVent: [4, 1], bananaPeel: [0.6, 0.6], boulder: [1, 1],
+    stoveBurner: [0.3, 2.5], speaker: [5.5, 1], tractorBeam: [1.2, 1.2]
+  };
+  /** Traps that are tall or come from above, kept out from under the sky islands (the rest may sit beneath them). */
+  const TALL_TRAPS = new Set(['pendulum', 'thundercloud', 'geyser', 'laserGate', 'meteor', 'crusher', 'seaMine', 'spider', 'tractorBeam', 'boulder']);
+  /** Monsters on each sky island: one per this many units of it (at least one, two on the bigger ones). */
   const ISLAND_UNITS_PER_MONSTER = 7;
   /** Monster Forge power at the first world, and how much it grows with each world visited. */
   const FIRST_POWER = 1;
@@ -260,6 +293,11 @@
   const BOSS_FIRST_HP = 10;
   const BOSS_HP_PER_LEVEL = 0.7;
   const SKY_KINDS = ['nutling', 'thornback', 'gloomwing', 'jelly'];
+  /** Share of a level's enemies that are its featured creature, and the chance that it's a sky creature (not a mutant species). */
+  const FEATURED_SHARE = 0.45;
+  const FEATURED_SKY_CHANCE = 0.35;
+  /** A featured mutant in the future-tech worlds is usually cyber. */
+  const FEATURED_CYBER_CHANCE = 0.7;
 
   /** How much higher and further the boy jumps in a world (low gravity). */
   function jumpScaleOf(theme) {
@@ -274,7 +312,7 @@
    * stones or on stones that crumble away under him. The tricky ones turn up more in later worlds.
    * @returns {{ground:Array<[number, number, number]>, platforms:object[], right:number}} right: where the ground ends
    */
-  function rollGround({ random, between, reach, lift, challenge, solidSides, until }) {
+  function rollGround({ random, between, reach, lift, challenge, solidSides, thinIce, until }) {
     const ground = [];
     const platforms = [];
     let height = 0;
@@ -308,9 +346,11 @@
     };
 
     const ceiling = MAX_GROUND_HEIGHT * lift;
+    let obstacleCount = 0;
     const tallestStep = HILL_STEP[1] * lift;
     while (right < until) {
-      let kind = pickObstacle();
+      obstacleCount++;
+      let kind = thinIce && obstacleCount % THIN_ICE_EVERY === 2 ? 'thinIce' : pickObstacle();
       // No room for a hill this high up: step back down instead
       if (kind === 'hill' && height + tallestStep > ceiling) kind = 'cliff';
       if (kind === 'widePit') {
@@ -363,6 +403,11 @@
           move: { dx: 0, dy: 1.6 * lift, period, phase: step === 1 ? 0 : 0.5 }
         }));
         addGround(right + pit, run(), height);
+      } else if (kind === 'thinIce') {
+        // Looks like solid ice, but it cracks and drops away under him: a pit is hiding beneath
+        const pit = between(...THIN_ICE_WIDTH) * reach;
+        platforms.push({ x: right, y: height, width: pit, essential: true, crumble: true, thinIce: true });
+        addGround(right + pit, run(), height);
       } else if (kind === 'crumbling') {
         // Two stones that fall away soon after he lands: keep going!
         const pit = between(...CRUMBLING_PIT_WIDTH) * reach;
@@ -401,13 +446,64 @@
       if (!padGround || padGround[1] < padX + TRAMPOLINE_WIDTH + 0.3) continue;
       if (!ground.some(([l, r]) => l <= end - 0.5 && r >= end + 2.5)) continue;
       const padTop = (padGround[2] || 0) + 0.6;
-      const y = padTop + ISLAND_RISE * jumpScale;
+      const y = padTop + between(...ISLAND_RISE) * jumpScale;
       const highestBelow = Math.max(0, ...ground.filter(([l, r]) => r > x && l < end).map(([, , h = 0]) => h));
       if (y - highestBelow < ISLAND_CLEARANCE) continue;
-      islands.push({ x, y, width, island: true, essential: true });
+      // Thin decks and chunky slabs, as thick as the room underneath allows
+      const roomForSlab = (y - highestBelow - ISLAND_SURFACE_DEPTH - ISLAND_HEADROOM) / (1 + ISLAND_TAPER_SHARE);
+      const thickness = Math.max(ISLAND_THICKNESS[0], Math.min(roomForSlab, between(...ISLAND_THICKNESS)));
+      islands.push({ x, y, width, thickness, island: true, essential: true });
       trampolines.push({ x: padX, y: padTop, width: TRAMPOLINE_WIDTH, bouncy: true, essential: true });
     }
     return { islands, trampolines };
+  }
+
+  /**
+   * Where the world's own trap goes: spots on the ground with room around them, well apart, never
+   * at the start, in the arena or by the high route's way up (nor under a sky island, if it's tall). Banana peels lie
+   * a few steps before the edge of a pit (that's where slipping hurts).
+   * @returns {Array<{x:number, height:number, left:number, right:number, phase:number}>}
+   */
+  function rollSpecialTraps({ kind, ground, routes, islands, trampolines, arena, random, between, challenge }) {
+    const space = SPECIAL_TRAP_SPACE[kind];
+    if (!space) return [];
+    const [before, after] = space;
+    const keepClear = [
+      ...routes.map(route => [route.x - 4, route.x + 8]),
+      ...(TALL_TRAPS.has(kind) ? islands.map(island => [island.x - 2, island.x + island.width + 2]) : []),
+      ...trampolines.map(pad => [pad.x - 1.5, pad.x + pad.width + 1.5])
+    ];
+    const isClear = (from, to) => !keepClear.some(([clearLeft, clearRight]) => to > clearLeft && from < clearRight);
+    const candidates = [];
+    ground.forEach(([left, right, height = 0], index) => {
+      const next = ground[index + 1];
+      if (kind === 'bananaPeel') {
+        const pitAhead = next && next[0] - right > 0.5;
+        const x = right - between(2.5, 3.5);
+        if (pitAhead && x - before > left && x > SPECIAL_TRAPS_FROM_X && x < arena.start - 6 && isClear(x - before, x + after)) {
+          candidates.push({ x, height, left, right });
+        }
+        return;
+      }
+      const from = Math.max(left + before + 0.5, SPECIAL_TRAPS_FROM_X);
+      const to = Math.min(right - after - 0.5, arena.start - 6);
+      for (let x = from + random() * 2; x < to; x += between(3, 5)) {
+        if (isClear(x - before, x + after)) candidates.push({ x, height, left, right });
+      }
+    });
+    // Shuffle, then keep as many as wanted that are far enough apart
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    const wanted = Math.round(SPECIAL_TRAP_COUNT[0] + (SPECIAL_TRAP_COUNT[1] - SPECIAL_TRAP_COUNT[0]) * challenge);
+    const chosen = [];
+    candidates.forEach(spot => {
+      if (chosen.length >= wanted) return;
+      if (chosen.some(other => Math.abs(other.x - spot.x) < SPECIAL_TRAP_SPACING)) return;
+      chosen.push({ ...spot, phase: random() });
+    });
+    return chosen.sort((a, b) => a.x - b.x);
   }
 
   /**
@@ -451,7 +547,8 @@
 
     const challenge = Math.min(1, position / CHALLENGE_RAMP_WORLDS);
     const { ground, platforms, right } = rollGround({
-      random, between, reach, lift, challenge, solidSides, until: arenaTarget - SEGMENT_LENGTH[1]
+      random, between, reach, lift, challenge, solidSides, thinIce: theme.trap === 'thinIce',
+      until: arenaTarget - SEGMENT_LENGTH[1]
     });
     // One more pit, then the flat ground of the arena
     const lastLeft = right + between(PIT_WIDTH[0], 3.0) * reach;
@@ -509,7 +606,14 @@
     platforms.length = 0;
     platforms.push(...roomyPlatforms, ...skyPlatforms);
 
-    const keepClear = trampolines.map(pad => [pad.x - 1, pad.x + pad.width + 1]);
+    const specialTraps = rollSpecialTraps({ kind: theme.trap, ground, routes, islands, trampolines, arena, random, between, challenge });
+    const keepClear = [
+      ...trampolines.map(pad => [pad.x - 1, pad.x + pad.width + 1]),
+      ...specialTraps.map(spot => {
+        const [before, after] = SPECIAL_TRAP_SPACE[theme.trap];
+        return [spot.x - before - 1, spot.x + after + 1];
+      })
+    ];
     const traps = rollSpikeTraps({ ground, routes, arena, random, between, challenge, keepClear });
 
     // Enemies, only over solid ground, getting stronger towards the arena and with every world
@@ -517,6 +621,18 @@
     const basePower = FIRST_POWER + Math.floor(position * POWER_PER_LEVEL);
     // Some worlds are crawling with their own creatures (spiders on the rainbow, crawlers on the ship)
     const natives = theme.natives || null;
+    // Every level has a creature of its own that turns up far more than the rest (the worlds
+    // with natives already have theirs)
+    let featured = null;
+    if (!natives) {
+      if (random() < FEATURED_SKY_CHANCE) {
+        featured = { kind: pick(SKY_KINDS) };
+      } else {
+        // One species at one power, so every one of them is the same monster
+        featured = { kind: 'mutant', seed: Math.floor(random() * 0x7fffffff), power: Math.min(MAX_POWER, basePower + 1) };
+        if (theme.future) featured.cyber = random() < FEATURED_CYBER_CHANCE;
+      }
+    }
     const rollEnemy = x => {
       const roll = random();
       if (natives && random() < natives.share) return { kind: pick(natives.kinds), x };
@@ -533,15 +649,28 @@
     }
     // Every sky island has monsters of its own
     islands.forEach(island => {
-      const count = Math.max(2, Math.round(island.width / ISLAND_UNITS_PER_MONSTER));
+      const count = Math.max(island.width >= 12 ? 2 : 1, Math.round(island.width / ISLAND_UNITS_PER_MONSTER));
       for (let i = 0; i < count; i++) {
         const x = island.x + 2 + ((island.width - 4) * (i + 0.5)) / count;
         enemies.push({ ...rollEnemy(x), allowLedges: true });
       }
     });
+    // Then a fixed share of them, picked at random, become the featured creature (so a level
+    // never ends up with just one or two of them by bad luck)
+    if (featured) {
+      const order = enemies.map((_, index) => index);
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      order.slice(0, Math.round(enemies.length * FEATURED_SHARE)).forEach(index => {
+        const { x, allowLedges } = enemies[index];
+        enemies[index] = { ...featured, x, ...(allowLedges !== undefined ? { allowLedges } : {}) };
+      });
+    }
     enemies.sort((a, b) => a.x - b.x);
 
-    return { ground, platforms, routes, traps, enemies, arena };
+    return { ground, platforms, routes, traps, specialTraps, featured, enemies, arena };
   }
 
   /**
@@ -659,6 +788,8 @@
   const THEMES = [
     {
       id: 'forest',
+      trap: 'flytrap',
+      trapHint: 'Snapping flytraps bite anyone who walks into them. Jump over!',
       name: 'THE WHISPERING FOREST',
       icon: '🌲',
       flavor: 'Hop the gaps, grab the coins, and find out what rules these woods!',
@@ -667,6 +798,8 @@
     },
     {
       id: 'dungeon',
+      trap: 'pendulum',
+      trapHint: 'Giant axes swing from the ceiling. Time your run!',
       name: 'THE SUNKEN DUNGEON',
       icon: '🏰',
       flavor: 'Torchlit halls and bottomless pits. Something big is smouldering below...',
@@ -675,6 +808,8 @@
     },
     {
       id: 'treetops',
+      trap: 'thundercloud',
+      trapHint: 'Thunderclouds flicker before lightning strikes.',
       name: 'THE CLOUD CANOPY',
       icon: '☁️',
       flavor: 'High above the forest, branch to branch and cloud to cloud. Don\'t look down!',
@@ -683,6 +818,8 @@
     },
     {
       id: 'desert',
+      trap: 'quicksand',
+      trapHint: 'Quicksand slows you down, and pulls you under if you don\'t get out!',
       name: 'THE SCORCHING DUNES',
       icon: '🏜️',
       flavor: 'Blazing sun and howling sandstorms. Watch the gusts when you jump!',
@@ -692,6 +829,8 @@
     },
     {
       id: 'ice',
+      trap: 'thinIce',
+      trapHint: 'Thin ice cracks under your feet and drops you into the pit below.',
       name: 'THE FROZEN PEAKS',
       icon: '❄️',
       flavor: 'A silent night under the aurora. The ice is slippery: you can\'t stop on a dime!',
@@ -701,6 +840,8 @@
     },
     {
       id: 'volcano',
+      trap: 'geyser',
+      trapHint: 'Lava geysers bubble, then blast up out of the rock.',
       name: 'THE MOLTEN CORE',
       icon: '🌋',
       flavor: 'Rivers of lava and fire raining from the sky. Smash the lava bombs!',
@@ -710,6 +851,8 @@
     },
     {
       id: 'candy',
+      trap: 'jawbreaker',
+      trapHint: 'Giant jawbreakers roll back and forth. Jump over them!',
       name: 'THE CANDY KINGDOM',
       icon: '🍭',
       flavor: 'Sweet as can be... and full of teeth. Bounce on the marshmallows!',
@@ -719,6 +862,8 @@
     },
     {
       id: 'moon',
+      trap: 'meteor',
+      trapHint: 'Meteors fall where the red marks flash. Step aside!',
       name: 'THE SILENT MOON',
       icon: '🌙',
       flavor: 'The Earth hangs overhead. Gravity is weak here: float across the craters!',
@@ -729,6 +874,8 @@
     // --- Future meets fantasy ---
     {
       id: 'neon',
+      trap: 'laserGate',
+      trapHint: 'Laser gates blink before they switch on.',
       name: 'NEON SPELL CITY',
       icon: '🌃',
       flavor: 'Wizard towers and hover-lights under a synthwave sun. The streets hum with magic!',
@@ -738,6 +885,8 @@
     },
     {
       id: 'crystal',
+      trap: 'crystalArc',
+      trapHint: 'Electric arcs crackle between the crystals. Hop over them!',
       name: 'THE CIRCUIT CRYSTAL CAVES',
       icon: '💎',
       flavor: 'Enchanted crystals wired with ancient circuits. They hum and glow in the dark.',
@@ -747,6 +896,8 @@
     },
     {
       id: 'clockwork',
+      trap: 'crusher',
+      trapHint: 'Pistons shake, then slam down. Run under while they rise!',
       name: 'THE CLOCKWORK SKY CITADEL',
       icon: '⚙️',
       flavor: 'A brass citadel floating on steam and sorcery. Mind the steam gusts!',
@@ -757,6 +908,8 @@
     },
     {
       id: 'atlantis',
+      trap: 'seaMine',
+      trapHint: 'Sea mines bob up and down on their chains. Boom!',
       name: 'TECHNO-ATLANTIS',
       icon: '🔱',
       flavor: 'A sunken city of glass domes and sea magic. Down here you float with every jump!',
@@ -767,6 +920,8 @@
     },
     {
       id: 'fae',
+      trap: 'puffball',
+      trapHint: 'Spore puffballs make you dizzy: left and right swap round!',
       name: 'THE HOLO FAE GARDEN',
       icon: '🍄',
       flavor: 'Glowing mushrooms and hologram fairies. Bounce on the springy caps!',
@@ -777,6 +932,8 @@
     },
     {
       id: 'mechKeep',
+      trap: 'flamethrower',
+      trapHint: 'Flamethrowers fire back along the floor. Jump the flames!',
       name: 'THE MECH DRAGON KEEP',
       icon: '🐉',
       flavor: 'A steel castle guarded by dragon drones. Smash the plasma bombs they drop!',
@@ -787,6 +944,8 @@
     },
     {
       id: 'rift',
+      trap: 'rift',
+      trapHint: 'Step into a rift and it throws you back the way you came.',
       name: 'THE QUANTUM RIFT',
       icon: '🌀',
       flavor: 'Floating islands torn from time. Gravity glitches here: soar across the void!',
@@ -797,6 +956,8 @@
     },
     {
       id: 'station',
+      trap: 'airlockVent',
+      trapHint: 'Airlock vents blast you backwards when the lamp flashes.',
       name: 'THE STARWIZARD STATION',
       icon: '🛸',
       flavor: 'An orbital tower of rune engines. The decks are polished slick: careful how you stop!',
@@ -808,6 +969,8 @@
     // --- The strange worlds ---
     {
       id: 'noir',
+      trap: 'bananaPeel',
+      trapHint: 'Watch out for banana peels!',
       name: 'THE SILENT FILM',
       icon: '🎞️',
       flavor: 'You fell into an old cartoon. Everything is black and white... even you!',
@@ -817,6 +980,8 @@
     },
     {
       id: 'mothership',
+      trap: 'tractorBeam',
+      trapHint: 'Tractor beams lift you up to a zapping saucer. Get out of the light!',
       name: 'THE ALIEN MOTHERSHIP',
       icon: '👽',
       flavor: 'Beamed aboard! The corridors are crawling with acid-spitting crawlers.',
@@ -827,6 +992,8 @@
     },
     {
       id: 'rainbow',
+      trap: 'spider',
+      trapHint: 'Spiders drop down on their threads.',
       name: 'THE RAINBOW OF WEBS',
       icon: '🌈',
       flavor: 'Run along a rainbow above the clouds. Spiders drop in on silk threads!',
@@ -837,6 +1004,8 @@
     },
     {
       id: 'rising',
+      trap: 'boulder',
+      trapHint: 'Boulders shoot up out of the cracks in the ground.',
       name: 'THE WORLD THAT FALLS UP',
       icon: '🎈',
       flavor: 'Houses, cows, ledges... everything here is floating up into the sky!',
@@ -847,6 +1016,8 @@
     },
     {
       id: 'kitchen',
+      trap: 'stoveBurner',
+      trapHint: 'Stove burners glow orange, then red hot. Off you hop!',
       name: 'THE GIANT\'S KITCHEN',
       icon: '🍪',
       flavor: 'You\'ve shrunk to the size of a crumb! Peas are rolling off the giant\'s plate!',
@@ -858,12 +1029,14 @@
     },
     {
       id: 'concert',
+      trap: 'speaker',
+      trapHint: 'Speakers blast shockwaves along the floor. Jump the beat!',
       name: 'THE OCTOPUS ROCK CONCERT',
       icon: '🐙',
       flavor: 'An octopus band is rocking the stage! Bounce on the speakers and ride the beat!',
       theme: 'concert',
       layout: { bouncy: true, beat: 140 },
-      natives: { kinds: ['octorocker'], share: 0.3 },
+      natives: { kinds: ['octorocker'], share: 0.45 },
       boss: { kind: 'octorocker', name: 'THE TENTACLE KING OF ROCK', flavor: 'The lead singer crowd-surfs right at you! Dodge the notes!', sizeScale: 2.2 }
     }
   ].map(theme => Object.freeze(theme));
@@ -930,6 +1103,7 @@
       platforms,
       coins: [],
       traps: [],
+      specialTraps: [],
       enemies: [],
       routes: [],
       arena: { start: 0, end: TRAINING_WIDTH },

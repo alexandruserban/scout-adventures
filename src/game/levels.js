@@ -17,6 +17,8 @@
  *  - platforms: one-way ledges { x: left edge, y: top, width } (bouncy ones launch the boy, moving
  *               ones ferry him across, crumbling ones fall away soon after he lands)
  *  - traps:     spikes { x: left edge, width, period, phase } that pop up out of the ground
+ *  - islands:   huge platforms high in the sky (platforms with `island`), a second ground level
+ *               reached by the trampoline under their near end, with monsters of their own
  *  - coins:     { x, y } centre of each coin
  *  - enemies:   { kind, x } each drops in when the boy gets close. kind is 'mushroom', a sky creature
  *               (nutling, thornback, gloomwing, jelly) or 'mutant': a freshly rolled Monster Forge monster
@@ -65,6 +67,15 @@
     platforms.forEach(platform => {
       // Moving stones over a pit leave their coins to the arc over it
       if (platform.move && platform.essential) return;
+      if (platform.island) {
+        for (let x = platform.x + 1.5; x < platform.x + platform.width - 1.5; x += 3) coins.push(...coinRow(x, platform.y + GROUND_COIN_Y, 2));
+        return;
+      }
+      if (platform.bouncy && platform.essential) {
+        // The trampoline up to a sky island: one coin just above it (any higher is inside the island)
+        coins.push({ x: platform.x + platform.width / 2, y: platform.y + 1.1 });
+        return;
+      }
       if (platform.bouncy) {
         coins.push(...coinRow(platform.x + platform.width / 2 - 0.35, platform.y + 3.4, 2));
         return;
@@ -226,6 +237,22 @@
   const SPIKE_CHANCE = [0.22, 0.5];
   const SPIKE_WIDTH = [1.4, 2.2];
   const SPIKES_FROM_X = 14;
+  /** Sky islands: how many (rounded), how wide, how far apart, and never before this x. */
+  const ISLAND_COUNT = [2, 3.4];
+  const ISLAND_WIDTH = [12, 20];
+  const ISLAND_SPACING = 10;
+  const ISLANDS_FROM_X = 20;
+  /** They float this far above their trampoline (times the jump scale): a bounce goes ~4.5. */
+  const ISLAND_RISE = 3.6;
+  /** And at least this far above any ground under them, so he can walk (and jump) underneath. */
+  const ISLAND_CLEARANCE = 2.8;
+  const TRAMPOLINE_WIDTH = 2.2;
+  /** The trampoline starts this far in under the island's near end. */
+  const TRAMPOLINE_INSET = 0.2;
+  /** Share of the spots along the ground that get a trampoline (with a high ledge), outside the bouncy worlds. */
+  const TRAMPOLINE_CHANCE = 0.14;
+  /** Monsters on each sky island: one per this many units of it, at least two. */
+  const ISLAND_UNITS_PER_MONSTER = 7;
   /** Monster Forge power at the first world, and how much it grows with each world visited. */
   const FIRST_POWER = 1;
   const POWER_PER_LEVEL = 0.55;
@@ -351,13 +378,46 @@
   }
 
   /**
+   * Huge islands floating high above the course, so it feels like a second ground level up there.
+   * Each one has a trampoline on the ground under its near end to bounce up onto it, and solid
+   * ground under its far end to drop back down to. They keep clear of the high route.
+   * @returns {{islands:object[], trampolines:object[]}}
+   */
+  function rollSkyIslands({ ground, routes, arena, random, between, jumpScale }) {
+    const islands = [];
+    const trampolines = [];
+    const segmentAt = x => ground.find(([l, r]) => x >= l && x <= r);
+    const keepClear = routes.map(route => [route.x - 4, route.x + 34]);
+    const count = Math.round(between(...ISLAND_COUNT));
+    for (let attempt = 0; attempt < 60 && islands.length < count; attempt++) {
+      const width = between(...ISLAND_WIDTH);
+      const x = between(ISLANDS_FROM_X, arena.start - 8 - width);
+      const end = x + width;
+      if (keepClear.some(([clearLeft, clearRight]) => end > clearLeft && x < clearRight)) continue;
+      if (islands.some(other => end > other.x - ISLAND_SPACING && x < other.x + other.width + ISLAND_SPACING)) continue;
+      // Solid ground under the trampoline, and under the drop off the far end
+      const padX = x + TRAMPOLINE_INSET;
+      const padGround = segmentAt(padX - 0.3);
+      if (!padGround || padGround[1] < padX + TRAMPOLINE_WIDTH + 0.3) continue;
+      if (!ground.some(([l, r]) => l <= end - 0.5 && r >= end + 2.5)) continue;
+      const padTop = (padGround[2] || 0) + 0.6;
+      const y = padTop + ISLAND_RISE * jumpScale;
+      const highestBelow = Math.max(0, ...ground.filter(([l, r]) => r > x && l < end).map(([, , h = 0]) => h));
+      if (y - highestBelow < ISLAND_CLEARANCE) continue;
+      islands.push({ x, y, width, island: true, essential: true });
+      trampolines.push({ x: padX, y: padTop, width: TRAMPOLINE_WIDTH, bouncy: true, essential: true });
+    }
+    return { islands, trampolines };
+  }
+
+  /**
    * Spikes that pop out of the ground, on the longer flat stretches (never at the very start, by
    * the high route's way up or in the arena). Later worlds have more of them.
    */
-  function rollSpikeTraps({ ground, routes, arena, random, between, challenge }) {
+  function rollSpikeTraps({ ground, routes, arena, random, between, challenge, keepClear: alsoClear = [] }) {
     const traps = [];
     const chance = SPIKE_CHANCE[0] + (SPIKE_CHANCE[1] - SPIKE_CHANCE[0]) * challenge;
-    const keepClear = routes.map(route => [route.x - 1.5, route.x + 7]);
+    const keepClear = [...routes.map(route => [route.x - 1.5, route.x + 7]), ...alsoClear];
     ground.forEach(([left, right, height = 0]) => {
       const from = Math.max(left + 2.5, SPIKES_FROM_X);
       const to = Math.min(right - 2.5, arena.start - 4);
@@ -410,7 +470,7 @@
       let x = Math.max(segmentLeft + 1.2, 7) + random() * 2;
       while (x < to - 3) {
         const roll = random();
-        if (bouncy && roll < 0.25 && x + 7 < to) {
+        if (roll < (bouncy ? 0.25 : TRAMPOLINE_CHANCE) && x + 7 < to) {
           platforms.push({ x, y: height + 0.6, width: 2.2, bouncy: true });
           platforms.push({ x: x + 3.4, y: height + 4.4 * lift, width: 3 });
           x += 6.4 + between(3, 5);
@@ -442,21 +502,44 @@
       });
     }
 
-    const traps = rollSpikeTraps({ ground, routes, arena, random, between, challenge });
+    // Huge islands in the sky; ledges that would crowd them make way
+    const { islands, trampolines } = rollSkyIslands({ ground, routes, arena, random, between, jumpScale });
+    const skyPlatforms = [...islands, ...trampolines];
+    const roomyPlatforms = platforms.filter(platform => platform.essential || !islands.some(island => isCrowding(platform, island)));
+    platforms.length = 0;
+    platforms.push(...roomyPlatforms, ...skyPlatforms);
+
+    const keepClear = trampolines.map(pad => [pad.x - 1, pad.x + pad.width + 1]);
+    const traps = rollSpikeTraps({ ground, routes, arena, random, between, challenge, keepClear });
 
     // Enemies, only over solid ground, getting stronger towards the arena and with every world
     const enemies = [];
     const basePower = FIRST_POWER + Math.floor(position * POWER_PER_LEVEL);
     // Some worlds are crawling with their own creatures (spiders on the rainbow, crawlers on the ship)
     const natives = theme.natives || null;
+    const rollEnemy = x => {
+      const roll = random();
+      if (natives && random() < natives.share) return { kind: pick(natives.kinds), x };
+      if (roll < 0.08) return { kind: 'mushroom', x };
+      if (roll < 0.36) return { kind: pick(SKY_KINDS), x };
+      return { kind: 'mutant', x, power: Math.min(MAX_POWER, basePower + Math.floor((x / arena.start) * 2.5)) };
+    };
     for (let x = between(12, 16); x < arena.start - 4; x += between(6, 9)) {
       if (!ground.some(([l, r]) => x > l + 1 && x < r - 1)) continue;
-      const roll = random();
-      if (natives && random() < natives.share) enemies.push({ kind: pick(natives.kinds), x });
-      else if (roll < 0.08) enemies.push({ kind: 'mushroom', x });
-      else if (roll < 0.36) enemies.push({ kind: pick(SKY_KINDS), x });
-      else enemies.push({ kind: 'mutant', x, power: Math.min(MAX_POWER, basePower + Math.floor((x / arena.start) * 2.5)) });
+      const entry = rollEnemy(x);
+      // The ones under a sky island stay down on the ground
+      if (islands.some(island => x > island.x - 1 && x < island.x + island.width + 1)) entry.allowLedges = false;
+      enemies.push(entry);
     }
+    // Every sky island has monsters of its own
+    islands.forEach(island => {
+      const count = Math.max(2, Math.round(island.width / ISLAND_UNITS_PER_MONSTER));
+      for (let i = 0; i < count; i++) {
+        const x = island.x + 2 + ((island.width - 4) * (i + 0.5)) / count;
+        enemies.push({ ...rollEnemy(x), allowLedges: true });
+      }
+    });
+    enemies.sort((a, b) => a.x - b.x);
 
     return { ground, platforms, routes, traps, enemies, arena };
   }
@@ -486,7 +569,7 @@
   const BEAT_BOB_HEIGHT = 0.22;
 
   function animatePlatform(platform, layout, random) {
-    if (!layout || platform.move || platform.bouncy || platform.crumble) return platform;
+    if (!layout || platform.move || platform.bouncy || platform.crumble || platform.island) return platform;
     if (layout.rising) {
       return { ...platform, move: { rise: RISE_DISTANCE, period: RISE_PERIOD[0] + random() * (RISE_PERIOD[1] - RISE_PERIOD[0]), phase: random() } };
     }

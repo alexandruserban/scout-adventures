@@ -203,6 +203,26 @@
     return { canvas, surfaceRow: 0 };
   }
 
+  /** A springy trampoline: a dark mat on a red frame, standing on little legs. */
+  function createTrampoline(widthPixels) {
+    const legs = [2, widthPixels - 4];
+    if (widthPixels > 30) legs.push(Math.floor(widthPixels / 2) - 1);
+    const canvas = paintSlab(widthPixels, 10, (x, y, w) => {
+      const isEnd = x < 2 || x > w - 3;
+      if (y === 0) return isEnd ? '#ff6a5c' : '#5d6fa8'; // shine on the frame ends and the mat
+      if (y === 1) return isEnd ? '#d8342c' : '#2b3350';
+      if (y === 2) return '#d8342c';
+      if (y === 3) return '#8a1c18';
+      const leg = legs.some(legX => x === legX || x === legX + 1);
+      if (!leg) return null;
+      if (y === 9) return '#3a3f48';
+      // Coiled springs at the top of each leg
+      if (y <= 6) return (y + (x % 2)) % 2 === 0 ? '#e0e4ea' : '#8a909a';
+      return '#7a808a';
+    });
+    return { canvas, surfaceRow: 0 };
+  }
+
   function createMetalPanel(widthPixels) {
     const canvas = paintSlab(widthPixels, 10, (x, y, w, h) => {
       if (y === 0) return '#d6dbe4';
@@ -343,6 +363,7 @@
       moon: createMetalPanel
     },
     createMarshmallowPad,
+    createTrampoline,
     decorations: {
       desert: [createCactus],
       ice: [createIceCrystal],

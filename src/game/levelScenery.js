@@ -40,6 +40,9 @@
   /** Coming back, it fades in over this long. */
   const CRUMBLE_RETURN_FADE_SECONDS = 0.4;
   const CRACK_COLOR = 'rgba(25, 12, 6, 0.8)';
+  /** A sky island's slab of earth under its surface, then two narrower steps tapering away below. */
+  const ISLAND_DEPTH = 0.8;
+  const ISLAND_TAPERS = [[0.78, 0.35], [0.5, 0.3]];
 
   const THEME_STYLE = {
     forest: { fill: '#290f02', edge: '#170800', pit: '#080402' },
@@ -122,8 +125,10 @@
       this.floaters = [];
       /** Gives every decoration its own depth, so overlapping props never flicker. */
       this.decorationCount = 0;
-      /** Sticky spider webs on the ground (the rainbow): { left, right, top } in world units. */
+      /** Sticky spider webs on the ground (the rainbow): { left, right, top, bottom } in world units. */
       this.stickyWebs = [];
+      /** Worlds without a pad of their own get marshmallows if they're bouncy, trampolines otherwise. */
+      this.defaultBouncePad = level.layout && level.layout.bouncy ? WorldArt.createMarshmallowPad : WorldArt.createTrampoline;
 
       const segments = [...level.ground].sort((a, b) => a[0] - b[0]);
       segments.forEach((segment, index) => this.addGroundSegment(segment, index, segments));
@@ -273,10 +278,14 @@
       });
     }
 
-    addPlatform({ x, y, width, bouncy, crumble }, surface) {
+    addPlatform({ x, y, width, bouncy, crumble, island }, surface) {
+      if (island) {
+        this.addSkyIsland(x, y, width);
+        return;
+      }
       const widthPixels = Math.round(width / PIXEL_SCALE);
       const painters = { forest: Art.createForestLedge, dungeon: Art.createStoneSlab, treetops: Art.createCloudPlatform, ...WorldArt.platforms };
-      const bouncePad = (WorldArt.bouncePads && WorldArt.bouncePads[this.theme]) || WorldArt.createMarshmallowPad;
+      const bouncePad = (WorldArt.bouncePads && WorldArt.bouncePads[this.theme]) || this.defaultBouncePad;
       const paint = bouncy ? bouncePad : painters[this.theme];
       const { canvas, surfaceRow } = paint(widthPixels);
       if (crumble) crackCanvas(canvas, surfaceRow);
@@ -288,6 +297,40 @@
       this.add(mesh, x + width / 2, y + offsetY, PLATFORM_Z);
       if (surface && surface.move) this.movingMeshes.push({ mesh, surface, offsetY });
       else if (surface && surface.isCrumbly) this.crumblingMeshes.push({ mesh, surface, restX: mesh.position.x, restY: mesh.position.y });
+    }
+
+    /**
+     * A huge island in the sky that looks like a piece of the ground: the world's own surface on a
+     * slab of earth tapering away underneath (just the surface where the ground floats anyway),
+     * with the world's trees and props on top.
+     */
+    addSkyIsland(left, top, width) {
+      const tile = this.tiles[this.theme];
+      const tileHeight = tile.height * PIXEL_SCALE;
+      const centerX = left + width / 2;
+      this.tiledStrip(tile, left, width, top);
+      if (this.style.fill) {
+        let bottom = top - tileHeight + PIXEL_SCALE;
+        this.solidRect(this.style.fill, width, ISLAND_DEPTH, centerX, bottom - ISLAND_DEPTH / 2, FILL_Z);
+        this.solidRect(this.style.edge, EDGE_WIDTH, ISLAND_DEPTH + tileHeight - 0.4, left + EDGE_WIDTH / 2, top - 0.4 - (ISLAND_DEPTH + tileHeight - 0.4) / 2, EDGE_Z);
+        this.solidRect(this.style.edge, EDGE_WIDTH, ISLAND_DEPTH + tileHeight - 0.4, left + width - EDGE_WIDTH / 2, top - 0.4 - (ISLAND_DEPTH + tileHeight - 0.4) / 2, EDGE_Z);
+        bottom -= ISLAND_DEPTH;
+        let stepWidth = width;
+        ISLAND_TAPERS.forEach(([share, depth]) => {
+          // A dark rim under each step, then the narrower step below it
+          this.solidRect(this.style.edge, stepWidth, EDGE_WIDTH, centerX, bottom + EDGE_WIDTH / 2, EDGE_Z);
+          stepWidth = width * share;
+          this.solidRect(this.style.fill, stepWidth, depth, centerX, bottom - depth / 2, FILL_Z);
+          bottom -= depth;
+        });
+        this.solidRect(this.style.edge, stepWidth, EDGE_WIDTH, centerX, bottom + EDGE_WIDTH / 2, EDGE_Z);
+      }
+      this.groundTop = top;
+      const index = Math.round(left * 10);
+      if (this.theme === 'forest') this.decorateForest(left, left + width, index);
+      else if (this.theme === 'dungeon') this.decorateDungeon(left, left + width, index);
+      else if (this.theme === 'treetops') this.decorateTreetops(left, left + width, index);
+      else this.decorateWorld(left, left + width, index);
     }
 
     // ==========================================
@@ -345,7 +388,10 @@
         if (prop.canvas.isStickyWeb) {
           // The silk between the twigs (a little narrower than the whole picture)
           const halfWidth = prop.width * PIXEL_SCALE * scale * 0.4;
-          this.stickyWebs.push({ left: x - halfWidth, right: x + halfWidth, top: this.groundTop - 0.05 + prop.height * PIXEL_SCALE * scale });
+          this.stickyWebs.push({
+            left: x - halfWidth, right: x + halfWidth,
+            top: this.groundTop - 0.05 + prop.height * PIXEL_SCALE * scale, bottom: this.groundTop - 0.3
+          });
         }
         // In the world that falls up, the props drift off the ground into the sky, over and over
         if (this.theme === 'rising') this.floaters.push({ mesh, baseY: mesh.position.y, climbed: hash(x * 23) * FLOAT_HEIGHT, speed: FLOAT_SPEED * (0.7 + hash(x * 29) * 0.6) });

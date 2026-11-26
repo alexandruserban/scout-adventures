@@ -23,7 +23,7 @@
   const WALL_STEP = 0.02;
 
   /** A platform's surface, from its level data. */
-  function createPlatform({ x, y, width, bouncy = false, move = null, crumble = false }) {
+  function createPlatform({ x, y, width, bouncy = false, move = null, crumble = false, island = false }) {
     return {
       left: x,
       right: x + width,
@@ -32,6 +32,8 @@
       isBouncy: bouncy,
       move,
       isCrumbly: crumble,
+      /** A huge island in the sky: monsters may live on it however high it is. */
+      isIsland: island,
       /** Crumbling ledges: 'solid', 'shaking' (stood on) or 'fallen' (not there), for `stateSeconds`. */
       crumbleState: 'solid',
       stateSeconds: Infinity, // long settled: no fade-in at the start
@@ -185,7 +187,7 @@
         if (x < surface.left || x > surface.right || surface.top > fromY) continue;
         const isRoomyLedge = !surface.isGround && !surface.move && !surface.isBouncy && !surface.isCrumbly
           && surface.width >= LANDING_MIN_WIDTH && surface.top <= LANDING_MAX_HEIGHT;
-        if (!surface.isGround && !(allowLedges && isRoomyLedge)) continue;
+        if (!surface.isGround && !(allowLedges && (isRoomyLedge || surface.isIsland))) continue;
         if (!best || surface.top > best.top) best = surface;
       }
       return best;

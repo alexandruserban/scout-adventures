@@ -20,6 +20,7 @@
   const boyCanvas = document.getElementById('menu-boy');
 
   const DIFFICULTY_ICONS = { EASY: '🌱', NORMAL: '⚔️', HARD: '💀' };
+  const PLAY_LABELS = { title: '▶ PLAY', resume: '▶ RESUME', restart: '▶ START GAME' };
   const BOY_FRAME_MS = 260;
 
   let onPlay = null;
@@ -84,7 +85,7 @@
     const isPause = options.mode === 'pause';
     onPlay = options.onPlay;
     onNewGame = options.onNewGame || null;
-    playButton.textContent = isPause ? '▶ RESUME' : '▶ PLAY';
+    playButton.textContent = isPause ? PLAY_LABELS.resume : PLAY_LABELS.title;
     subtitleElement.textContent = isPause ? '⏸ PAUSED' : "THE BOY'S QUEST";
     newGameButton.style.display = isPause && onNewGame ? '' : 'none';
     if (options.getBestPoints) getBestPoints = options.getBestPoints;
@@ -162,6 +163,13 @@
     show,
     hide,
     isCoveredByOverlay,
+    /**
+     * Pause menu: the big button resumes the game ('resume'), or starts a fresh one ('restart')
+     * once a different difficulty has been picked.
+     */
+    setPlayAction(action) {
+      playButton.textContent = PLAY_LABELS[action];
+    },
     get isOpen() {
       return isOpen();
     }

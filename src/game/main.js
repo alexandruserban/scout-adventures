@@ -265,6 +265,8 @@
   let hasWon = false;
   /** False while the title screen is up and nothing has been played yet. */
   let hasStarted = false;
+  /** The difficulty of the game under the pause menu (picking another one there starts a fresh game). */
+  let pausedDifficultyId = null;
 
   // --- The current level ---
   let level = null;
@@ -476,14 +478,33 @@
     Forest.Music.setPaused(false);
   }
 
+  /** The note on the loading screen when a game starts over at a new difficulty. */
+  function difficultyNote() {
+    const { label, startHearts } = Difficulty.current;
+    return `DIFFICULTY: ${label} · ${startHearts} HEARTS`;
+  }
+
+  /**
+   * The pause menu's big button (or Esc): back to the game, or, if a different difficulty was
+   * picked meanwhile, a fresh game at that difficulty.
+   */
+  function playFromPauseMenu() {
+    if (Difficulty.current.id !== pausedDifficultyId) {
+      if (isTraining) startTrainingSession(difficultyNote());
+      else startAdventure(difficultyNote());
+    }
+    closeMainMenu();
+  }
+
   /** Esc (or ☰ on phones) during a game: pause, stop the music and bring up the main menu. */
   function openPauseMenu() {
     if (!hasStarted || Forest.LoadingScreen.isBusy || Forest.MainMenu.isOpen) return;
     Forest.Game.setPaused(true, 'main-menu');
     Forest.Music.setPaused(true); // the music waits for RESUME
+    pausedDifficultyId = Difficulty.current.id;
     Forest.MainMenu.show({
       mode: 'pause',
-      onPlay: closeMainMenu,
+      onPlay: playFromPauseMenu,
       onNewGame: () => {
         if (isTraining) Forest.Game.endTraining();
         else startAdventure(); // pauses for its loading screen before the menu lets go
@@ -498,7 +519,7 @@
   window.addEventListener('keydown', event => {
     if (event.code !== 'Escape' || event.repeat || Forest.MainMenu.isCoveredByOverlay()) return;
     if (!Forest.MainMenu.isOpen) openPauseMenu();
-    else if (hasStarted) closeMainMenu();
+    else if (hasStarted) playFromPauseMenu();
   }, true);
 
   /** Try the current level again from its start, with full health (same course as before). */
@@ -523,7 +544,8 @@
   function spawnLevelEnemy(entry) {
     const difficulty = Difficulty.current;
     // About half of them may come down on a ledge above, the rest land on the ground
-    const allowLedges = Math.random() < LEDGE_LANDING_CHANCE;
+    // The level may say where it lands (on a sky island, or under one); otherwise it's a coin toss
+    const allowLedges = entry.allowLedges !== undefined ? entry.allowLedges : Math.random() < LEDGE_LANDING_CHANCE;
     if (entry.kind === 'mushroom') {
       addEnemy(new Forest.EvilMushroom(world, { x: entry.x, patrolDistance: LEVEL_PATROL_DISTANCE, allowLedges }, onEnemyDefeated));
       return;
@@ -871,7 +893,8 @@
   /** Walking (not jumping) through a sticky web on the ground slows the boy down. */
   function checkStickyWebs() {
     if (!scenery || player.isDefeated) return;
-    const isInWeb = scenery.stickyWebs.some(web => player.x > web.left && player.x < web.right && player.y < web.top - 0.4);
+    const isInWeb = scenery.stickyWebs.some(web => player.x > web.left && player.x < web.right
+      && player.y < web.top - 0.4 && player.y > web.bottom);
     if (isInWeb) player.entangle(GROUND_WEB_STUCK_SECONDS, GROUND_WEB_SPEED_FACTOR);
   }
 
@@ -1075,14 +1098,17 @@
     });
   }
 
-  // A new difficulty starts a fresh run with that many hearts (on the title screen it's just picked)
+  // On the title screen a difficulty is just picked. On the pause menu nothing restarts yet: the
+  // big button turns into START GAME (and back into RESUME if the game's own difficulty is picked
+  // again). Changed anywhere else during a game, a fresh run starts with that many hearts.
   Difficulty.onChange(changedLevel => {
     if (!hasStarted) return;
-    const note = `DIFFICULTY: ${changedLevel.label} · ${changedLevel.startHearts} HEARTS`;
-    if (isTraining) startTrainingSession(note);
-    else startAdventure(note);
-    // Picked on the pause menu: the fresh game starts straight away
-    if (Forest.MainMenu.isOpen) closeMainMenu();
+    if (Forest.MainMenu.isOpen) {
+      Forest.MainMenu.setPlayAction(changedLevel.id === pausedDifficultyId ? 'resume' : 'restart');
+      return;
+    }
+    if (isTraining) startTrainingSession(difficultyNote());
+    else startAdventure(difficultyNote());
   });
 
   // ==========================================

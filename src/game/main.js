@@ -453,6 +453,7 @@
     hasWon = false;
     levelIndex = index;
     if (!course) levelStart = { points, coins: coinsCollected, coinsOffered, maxHp };
+    Forest.Stats.raise('furthestLevel', index + 1);
     levelCoins = 0;
     levelCoinsPicked = 0;
     levelMonstersDefeated = 0;
@@ -516,6 +517,7 @@
     coinsOffered = 0;
     runOrder = Levels.createRun();
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
+    Forest.Stats.add('adventuresStarted');
     const { startHearts } = Difficulty.current;
     startLevel(0, startHearts, startHearts, { note });
   }
@@ -866,6 +868,7 @@
 
   function onBossDefeated(enemy) {
     onEnemyDefeated(enemy);
+    Forest.Stats.add('bossesDefeated');
     arenaState = ArenaState.BOSS_DOWN;
     bossFallSpot = { x: enemy.x, y: enemy.centerY };
     // With their leader gone, the sidekicks blow up too
@@ -903,6 +906,7 @@
     arenaState = ArenaState.CLEARED;
     nextLevelTimer = COIN_TALLY_DELAY_SECONDS;
     Sfx.levelCleared();
+    Forest.Stats.add('levelsCleared');
     const bonus = LEVEL_CLEAR_POINTS * level.number;
     points += bonus;
     player.raiseMaxHp(1, Difficulty.current.maxHearts);
@@ -968,6 +972,7 @@
       total += bonus;
     }
     if (total === 0) return false;
+    if (lines.length === 2) Forest.Stats.add('perfectLevels');
     points += total;
     Sfx.newSpecies();
     particles.burst(player.x, player.y + player.height + 0.4, 18, '#ffd84a', 1.6, 0.6);
@@ -1016,6 +1021,7 @@
     }
     hasWon = true;
     clearSavedRun(); // the adventure is over: nothing left to continue
+    Forest.Stats.add('adventuresCompleted');
     const totalCoins = coinsOffered;
     const previousBest = loadBest(BEST_POINTS_STORAGE_KEY);
     const isNewBestPoints = points > previousBest;
@@ -1094,6 +1100,7 @@
     floatingText.spawn(`+${reward}`, enemy.x, enemy.centerY + 0.5);
     if (Math.random() < Rewards.heartDropChance(enemy)) hearts.spawn(enemy.x, enemy.centerY);
     if (isTraining) return;
+    Forest.Stats.add('monstersDefeated');
     if (enemy.isLevelMonster) levelMonstersDefeated++;
     Scrapbook.recordDefeat(enemy);
   }
@@ -1103,6 +1110,7 @@
     coinsCollected++;
     levelCoins++;
     levelCoinsPicked++;
+    if (!isTraining) Forest.Stats.add('coinsCollected');
     Sfx.coin();
   }
 
@@ -1165,6 +1173,7 @@
       showTrainingResult(false);
       return;
     }
+    Forest.Stats.add('gameOvers');
     const previousBestPoints = loadBest(BEST_POINTS_STORAGE_KEY);
     const isNewBestPoints = points > previousBestPoints;
     if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, points);
@@ -1307,6 +1316,7 @@
       stage.render();
       return;
     }
+    if (hasStarted) Forest.Stats.add('playSeconds', realDeltaSeconds);
     // Gameplay freezes during hit-stop, but the camera keeps shaking
     const gameDeltaSeconds = hitStop.consume(realDeltaSeconds);
 

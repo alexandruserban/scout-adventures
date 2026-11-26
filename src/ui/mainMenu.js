@@ -37,7 +37,7 @@
 
   /** The scrapbook or the sprite gallery is open on top of the menu. */
   function isCoveredByOverlay() {
-    return ['scrapbook-overlay', 'gallery-overlay'].some(id => document.getElementById(id).style.display === 'flex');
+    return ['scrapbook-overlay', 'gallery-overlay', 'stats-overlay'].some(id => document.getElementById(id).style.display === 'flex');
   }
 
   function refresh() {

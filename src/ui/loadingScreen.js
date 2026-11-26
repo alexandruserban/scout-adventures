@@ -22,6 +22,9 @@
   /** After booting, the full bar stays up this long before fading. */
   const BOOT_SETTLE_MS = 300;
   const BOY_FRAME_MS = 110;
+  /** The story types itself out, one letter every this many ms. */
+  const TYPE_MS_PER_LETTER = 28;
+  const TYPE_TICK_MS = 30;
   /** Keys that turn the page of a story (the game's jump and attack keys). */
   const CONTINUE_KEYS = new Set(['Enter', 'Space', 'KeyJ', 'KeyK', 'KeyZ', 'KeyW', 'ArrowUp']);
 
@@ -51,6 +54,8 @@
   let isBusy = true; // the boot load is in progress
   /** What the continue button (or a tap, or a key) does while it's showing. */
   let pendingContinue = null;
+  /** The story being typed out: its paragraphs and how far it has got (null once it's all shown). */
+  let typing = null;
 
   function randomTip() {
     return `TIP: ${TIPS[Math.floor(Math.random() * TIPS.length)]}`;
@@ -66,15 +71,91 @@
     const hasStory = Boolean(story && story.length);
     subtitleElement.style.display = hasStory && !note ? 'none' : '';
     if (hasStory && note) subtitleElement.innerHTML = `<span class="loading-note">${note}</span>`;
+    stopTyping();
     storyElement.replaceChildren(...(hasStory ? story.map(text => {
+      // Each paragraph is the part typed so far and the rest, which is invisible but already takes
+      // its space, so the lines wrap the same as they will in the end and nothing jumps around
       const paragraph = document.createElement('p');
-      paragraph.textContent = text;
+      const typed = document.createElement('span');
+      const rest = document.createElement('span');
+      rest.className = 'loading-story-rest';
+      rest.textContent = text;
+      paragraph.append(typed, rest);
       return paragraph;
     }) : []));
     storyElement.style.display = hasStory ? '' : 'none';
     storyElement.scrollTop = 0;
+    if (hasStory) startTyping(story);
     tipElement.textContent = hasStory ? '' : randomTip();
     tipElement.style.display = hasStory ? 'none' : '';
+  }
+
+  /** Type the story out letter by letter (see setText), scrolling along to keep the newest letters in view. */
+  function startTyping(story) {
+    const paragraphs = [...storyElement.children].map((element, index) => ({
+      text: story[index],
+      typed: element.firstChild,
+      rest: element.lastChild
+    }));
+    const total = story.reduce((sum, text) => sum + text.length, 0);
+    // Scrolling back up while it types stops it following along
+    let follow = true;
+    const stopFollowing = () => { follow = false; };
+    storyElement.addEventListener('wheel', stopFollowing, { once: true, passive: true });
+    storyElement.addEventListener('touchmove', stopFollowing, { once: true, passive: true });
+    const startedAt = Date.now();
+    typing = {
+      paragraphs,
+      shown: 0,
+      timer: setInterval(() => {
+        showLetters(Math.min(total, Math.floor((Date.now() - startedAt) / TYPE_MS_PER_LETTER)), follow);
+        if (typing && typing.shown >= total) stopTyping();
+      }, TYPE_TICK_MS),
+      stopFollowing
+    };
+  }
+
+  /** Show the first `count` letters of the story. */
+  function showLetters(count, follow) {
+    if (!typing || count <= typing.shown) return;
+    typing.shown = count;
+    let left = count;
+    let current = null;
+    typing.paragraphs.forEach(paragraph => {
+      const visible = Math.max(0, Math.min(paragraph.text.length, left));
+      left -= visible;
+      if (paragraph.typed.textContent.length !== visible) {
+        paragraph.typed.textContent = paragraph.text.slice(0, visible);
+        paragraph.rest.textContent = paragraph.text.slice(visible);
+      }
+      if (visible > 0) current = paragraph.typed;
+    });
+    if (follow && current) keepInView(current);
+  }
+
+  /** Scroll the story just enough to show the last line of `element`. */
+  function keepInView(element) {
+    const lines = element.getClientRects();
+    if (!lines.length) return;
+    const lastLine = lines[lines.length - 1];
+    const box = storyElement.getBoundingClientRect();
+    if (lastLine.bottom > box.bottom) storyElement.scrollTop += lastLine.bottom - box.bottom + 2;
+  }
+
+  /** Show the whole story at once (a tap or key while it's still typing). */
+  function finishTyping() {
+    if (!typing) return;
+    const total = typing.paragraphs.reduce((sum, paragraph) => sum + paragraph.text.length, 0);
+    showLetters(total, false);
+    stopTyping();
+  }
+
+  function stopTyping() {
+    if (!typing) return;
+    clearInterval(typing.timer);
+    storyElement.removeEventListener('wheel', typing.stopFollowing);
+    storyElement.removeEventListener('touchmove', typing.stopFollowing);
+    typing = null;
   }
 
   /** The boy walks on the spot while a level loads (his sprites only exist once the art has loaded). */
@@ -127,6 +208,11 @@
   }
 
   function continueNow() {
+    // The first tap (or key) while the story is still typing shows all of it; the next one goes on
+    if (typing) {
+      finishTyping();
+      return;
+    }
     const action = pendingContinue;
     if (!action) return;
     hideContinue();
@@ -143,6 +229,7 @@
 
   function hide() {
     hideContinue();
+    stopTyping();
     screen.classList.add('hiding');
     hideTimer = setTimeout(() => {
       screen.style.display = 'none';
@@ -226,7 +313,7 @@
   screen.addEventListener('click', continueNow);
   // Caught on the way down, so the key that starts the level doesn't also jump or attack
   window.addEventListener('keydown', event => {
-    if (!pendingContinue || !CONTINUE_KEYS.has(event.code) || event.repeat) return;
+    if ((!pendingContinue && !typing) || !CONTINUE_KEYS.has(event.code) || event.repeat) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     continueNow();

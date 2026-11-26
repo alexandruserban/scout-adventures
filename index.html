@@ -42,6 +42,7 @@
         <button id="menu-new" class="hud-btn menu-option menu-new" style="display: none">🔄 NEW ADVENTURE</button>
         <button id="menu-difficulty" class="hud-btn menu-option" title="Difficulty">⚔️ NORMAL</button>
         <button id="menu-scrapbook" class="hud-btn menu-option">📖 SCRAPBOOK</button>
+        <button id="menu-stats" class="hud-btn menu-option">📊 STATS</button>
         <button id="menu-music" class="hud-btn menu-option">🎵 MUSIC: ON</button>
         <button id="menu-sound" class="hud-btn menu-option">🔊 SOUND: ON</button>
         <button id="menu-crt" class="hud-btn menu-option" title="Retro TV scanlines">📺 CRT: ON</button>
@@ -174,6 +175,17 @@
     </div>
   </div>
 
+  <!-- Stats page (📊 STATS on the main menu) -->
+  <div id="stats-overlay">
+    <div class="gallery-card stats-card">
+      <div class="gallery-header">
+        <h2 class="gallery-title">📊 STATS</h2>
+        <button id="btn-stats-close" class="pixel-btn" style="padding: 6px 12px; font-size: 8px;">[X] CLOSE</button>
+      </div>
+      <div id="stats-content" class="stats-list"></div>
+    </div>
+  </div>
+
   <!-- Scrapbook Modal (species the boy has met) -->
   <div id="scrapbook-overlay">
     <div class="gallery-card scrapbook-card">
@@ -275,8 +287,10 @@
   <script src="src/game/traps.js"></script>
   <script src="src/game/worldTraps.js"></script>
   <script src="src/game/scrapbook.js"></script>
+  <script src="src/game/stats.js"></script>
   <script src="src/game/training.js"></script>
   <script src="src/ui/scrapbookView.js"></script>
+  <script src="src/ui/statsView.js"></script>
 
   <script src="src/game/main.js"></script>
   <script src="src/ui/exitButton.js"></script>

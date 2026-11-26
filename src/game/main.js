@@ -581,10 +581,10 @@
     }
     const options = { x: entry.x, onDefeated: onEnemyDefeated, allowLedges };
     if (entry.kind === 'mutant') {
-      // A new random monster every time, so the scrapbook keeps filling up, except the level's
-      // featured species (a fixed seed). The future-tech worlds are crawling with cybernetic mutants
-      const cyber = entry.cyber !== undefined ? entry.cyber : (level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined);
-      const genome = Forest.MonsterForge.generate({ power: entry.power, cyber, seed: entry.seed });
+      // A new random monster every time, so the scrapbook keeps filling up
+      // The future-tech worlds are crawling with cybernetic mutants
+      const cyber = level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined;
+      const genome = Forest.MonsterForge.generate({ power: entry.power, cyber });
       addEnemy(Forest.MonsterForge.create(world, { ...options, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) }));
       return;
     }

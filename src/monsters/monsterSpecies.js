@@ -78,7 +78,9 @@
     { id: 'golem', latin: 'Rockus flamboyantus', common: 'Cinder Golem', note: 'Arrives by meteor. Leaves in pieces.' },
     { id: 'spider', latin: 'Arachnus prismaticus', common: 'Rainbow Spider', note: 'Abseils in on a silk thread. Eight legs, zero manners.' },
     { id: 'crawler', latin: 'Xenoscuttlus acidicus', common: 'Alien Crawler', note: 'Skitters along spaceship hulls and spits acid. Do not pet.' },
-    { id: 'octorocker', latin: 'Octopus shreddicus', common: 'Octo-Rocker', note: 'Plays guitar with four arms and drums with the other four.' }
+    { id: 'octorocker', latin: 'Octopus shreddicus', common: 'Octo-Rocker', note: 'Plays guitar with four arms and drums with the other four.' },
+    // ...and one for each of the other worlds (see Forest.WorldCreatures)
+    ...Forest.WorldCreatures.species.map(({ kind, latin, common, note }) => ({ id: kind, latin, common, note }))
   ];
 
   function hashString(text) {

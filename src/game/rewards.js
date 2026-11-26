@@ -6,7 +6,10 @@
   const { MonsterSpecies } = Forest;
 
   /** Points for the hand-made enemies, by kind. */
-  const NATIVE_POINTS = { mushroom: 50, nutling: 10, thornback: 25, gloomwing: 30, jelly: 40, golem: 300, spider: 25, crawler: 30, octorocker: 60 };
+  const NATIVE_POINTS = {
+    mushroom: 50, nutling: 10, thornback: 25, gloomwing: 30, jelly: 40, golem: 300, spider: 25, crawler: 30, octorocker: 60,
+    ...Object.fromEntries(Forest.WorldCreatures.species.map(({ kind, points }) => [kind, points]))
+  };
   /** The little halves of a split Thunder Jelly. */
   const MINI_JELLY_POINTS = 15;
 
@@ -25,7 +28,10 @@
   const SPARE_HEART_POINTS = 50;
 
   // --- Heart drops (chance per defeat) ---
-  const NATIVE_HEART_CHANCE = { mushroom: 0.15, nutling: 0.05, thornback: 0.08, gloomwing: 0.08, jelly: 0.1, golem: 1, spider: 0.08, crawler: 0.08, octorocker: 0.15 };
+  const NATIVE_HEART_CHANCE = {
+    mushroom: 0.15, nutling: 0.05, thornback: 0.08, gloomwing: 0.08, jelly: 0.1, golem: 1, spider: 0.08, crawler: 0.08, octorocker: 0.15,
+    ...Object.fromEntries(Forest.WorldCreatures.species.map(({ kind, heartChance }) => [kind, heartChance]))
+  };
   const MINI_HEART_CHANCE = 0.04;
   const MONSTER_HEART_CHANCE = 0.2;
   const MONSTER_HEART_CHANCE_PER_POWER = 0.03;

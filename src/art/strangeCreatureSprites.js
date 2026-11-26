@@ -294,6 +294,8 @@
   };
 
   Object.assign(SkyArt.creatures, { spider, crawler, octorocker });
+  /** The letter-grid painter, shared with the other worlds' creatures (see worldCreatureSprites.js). */
+  Forest.LetterGrid = Object.freeze({ createGrid, ellipse, line, leg, outline, toRows });
   Forest.StrangeCreatureSprites = Object.freeze({
     musicNote,
     webBall,

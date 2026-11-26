@@ -24,8 +24,6 @@
  *               left, right } with the ends of the ground it stands on
  *  - heartSpots: where hearts wait to be picked up (on the sky islands, at the end of the high
  *               route and along the ground); how many of them are used depends on the difficulty
- *  - featured:  the level's own creature, which makes up a good share of its enemies (a Monster
- *               Forge species with a fixed seed, so it's the same monster each time, or a sky creature)
  *  - enemies:   { kind, x } each drops in when the boy gets close. kind is 'mushroom', a sky creature
  *               (nutling, thornback, gloomwing, jelly) or 'mutant': a freshly rolled Monster Forge monster
  *               of `power`, so every run can turn up scrapbook species not met before
@@ -303,11 +301,9 @@
   const BOSS_FIRST_HP = 10;
   const BOSS_HP_PER_LEVEL = 0.7;
   const SKY_KINDS = ['nutling', 'thornback', 'gloomwing', 'jelly'];
-  /** Share of a level's enemies that are its featured creature, and the chance that it's a sky creature (not a mutant species). */
-  const FEATURED_SHARE = 0.45;
-  const FEATURED_SKY_CHANCE = 0.35;
-  /** A featured mutant in the future-tech worlds is usually cyber. */
-  const FEATURED_CYBER_CHANCE = 0.7;
+  /** Share of a world's enemies that are its own creature (see `natives`). */
+  const NATIVE_SHARE = 0.45;
+
 
   /** How much higher and further the boy jumps in a world (low gravity). */
   function jumpScaleOf(theme) {
@@ -631,21 +627,8 @@
     const basePower = FIRST_POWER + Math.floor(position * POWER_PER_LEVEL);
     // Some worlds are crawling with their own creatures (spiders on the rainbow, crawlers on the ship)
     const natives = theme.natives || null;
-    // Every level has a creature of its own that turns up far more than the rest (the worlds
-    // with natives already have theirs)
-    let featured = null;
-    if (!natives) {
-      if (random() < FEATURED_SKY_CHANCE) {
-        featured = { kind: pick(SKY_KINDS) };
-      } else {
-        // One species at one power, so every one of them is the same monster
-        featured = { kind: 'mutant', seed: Math.floor(random() * 0x7fffffff), power: Math.min(MAX_POWER, basePower + 1) };
-        if (theme.future) featured.cyber = random() < FEATURED_CYBER_CHANCE;
-      }
-    }
     const rollEnemy = x => {
       const roll = random();
-      if (natives && random() < natives.share) return { kind: pick(natives.kinds), x };
       if (roll < 0.08) return { kind: 'mushroom', x };
       if (roll < 0.36) return { kind: pick(SKY_KINDS), x };
       return { kind: 'mutant', x, power: Math.min(MAX_POWER, basePower + Math.floor((x / arena.start) * 2.5)) };
@@ -665,22 +648,22 @@
         enemies.push({ ...rollEnemy(x), allowLedges: true });
       }
     });
-    // Then a fixed share of them, picked at random, become the featured creature (so a level
+    // Then a fixed share of them, picked at random, become the world's own creatures (so a level
     // never ends up with just one or two of them by bad luck)
-    if (featured) {
+    if (natives) {
       const order = enemies.map((_, index) => index);
       for (let i = order.length - 1; i > 0; i--) {
         const j = Math.floor(random() * (i + 1));
         [order[i], order[j]] = [order[j], order[i]];
       }
-      order.slice(0, Math.round(enemies.length * FEATURED_SHARE)).forEach(index => {
+      order.slice(0, Math.round(enemies.length * natives.share)).forEach(index => {
         const { x, allowLedges } = enemies[index];
-        enemies[index] = { ...featured, x, ...(allowLedges !== undefined ? { allowLedges } : {}) };
+        enemies[index] = { kind: pick(natives.kinds), x, ...(allowLedges !== undefined ? { allowLedges } : {}) };
       });
     }
     enemies.sort((a, b) => a.x - b.x);
 
-    return { ground, platforms, routes, traps, specialTraps, featured, enemies, arena };
+    return { ground, platforms, routes, traps, specialTraps, enemies, arena };
   }
 
   /**
@@ -823,6 +806,7 @@
   const THEMES = [
     {
       id: 'forest',
+      natives: { kinds: ['mossling'], share: NATIVE_SHARE },
       trap: 'flytrap',
       trapHint: 'Snapping flytraps bite anyone who walks into them. Jump over!',
       name: 'THE WHISPERING FOREST',
@@ -833,6 +817,7 @@
     },
     {
       id: 'dungeon',
+      natives: { kinds: ['bonerattler'], share: NATIVE_SHARE },
       trap: 'pendulum',
       trapHint: 'Giant axes swing from the ceiling. Time your run!',
       name: 'THE SUNKEN DUNGEON',
@@ -843,6 +828,7 @@
     },
     {
       id: 'treetops',
+      natives: { kinds: ['puffwing'], share: NATIVE_SHARE },
       trap: 'thundercloud',
       trapHint: 'Thunderclouds flicker before lightning strikes.',
       name: 'THE CLOUD CANOPY',
@@ -853,6 +839,7 @@
     },
     {
       id: 'desert',
+      natives: { kinds: ['tumblecritter'], share: NATIVE_SHARE },
       trap: 'quicksand',
       trapHint: 'Quicksand slows you down, and pulls you under if you don\'t get out!',
       name: 'THE SCORCHING DUNES',
@@ -864,6 +851,7 @@
     },
     {
       id: 'ice',
+      natives: { kinds: ['penguin'], share: NATIVE_SHARE },
       trap: 'thinIce',
       trapHint: 'Thin ice cracks under your feet and drops you into the pit below.',
       name: 'THE FROZEN PEAKS',
@@ -875,6 +863,7 @@
     },
     {
       id: 'volcano',
+      natives: { kinds: ['emberimp'], share: NATIVE_SHARE },
       trap: 'geyser',
       trapHint: 'Lava geysers bubble, then blast up out of the rock.',
       name: 'THE MOLTEN CORE',
@@ -886,6 +875,7 @@
     },
     {
       id: 'candy',
+      natives: { kinds: ['gummy'], share: NATIVE_SHARE },
       trap: 'jawbreaker',
       trapHint: 'Giant jawbreakers roll back and forth. Jump over them!',
       name: 'THE CANDY KINGDOM',
@@ -897,6 +887,7 @@
     },
     {
       id: 'moon',
+      natives: { kinds: ['craterbunny'], share: NATIVE_SHARE },
       trap: 'meteor',
       trapHint: 'Meteors fall where the red marks flash. Step aside!',
       name: 'THE SILENT MOON',
@@ -909,6 +900,7 @@
     // --- Future meets fantasy ---
     {
       id: 'neon',
+      natives: { kinds: ['glitchcat'], share: NATIVE_SHARE },
       trap: 'laserGate',
       trapHint: 'Laser gates blink before they switch on.',
       name: 'NEON SPELL CITY',
@@ -920,6 +912,7 @@
     },
     {
       id: 'crystal',
+      natives: { kinds: ['shardback'], share: NATIVE_SHARE },
       trap: 'crystalArc',
       trapHint: 'Electric arcs crackle between the crystals. Hop over them!',
       name: 'THE CIRCUIT CRYSTAL CAVES',
@@ -931,6 +924,7 @@
     },
     {
       id: 'clockwork',
+      natives: { kinds: ['windupmouse'], share: NATIVE_SHARE },
       trap: 'crusher',
       trapHint: 'Pistons shake, then slam down. Run under while they rise!',
       name: 'THE CLOCKWORK SKY CITADEL',
@@ -943,6 +937,7 @@
     },
     {
       id: 'atlantis',
+      natives: { kinds: ['jetsquid'], share: NATIVE_SHARE },
       trap: 'seaMine',
       trapHint: 'Sea mines bob up and down on their chains. Boom!',
       name: 'TECHNO-ATLANTIS',
@@ -955,6 +950,7 @@
     },
     {
       id: 'fae',
+      natives: { kinds: ['pixie'], share: NATIVE_SHARE },
       trap: 'puffball',
       trapHint: 'Spore puffballs make you dizzy: left and right swap round!',
       name: 'THE HOLO FAE GARDEN',
@@ -967,6 +963,7 @@
     },
     {
       id: 'mechKeep',
+      natives: { kinds: ['drakeling'], share: NATIVE_SHARE },
       trap: 'flamethrower',
       trapHint: 'Flamethrowers fire back along the floor. Jump the flames!',
       name: 'THE MECH DRAGON KEEP',
@@ -979,6 +976,7 @@
     },
     {
       id: 'rift',
+      natives: { kinds: ['blinkwisp'], share: NATIVE_SHARE },
       trap: 'rift',
       trapHint: 'Step into a rift and it throws you back the way you came.',
       name: 'THE QUANTUM RIFT',
@@ -991,6 +989,7 @@
     },
     {
       id: 'station',
+      natives: { kinds: ['drone'], share: NATIVE_SHARE },
       trap: 'airlockVent',
       trapHint: 'Airlock vents blast you backwards when the lamp flashes.',
       name: 'THE STARWIZARD STATION',
@@ -1004,6 +1003,7 @@
     // --- The strange worlds ---
     {
       id: 'noir',
+      natives: { kinds: ['piebandit'], share: NATIVE_SHARE },
       trap: 'bananaPeel',
       trapHint: 'Watch out for banana peels!',
       name: 'THE SILENT FILM',
@@ -1039,6 +1039,7 @@
     },
     {
       id: 'rising',
+      natives: { kinds: ['puffer'], share: NATIVE_SHARE },
       trap: 'boulder',
       trapHint: 'Boulders shoot up out of the cracks in the ground.',
       name: 'THE WORLD THAT FALLS UP',
@@ -1051,6 +1052,7 @@
     },
     {
       id: 'kitchen',
+      natives: { kinds: ['pepper'], share: NATIVE_SHARE },
       trap: 'stoveBurner',
       trapHint: 'Stove burners glow orange, then red hot. Off you hop!',
       name: 'THE GIANT\'S KITCHEN',

@@ -140,8 +140,8 @@
 
     updateWalk(deltaSeconds, player) {
       const distance = Math.abs(player.x - this.x);
-      this.facing = directionTowards(this.x, player.x);
-      if (distance > 0.6) this.moveHorizontally(this.facing * SPIDER_WALK_SPEED * this.speed * deltaSeconds);
+      this.facing = directionTowards(this.x, this.chaseX);
+      if (Math.abs(this.chaseX - this.x) > 0.6) this.moveHorizontally(this.facing * SPIDER_WALK_SPEED * this.speed * deltaSeconds);
       this.animationTimer += deltaSeconds;
       if (this.animationTimer > SPIDER_FRAME_SECONDS) {
         this.animationTimer = 0;
@@ -150,7 +150,7 @@
 
       this.updateWebSpitting(deltaSeconds, player, distance);
 
-      if (this.cooldown <= 0 && this.isOnGround && !player.isDefeated && distance < SPIDER_POUNCE_RANGE * this.sizeScale) {
+      if (this.cooldown <= 0 && this.isOnGround && !player.isDefeated && !this.isPatrolling && distance < SPIDER_POUNCE_RANGE * this.sizeScale) {
         this.state = CreatureState.TELEGRAPH;
         this.stateTimer = SPIDER_CROUCH_SECONDS / Math.sqrt(this.speed);
         this.showFrame('crouch');
@@ -239,7 +239,7 @@
       this.isDashing = true;
       this.stateTimer = randomBetween(...CRAWLER_DASH_SECONDS);
       // Mostly skitters towards the boy, sometimes darts the wrong way
-      const towards = player ? directionTowards(this.x, player.x) : this.facing;
+      const towards = player ? directionTowards(this.x, this.chaseX) : this.facing;
       this.facing = Math.random() < 0.8 ? towards : -towards;
     }
 
@@ -367,9 +367,9 @@
       this.state = CreatureState.JUMP;
       this.showFrame('jump');
       this.velocityY = OCTO_HOP_SPEED_Y;
-      const targetX = player.x + randomBetween(-2, 2);
+      const targetX = this.chaseX + randomBetween(-2, 2);
       this.velocityX = leapSpeedX(this.x, targetX, OCTO_HOP_SPEED_Y, OCTO_HOP_MAX_X * this.speed);
-      this.facing = directionTowards(this.x, player.x);
+      this.facing = directionTowards(this.x, targetX);
       this.setSquash(0.8, 1.2);
       Sfx.jellyBoing();
     }

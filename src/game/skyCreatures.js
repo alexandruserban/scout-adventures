@@ -43,6 +43,16 @@
   /** Flying creatures lose this fraction of their knockback speed per second. */
   const AIR_DAMPING_PER_SECOND = 0.985;
   const LEVEL_MARGIN = 0.6;
+  /**
+   * When the boy is somewhere a creature can't follow (past the end of its ground or ledge), it
+   * waits at the edge this long, then patrols its stretch back and forth for a while (a random
+   * time in this range) before coming after him again.
+   */
+  const EDGE_WAIT_SECONDS = 2;
+  const PATROL_SECONDS = [4, 7];
+  /** He counts as within reach this far past either end, and when no more than this far above or below. */
+  const REACH_MARGIN = 0.3;
+  const REACH_HEIGHT = 1.5;
 
   // --- Drawing ---
   const MESH_Z = 0.26;
@@ -289,7 +299,9 @@
         case CreatureState.FALLING: this.updateFalling(deltaSeconds); break;
         case CreatureState.HURT: this.updateHurt(deltaSeconds); break;
         case CreatureState.DEFEATED: this.updateDefeated(deltaSeconds); break;
-        default: this.think(deltaSeconds, player);
+        default:
+          this.updatePursuit(deltaSeconds, player);
+          this.think(deltaSeconds, player);
       }
 
       this.relaxSquash(deltaSeconds);
@@ -298,6 +310,40 @@
 
     /** Behaviour once it has landed; each creature implements its own. */
     think() {}
+
+    /**
+     * Decide where it's heading this frame (`chaseX`): the boy, unless he's out of reach and it has
+     * been standing at the edge of its ground for EDGE_WAIT_SECONDS. Then it patrols from end to end
+     * for a while instead, and goes back to chasing once the time is up or he comes within reach.
+     */
+    updatePursuit(deltaSeconds, player) {
+      const hasRoom = this.maxX - this.minX > 1;
+      const inReach = player.x > this.minX - REACH_MARGIN && player.x < this.maxX + REACH_MARGIN;
+      if (this.patrolSeconds > 0) {
+        this.patrolSeconds -= deltaSeconds;
+        if (inReach && Math.abs(player.y - this.floorY) < REACH_HEIGHT) this.patrolSeconds = 0;
+      }
+      if (this.patrolSeconds > 0) {
+        if (Math.abs(this.x - this.patrolX) < 0.3) this.patrolX = this.patrolX <= this.minX ? this.maxX : this.minX;
+        this.chaseX = this.patrolX;
+        return;
+      }
+      this.chaseX = player.x;
+      const isWaitingAtEdge = !player.isDefeated && !inReach && hasRoom
+        && Math.abs(this.x - clamp(player.x, this.minX, this.maxX)) < 0.25;
+      this.edgeSeconds = isWaitingAtEdge ? (this.edgeSeconds || 0) + deltaSeconds : 0;
+      if (this.edgeSeconds < EDGE_WAIT_SECONDS) return;
+      // Give up for now: off to the far end and back
+      this.edgeSeconds = 0;
+      this.patrolSeconds = randomBetween(...PATROL_SECONDS);
+      this.patrolX = player.x < this.minX ? this.maxX : this.minX;
+      this.chaseX = this.patrolX;
+    }
+
+    /** Patrolling its stretch (having given up on reaching the boy for now). */
+    get isPatrolling() {
+      return this.patrolSeconds > 0;
+    }
 
     updateFalling(deltaSeconds) {
       this.velocityY -= FALL_GRAVITY * deltaSeconds;
@@ -573,7 +619,7 @@
       this.showFrame('hop1');
       if (this.stateTimer <= 0) {
         // Hop at the boy (or somewhere random once he's down)
-        this.facing = player.isDefeated ? randomDirection() : directionTowards(this.x, player.x);
+        this.facing = player.isDefeated ? randomDirection() : directionTowards(this.x, this.chaseX);
         this.velocityX = this.facing * NUTLING_HOP_SPEED_X * this.speed;
         this.velocityY = randomBetween(...NUTLING_HOP_SPEED_Y);
         this.stateTimer = (NUTLING_HOP_INTERVAL + randomBetween(-0.15, 0.2)) / this.speed;
@@ -646,11 +692,11 @@
 
     updateWalk(deltaSeconds, player) {
       const dx = player.x - this.x;
-      this.facing = directionTowards(this.x, player.x);
+      this.facing = directionTowards(this.x, this.chaseX);
       this.moveHorizontally(this.facing * BEETLE_WALK_SPEED * this.speed * deltaSeconds);
       this.animateLegs(deltaSeconds, BEETLE_WALK_FRAME_SECONDS);
 
-      const canCharge = this.cooldown <= 0 && this.isOnGround && !player.isDefeated;
+      const canCharge = this.cooldown <= 0 && this.isOnGround && !player.isDefeated && !this.isPatrolling;
       if (canCharge && Math.abs(dx) < BEETLE_CHARGE_RANGE) {
         this.state = CreatureState.TELEGRAPH;
         this.stateTimer = BEETLE_TELEGRAPH_SECONDS / Math.sqrt(this.speed);
@@ -975,7 +1021,7 @@
       this.showFrame('idle');
       const jumpSpeed = JELLY_JUMP_SPEED * (this.isMini ? 0.75 : 1);
       const airSeconds = (2 * jumpSpeed) / GRAVITY;
-      const targetX = player.isDefeated ? this.x + randomBetween(-3, 3) : player.x;
+      const targetX = player.isDefeated ? this.x + randomBetween(-3, 3) : this.chaseX;
       const maxSpeedX = JELLY_MAX_JUMP_SPEED_X * this.speed;
       this.velocityX = clamp((targetX - this.x) / airSeconds, -maxSpeedX, maxSpeedX);
       this.velocityY = jumpSpeed;
@@ -1123,8 +1169,8 @@
     }
 
     updateWalk(deltaSeconds, player, pace) {
-      this.facing = directionTowards(this.x, player.x);
-      if (Math.abs(player.x - this.x) > GOLEM_STOP_DISTANCE) {
+      this.facing = directionTowards(this.x, this.chaseX);
+      if (Math.abs(this.chaseX - this.x) > GOLEM_STOP_DISTANCE) {
         this.moveHorizontally(this.facing * GOLEM_WALK_SPEED * this.speed * pace * deltaSeconds);
       }
 

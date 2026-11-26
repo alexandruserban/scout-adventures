@@ -35,6 +35,9 @@
   const AGGRO_RANGE = 5.2;
   /** ...and gives up once the player is this far away. */
   const GIVE_UP_RANGE = 8.0;
+  /** Stuck at the edge of its ground chasing the boy this long, it gives up and patrols (without chasing) for a while. */
+  const EDGE_WAIT_SECONDS = 2;
+  const CALM_SECONDS = [4, 7];
   /** While chasing and this close, occasionally does a menacing hop. */
   const HOP_RANGE = 2.0;
   const HOP_CHANCE_PER_FRAME = 0.03;
@@ -216,7 +219,8 @@
     }
 
     updatePatrol(deltaSeconds, player) {
-      if (Math.abs(player.x - this.x) < AGGRO_RANGE && !player.isDefeated) {
+      if (this.calmSeconds > 0) this.calmSeconds -= deltaSeconds;
+      if (Math.abs(player.x - this.x) < AGGRO_RANGE && !player.isDefeated && !(this.calmSeconds > 0)) {
         this.state = MushroomState.AGGRO;
         this.showFrame(this.sprites.aggro);
         return;
@@ -248,6 +252,18 @@
 
       this.facing = player.x > this.x ? 1 : -1;
       this.velocityX = this.facing * CHASE_SPEED * this.speedScale;
+
+      // Stuck at the edge of its ground with the boy out of reach: after a moment it gives up and
+      // goes back to patrolling for a while
+      const isStuckAtEdge = (this.facing < 0 && this.x <= this.minX + 0.05) || (this.facing > 0 && this.x >= this.maxX - 0.05);
+      this.edgeSeconds = isStuckAtEdge ? (this.edgeSeconds || 0) + deltaSeconds : 0;
+      if (this.edgeSeconds >= EDGE_WAIT_SECONDS) {
+        this.edgeSeconds = 0;
+        this.calmSeconds = CALM_SECONDS[0] + Math.random() * (CALM_SECONDS[1] - CALM_SECONDS[0]);
+        this.facing = -this.facing;
+        this.state = MushroomState.PATROL;
+        return;
+      }
 
       // Hopping animation that alternates with the angry face
       this.animationTimer += deltaSeconds;

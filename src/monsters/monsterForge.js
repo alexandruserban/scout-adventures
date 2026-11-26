@@ -240,8 +240,8 @@
     }
 
     walk(deltaSeconds, player) {
-      if (!player.isDefeated) this.facing = player.x >= this.x ? 1 : -1;
-      const isFarEnough = Math.abs(player.x - this.x) > WALK_STOP_DISTANCE;
+      if (!player.isDefeated) this.facing = this.chaseX >= this.x ? 1 : -1;
+      const isFarEnough = Math.abs(this.chaseX - this.x) > WALK_STOP_DISTANCE;
       if (isFarEnough || player.isDefeated) {
         if (this.moveHorizontally(this.facing * WALK_SPEED * this.speed * deltaSeconds)) this.facing = -this.facing;
         this.animate(deltaSeconds, WALK_FRAME_SECONDS / this.speed, 'idle', 'move');
@@ -258,7 +258,7 @@
       this.showFrame('idle');
       if (this.stateTimer > 0) return;
 
-      this.facing = player.isDefeated ? randomDirection() : (player.x >= this.x ? 1 : -1);
+      this.facing = player.isDefeated ? randomDirection() : (this.chaseX >= this.x ? 1 : -1);
       this.velocityX = this.facing * HOP_SPEED_X * this.speed;
       this.velocityY = randomBetween(...HOP_SPEED_Y) * (this.genome.isMini ? 0.8 : 1);
       this.stateTimer = (HOP_INTERVAL + randomBetween(-0.15, 0.25)) / this.speed;

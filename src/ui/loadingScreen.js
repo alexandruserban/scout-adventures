@@ -1,6 +1,8 @@
 /**
  * Full-screen loading card. It is in index.html from the start, so it shows while the scripts load
  * and paint their sprites (finishBoot hides it), and comes back each time a level is built (run).
+ * It also tells the story: the start of a level waits on its story page until the player is ready,
+ * and showStory puts up the end-of-level page between levels.
  */
 (function (Forest) {
   const screen = document.getElementById('loading-screen');
@@ -8,7 +10,10 @@
   const headingElement = document.getElementById('loading-heading');
   const titleElement = document.getElementById('loading-title');
   const subtitleElement = document.getElementById('loading-subtitle');
+  const storyElement = document.getElementById('loading-story');
+  const barElement = document.getElementById('loading-bar');
   const barFill = document.getElementById('loading-bar-fill');
+  const continueButton = document.getElementById('loading-continue');
   const tipElement = document.getElementById('loading-tip');
   const boyCanvas = document.getElementById('loading-boy');
 
@@ -17,6 +22,8 @@
   /** After booting, the full bar stays up this long before fading. */
   const BOOT_SETTLE_MS = 300;
   const BOY_FRAME_MS = 110;
+  /** Keys that turn the page of a story (the game's jump and attack keys). */
+  const CONTINUE_KEYS = new Set(['Enter', 'Space', 'KeyJ', 'KeyK', 'KeyZ', 'KeyW', 'ArrowUp']);
 
   const TIPS = [
     'Press jump again in mid-air for a double jump.',
@@ -30,26 +37,41 @@
     'Ice is slippery: start braking early!',
     'Gravity is weak on the moon. Float across the gaps!',
     'Sandstorm gusts push you around. Time your jumps!',
-    'Train against creatures you have met: pick them in the scrapbook.'
+    'Train against creatures you have met: pick them in the scrapbook.',
+    'Press Esc to pause the game.'
   ];
 
-  /** Bumped by every run(), so an older load that is still waiting gives up. */
+  /** Bumped by every run() and showStory(), so an older load that is still waiting gives up. */
   let loadToken = 0;
   let hideTimer = null;
   let boyTimer = null;
   let isBusy = true; // the boot load is in progress
+  /** What the continue button (or a tap, or a key) does while it's showing. */
+  let pendingContinue = null;
 
   function randomTip() {
     return `TIP: ${TIPS[Math.floor(Math.random() * TIPS.length)]}`;
   }
 
-  function setText({ icon = '', heading = '', title = '', subtitle = '', note = '' }) {
+  /** Fill in the card. A story (paragraphs) takes the place of the subtitle and the tip. */
+  function setText({ icon = '', heading = '', title = '', subtitle = '', note = '', story = null }) {
     iconElement.textContent = icon;
     iconElement.style.display = icon ? '' : 'none';
     headingElement.textContent = heading;
     titleElement.textContent = title;
     subtitleElement.innerHTML = note ? `${subtitle}<br><span class="loading-note">${note}</span>` : subtitle;
-    tipElement.textContent = randomTip();
+    const hasStory = Boolean(story && story.length);
+    subtitleElement.style.display = hasStory && !note ? 'none' : '';
+    if (hasStory && note) subtitleElement.innerHTML = `<span class="loading-note">${note}</span>`;
+    storyElement.replaceChildren(...(hasStory ? story.map(text => {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = text;
+      return paragraph;
+    }) : []));
+    storyElement.style.display = hasStory ? '' : 'none';
+    storyElement.scrollTop = 0;
+    tipElement.textContent = hasStory ? '' : randomTip();
+    tipElement.style.display = hasStory ? 'none' : '';
   }
 
   /** The boy walks on the spot while a level loads (his sprites only exist once the art has loaded). */
@@ -74,10 +96,12 @@
   function stopBoy() {
     if (boyTimer) clearInterval(boyTimer);
     boyTimer = null;
+    if (boyCanvas) boyCanvas.style.display = 'none';
   }
 
   /** Fill the bar from empty to full over `seconds` (a transform transition, so it runs even while JS is busy). */
   function animateBar(seconds) {
+    barElement.style.display = '';
     barFill.style.transition = 'none';
     barFill.style.transform = 'scaleX(0)';
     void barFill.offsetWidth;
@@ -85,14 +109,37 @@
     barFill.style.transform = 'scaleX(1)';
   }
 
+  /** Swap the bar for a button; it, a tap anywhere on the card or a jump/attack key calls `action`. */
+  function showContinue(label, action) {
+    stopBoy();
+    barElement.style.display = 'none';
+    continueButton.textContent = label;
+    continueButton.style.display = '';
+    pendingContinue = action;
+  }
+
+  function hideContinue() {
+    continueButton.style.display = 'none';
+    pendingContinue = null;
+  }
+
+  function continueNow() {
+    const action = pendingContinue;
+    if (!action) return;
+    hideContinue();
+    action();
+  }
+
   function show() {
     if (hideTimer) clearTimeout(hideTimer);
     hideTimer = null;
+    hideContinue();
     screen.classList.remove('boot', 'hiding');
     screen.style.display = 'flex';
   }
 
   function hide() {
+    hideContinue();
     screen.classList.add('hiding');
     hideTimer = setTimeout(() => {
       screen.style.display = 'none';
@@ -109,6 +156,7 @@
    * @param {string} options.title the world's name
    * @param {string} [options.subtitle] its flavour text
    * @param {string} [options.note] an extra highlighted line (e.g. a difficulty change)
+   * @param {string[]} [options.story] story paragraphs; the screen then waits for the player once loaded
    * @param {number} [options.minSeconds] the screen stays up at least this long
    * @param {() => void} options.build does the (synchronous) work; runs once the screen is painted
    * @param {() => void} [options.onReady] called as the screen starts fading out
@@ -121,6 +169,11 @@
     startBoy();
     animateBar(minSeconds);
     const shownAt = performance.now();
+    const finish = () => {
+      isBusy = false;
+      hide();
+      if (onReady) onReady();
+    };
     // Two frames, so the screen is on the glass before the build blocks the page
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (token !== loadToken) return;
@@ -128,11 +181,25 @@
       const remainingMs = Math.max(0, minSeconds * 1000 - (performance.now() - shownAt));
       setTimeout(() => {
         if (token !== loadToken) return;
-        isBusy = false;
-        hide();
-        if (onReady) onReady();
+        // With a story to read, the level waits until the player says go
+        if (text.story && text.story.length) showContinue('▶ START', finish);
+        else finish();
       }, remainingMs);
     }));
+  }
+
+  /**
+   * A story page with a button (e.g. the end of a level). The screen stays up afterwards:
+   * `onContinue` usually starts the next run(), or calls hide().
+   * @param {{icon?:string, heading?:string, title:string, story:string[], buttonLabel:string, onContinue:() => void}} page
+   */
+  function showStory({ buttonLabel, onContinue, ...text }) {
+    ++loadToken;
+    isBusy = true;
+    setText(text);
+    show();
+    stopBoy();
+    showContinue(buttonLabel, onContinue);
   }
 
   /** Everything has loaded: fill the bar, then fade out and call `onDone`. */
@@ -151,10 +218,28 @@
     }, BOOT_SETTLE_MS);
   }
 
+  // A click anywhere on the card turns the page (a click, not a press, so the press can't also
+  // reach the game as an attack once it resumes)
+  screen.addEventListener('click', continueNow);
+  // Caught on the way down, so the key that starts the level doesn't also jump or attack
+  window.addEventListener('keydown', event => {
+    if (!pendingContinue || !CONTINUE_KEYS.has(event.code) || event.repeat) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    continueNow();
+  }, true);
+
   Forest.LoadingScreen = {
     run,
+    showStory,
     finishBoot,
-    /** True while a load is in progress (the screen is up and the level isn't ready yet). */
+    /** Take the screen away (e.g. after the last story page). */
+    hide() {
+      ++loadToken;
+      isBusy = false;
+      hide();
+    },
+    /** True while the screen is up for a load or a story (the game isn't ready to play). */
     get isBusy() {
       return isBusy;
     }

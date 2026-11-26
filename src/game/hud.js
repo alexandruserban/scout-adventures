@@ -109,7 +109,7 @@
      * @param {{points:number, coins:number, totalCoins:number, bestPoints:number, isNewBestPoints:boolean}} run
      */
     showVictory(onPlayAgain, { points, coins, totalCoins, bestPoints, isNewBestPoints }) {
-      const message = 'Every boss in all sixteen worlds is beaten. The world is safe again!'
+      const message = 'Every shard of the Heart Star is home, and the worlds are safe again!'
         + `<br><br>COINS: ${coins} / ${totalCoins}<br>POINTS: ${points.toLocaleString()}<br>`
         + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
       this.showOverlay({

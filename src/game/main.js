@@ -86,7 +86,7 @@
   const DESPAWN_DISTANCE = 30;
   /** The boss fight starts once the boy is this far into the arena. */
   const ARENA_TRIGGER_INSET = 1.5;
-  const NEXT_LEVEL_DELAY_SECONDS = 4.5;
+  const NEXT_LEVEL_DELAY_SECONDS = 3.2;
   /** The loading screen stays up at least this long before a new level (and before a retry). */
   const LEVEL_LOADING_SECONDS = 1.6;
   const RETRY_LOADING_SECONDS = 0.8;
@@ -146,8 +146,10 @@
     CLEARED: 'CLEARED',
     /** The level's coins are being turned into points. */
     COIN_TALLY: 'COIN_TALLY',
-    /** All done: on to the next level when the timer runs out. */
-    ADVANCING: 'ADVANCING'
+    /** All done: the end-of-level story comes up when the timer runs out. */
+    ADVANCING: 'ADVANCING',
+    /** The end-of-level story page is up; the next level starts when the player moves on. */
+    STORY: 'STORY'
   });
 
   // ==========================================
@@ -389,11 +391,19 @@
     if (!course) levelStart = { points, coins: coinsCollected, coinsOffered, maxHp };
     levelCoins = 0;
     const worldTheme = course || Levels.themes[runOrder[index]];
+    // A new level opens with its part of the story (a retry goes straight back in)
+    const story = course ? null : Forest.Story.levelStart({
+      position: index,
+      total: runOrder.length,
+      worldId: worldTheme.id,
+      previousWorldId: index > 0 ? Levels.themes[runOrder[index - 1]].id : null
+    });
     loadBehindScreen({
       icon: worldTheme.icon,
       heading: course ? `LEVEL ${index + 1} · TRY AGAIN!` : `LEVEL ${index + 1} OF ${runOrder.length}`,
       title: worldTheme.name,
       subtitle: worldTheme.flavor,
+      story,
       note,
       minSeconds: course ? RETRY_LOADING_SECONDS : LEVEL_LOADING_SECONDS,
       build: () => {
@@ -536,7 +546,7 @@
       updateCoinTally(deltaSeconds);
     } else if (arenaState === ArenaState.ADVANCING) {
       nextLevelTimer -= deltaSeconds;
-      if (nextLevelTimer <= 0) advanceToNextLevel();
+      if (nextLevelTimer <= 0) showLevelEndStory();
     }
   }
 
@@ -740,6 +750,34 @@
       subtitle: levelIndex === runOrder.length - 1 ? 'What a journey!' : 'Get ready for the next level...',
       variant: 'cleared',
       seconds: NEXT_LEVEL_DELAY_SECONDS - 0.3
+    });
+  }
+
+  /**
+   * The level's part of the story once its shard is won back (after the last level, the finale),
+   * on the loading screen with the game paused. Moving on starts the next level, or the victory screen.
+   */
+  function showLevelEndStory() {
+    arenaState = ArenaState.STORY;
+    const total = runOrder.length;
+    const isLast = levelIndex === total - 1;
+    Forest.Game.setPaused(true, 'loading');
+    Forest.LoadingScreen.showStory({
+      icon: '✨',
+      heading: `SHARD ${levelIndex + 1} OF ${total} RECOVERED!`,
+      title: level.name,
+      story: Forest.Story.levelEnd({ position: levelIndex, total, worldId: level.id, bossName }),
+      buttonLabel: isLast ? 'THE END ▶' : 'NEXT WORLD ▶',
+      onContinue: () => {
+        // The next level's loading takes the screen over (and keeps the game paused)
+        if (!isLast) {
+          advanceToNextLevel();
+          return;
+        }
+        Forest.LoadingScreen.hide();
+        Forest.Game.setPaused(false, 'loading');
+        advanceToNextLevel();
+      }
     });
   }
 

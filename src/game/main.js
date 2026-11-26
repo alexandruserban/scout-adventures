@@ -87,6 +87,9 @@
   /** The boss fight starts once the boy is this far into the arena. */
   const ARENA_TRIGGER_INSET = 1.5;
   const NEXT_LEVEL_DELAY_SECONDS = 4.5;
+  /** The loading screen stays up at least this long before a new level (and before a retry). */
+  const LEVEL_LOADING_SECONDS = 1.6;
+  const RETRY_LOADING_SECONDS = 0.8;
   /** How much tougher each later level's creatures are, as a fraction of the difficulty's cycle ramp. */
   const RAMP_PER_LEVEL = 0.16;
 
@@ -247,6 +250,8 @@
   let trainingTotal = 0;
   /** True once every level is beaten (the victory screen is up). */
   let hasWon = false;
+  /** False while the title screen is up and nothing has been played yet. */
+  let hasStarted = false;
 
   // --- The current level ---
   let level = null;
@@ -370,31 +375,69 @@
    * Its world comes from the shuffled run order and gets a freshly rolled course, unless
    * `course` (an already generated level, e.g. on a retry) is given.
    */
-  function startLevel(index, hp, maxHp, course = null) {
+  function startLevel(index, hp, maxHp, course = null, note = '') {
     isTraining = false;
     hasWon = false;
     levelIndex = index;
     if (!course) levelStart = { points, coins: coinsCollected, coinsOffered, maxHp };
     levelCoins = 0;
-    const levelData = course || Levels.generate(Levels.themes[runOrder[index]], { position: index });
-    buildLevel(levelData, { hp, maxHp });
-    coinsOffered = levelStart.coinsOffered + level.coins.length;
-
-    Sfx.waveStart();
-    hud.showBanner({ title: `LEVEL ${level.number}: ${level.name}`, subtitle: level.flavor, variant: 'wave', seconds: 3.4 });
-    refreshScore();
-    refreshPoints();
+    const worldTheme = course || Levels.themes[runOrder[index]];
+    loadBehindScreen({
+      icon: worldTheme.icon,
+      heading: course ? `LEVEL ${index + 1} · TRY AGAIN!` : `LEVEL ${index + 1} OF ${runOrder.length}`,
+      title: worldTheme.name,
+      subtitle: worldTheme.flavor,
+      note,
+      minSeconds: course ? RETRY_LOADING_SECONDS : LEVEL_LOADING_SECONDS,
+      build: () => {
+        const levelData = course || Levels.generate(worldTheme, { position: index });
+        buildLevel(levelData, { hp, maxHp });
+        coinsOffered = levelStart.coinsOffered + level.coins.length;
+        refreshScore();
+        refreshPoints();
+      },
+      onReady: () => {
+        Sfx.waveStart();
+        hud.showBanner({ title: `LEVEL ${level.number}: ${level.name}`, subtitle: level.flavor, variant: 'wave', seconds: 3.4 });
+      }
+    });
   }
 
-  /** A brand new adventure: every world once, in a new random order, each with a new course. */
-  function startAdventure() {
+  /**
+   * Build a level (or training ground) behind the loading screen, with the game paused until it's
+   * ready. `onReady` runs as the screen fades out.
+   */
+  function loadBehindScreen({ build, onReady, ...screen }) {
+    Forest.Game.setPaused(true, 'loading');
+    Forest.LoadingScreen.run({
+      ...screen,
+      build,
+      onReady: () => {
+        Forest.Game.setPaused(false, 'loading');
+        if (onReady) onReady();
+      }
+    });
+  }
+
+  /**
+   * A brand new adventure: every world once, in a new random order, each with a new course.
+   * @param {string} [note] an extra line for the loading screen
+   */
+  function startAdventure(note = '') {
     points = 0;
     coinsCollected = 0;
     coinsOffered = 0;
     runOrder = Levels.createRun();
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
     const { startHearts } = Difficulty.current;
-    startLevel(0, startHearts, startHearts);
+    startLevel(0, startHearts, startHearts, null, note);
+  }
+
+  /** PLAY on the title screen. */
+  function leaveTitleScreen() {
+    hasStarted = true;
+    Forest.MainMenu.hide();
+    Forest.Game.setPaused(false, 'title');
   }
 
   /** Try the current level again from its start, with full health (same course as before). */
@@ -860,6 +903,8 @@
 
   /** [R] or a "try again" button: retry the level (or the training, or a new adventure after winning). */
   function restartGame() {
+    // Nothing to restart on the title screen, and a level that is still loading can't be retried yet
+    if (!hasStarted || Forest.LoadingScreen.isBusy) return;
     if (isTraining) {
       startTrainingSession();
       return;
@@ -871,7 +916,7 @@
     retryLevel();
   }
 
-  function startTrainingSession() {
+  function startTrainingSession(note = '') {
     const session = Training.buildSession();
     // Nothing left to train against (e.g. every pick was unticked): back to the adventure
     if (!session) {
@@ -888,23 +933,31 @@
     const theme = mapId === Training.RANDOM_MAP
       ? themes[Math.floor(Math.random() * themes.length)]
       : themes.find(entry => entry.id === mapId) || themes[0];
-    buildLevel(Levels.trainingGround(theme), { hp: startHearts, maxHp: startHearts });
     trainingTotal = session.total;
-    waves.startCustom(session);
-    refreshScore();
-    refreshPoints();
+    loadBehindScreen({
+      icon: '🎯',
+      heading: 'TRAINING',
+      title: theme.name,
+      subtitle: `${session.total} ${session.total === 1 ? 'foe' : 'foes'} to defeat. Training doesn't count towards high scores.`,
+      note,
+      minSeconds: RETRY_LOADING_SECONDS,
+      build: () => {
+        buildLevel(Levels.trainingGround(theme), { hp: startHearts, maxHp: startHearts });
+        refreshPoints();
+      },
+      onReady: () => {
+        waves.startCustom(session);
+        refreshScore();
+      }
+    });
   }
 
-  // A new difficulty starts a fresh run with that many hearts
+  // A new difficulty starts a fresh run with that many hearts (on the title screen it's just picked)
   Difficulty.onChange(changedLevel => {
-    if (isTraining) startTrainingSession();
-    else startAdventure();
-    hud.showBanner({
-      title: `DIFFICULTY: ${changedLevel.label}`,
-      subtitle: `${changedLevel.startHearts} hearts. ${isTraining ? 'Training starts over!' : 'A fresh adventure begins!'}`,
-      variant: changedLevel.id === 'HARD' ? 'boss' : 'cleared',
-      seconds: 2.2
-    });
+    if (!hasStarted) return;
+    const note = `DIFFICULTY: ${changedLevel.label} · ${changedLevel.startHearts} HEARTS`;
+    if (isTraining) startTrainingSession(note);
+    else startAdventure(note);
   });
 
   // ==========================================
@@ -1017,6 +1070,8 @@
     startTraining() {
       if (Training.selectedCreatureCount === 0) return false;
       startTrainingSession();
+      // Training can be started from the scrapbook on the title screen
+      if (!hasStarted) leaveTitleScreen();
       notifyModeChanged();
       return true;
     },
@@ -1091,6 +1146,14 @@
   window.addEventListener('pagehide', () => Forest.Game.setBackgrounded(true));
   window.addEventListener('pageshow', () => Forest.Game.setBackgrounded(document.hidden));
 
-  startAdventure();
+  // Everything has loaded: the title screen comes up, and the game waits behind it
+  Forest.Game.setPaused(true, 'title');
+  Forest.LoadingScreen.finishBoot(() => Forest.MainMenu.show({
+    onPlay: () => {
+      startAdventure(); // pauses for its loading screen before the title screen lets go
+      leaveTitleScreen();
+    },
+    getBestPoints: () => loadBest(BEST_POINTS_STORAGE_KEY)
+  }));
   requestAnimationFrame(runFrame);
 })(window.Forest);

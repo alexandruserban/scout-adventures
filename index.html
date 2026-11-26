@@ -7,6 +7,46 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!--
+    Loading screen: first in the page so it shows while the scripts below load and paint their
+    sprites (the "boot" class animates the bar on its own), and again each time a level is built.
+  -->
+  <div id="loading-screen" class="boot">
+    <div class="loading-card">
+      <div id="loading-icon" class="loading-icon">🌲</div>
+      <div id="loading-heading" class="loading-heading">FOREST PIXEL ADVENTURE</div>
+      <div id="loading-title" class="loading-title">LOADING...</div>
+      <div id="loading-subtitle" class="loading-subtitle">Painting the forest, pixel by pixel</div>
+      <canvas id="loading-boy" class="loading-boy" style="display: none"></canvas>
+      <div class="loading-bar"><div id="loading-bar-fill" class="loading-bar-fill"></div></div>
+      <div id="loading-tip" class="loading-tip">&nbsp;</div>
+    </div>
+  </div>
+
+  <!-- Title screen, shown once when the game first starts -->
+  <div id="main-menu">
+    <div class="menu-stars"></div>
+    <div class="menu-hills"></div>
+    <div class="menu-card">
+      <div class="menu-title-row">
+        <canvas id="menu-boy" class="menu-boy"></canvas>
+        <div>
+          <h1 class="menu-title">FOREST PIXEL<br>ADVENTURE</h1>
+          <div class="menu-subtitle">THE BOY'S QUEST</div>
+        </div>
+      </div>
+      <div class="menu-buttons">
+        <button id="menu-play" class="pixel-btn menu-play">▶ PLAY</button>
+        <button id="menu-difficulty" class="hud-btn menu-option" title="Difficulty">⚔️ NORMAL</button>
+        <button id="menu-scrapbook" class="hud-btn menu-option">📖 SCRAPBOOK</button>
+        <button id="menu-music" class="hud-btn menu-option">🎵 MUSIC: ON</button>
+        <button id="menu-sound" class="hud-btn menu-option">🔊 SOUND: ON</button>
+      </div>
+      <div id="menu-best" class="menu-best"></div>
+      <div class="menu-hint">A / D: WALK &middot; W / SPACE: JUMP &middot; J / CLICK: ATTACK</div>
+    </div>
+  </div>
+
   <!-- 3D / 2D WebGL Game Canvas Container -->
   <div id="game-container"></div>
 
@@ -162,6 +202,8 @@
   <script src="src/ui/difficultyControls.js"></script>
   <script src="src/ui/touchControls.js"></script>
   <script src="src/ui/spriteGallery.js"></script>
+  <script src="src/ui/loadingScreen.js"></script>
+  <script src="src/ui/mainMenu.js"></script>
 
   <!-- Game -->
   <script src="src/game/terrain.js"></script>

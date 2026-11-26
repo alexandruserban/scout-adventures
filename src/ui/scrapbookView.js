@@ -177,7 +177,6 @@
   function startTraining() {
     if (!Forest.Game) return;
     close();
-    if (Forest.TouchControls && Forest.TouchControls.closeMenu) Forest.TouchControls.closeMenu();
     Forest.Game.startTraining();
   }
 

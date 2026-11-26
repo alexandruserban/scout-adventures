@@ -136,6 +136,8 @@
       this.soundtrack = this.createSoundtrackElement();
       this.themeId = null;
       this.levelLoop = null;
+      /** Why everything is silenced right now ('background', 'pause'); it plays again once none are left. */
+      this.quietReasons = new Set();
     }
 
     /** Switch to a world's soundtrack (theme id); restarts the music if it's playing. */
@@ -235,14 +237,29 @@
       }
     }
 
-    /**
-     * The app went to the background (true) or came back (false). The MIDI tracks and the chiptune
-     * run on the synth, which freezes by itself; the mp3 soundtrack has to be paused here.
-     */
+    /** The app went to the background (true) or came back (false): music and sounds freeze meanwhile. */
     setBackgrounded(backgrounded) {
-      synth.setBackgrounded(backgrounded);
+      this.setQuiet('background', backgrounded);
+    }
+
+    /** The game is paused (true) on the pause menu, or resumed (false): the music stops meanwhile. */
+    setPaused(paused) {
+      this.setQuiet('pause', paused);
+    }
+
+    /**
+     * Silence everything for `reason`, or lift it; the music only plays on once no reason is left
+     * (e.g. coming back to the app with the pause menu still open stays quiet). The MIDI tracks and
+     * the chiptune run on the synth, which freezes in place; the mp3 soundtrack is paused here.
+     */
+    setQuiet(reason, quiet) {
+      if (quiet) this.quietReasons.add(reason);
+      else this.quietReasons.delete(reason);
+      const silenced = this.quietReasons.size > 0;
+      if (silenced === synth.backgrounded) return;
+      synth.setBackgrounded(silenced);
       if (!this.soundtrack || this.levelLoop || this.chiptuneTimer) return;
-      if (backgrounded) {
+      if (silenced) {
         this.soundtrack.pause();
       } else if (this.isPlaying) {
         const playPromise = this.soundtrack.play();

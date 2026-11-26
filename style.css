@@ -240,13 +240,15 @@ body.screen-noir .film-overlay {
   50% { opacity: 0.7; filter: brightness(0.8); }
 }
 
-/* Controls / Instructions Toolbar */
+/* Controls / Instructions Toolbar: never shown any more. Its buttons stay in the page because the
+   audio, CRT, difficulty, scrapbook and gallery scripts bind to them, and the main menu's buttons
+   (Esc, or ☰ on phones) work through them. */
 #controls-bar {
   position: absolute;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
+  display: none;
   gap: 16px;
   align-items: center;
   background: rgba(13, 22, 21, 0.92);
@@ -427,9 +429,6 @@ body.screen-noir .film-overlay {
   -webkit-tap-highlight-color: transparent;
 }
 
-.menu-toggle[aria-expanded="true"] {
-  background: #3c8b3e;
-}
 
 .touch-cluster {
   display: flex;
@@ -632,31 +631,13 @@ body.screen-noir .film-overlay {
 /* Show touch buttons on narrow screens and on any touch-first device (incl. landscape phones) */
 @media (max-width: 768px), (pointer: coarse) {
   #touch-controls { display: flex; }
-
-  /* The menu bar is hidden until the â° toggle opens it; it then pops up above the touch buttons */
-  #controls-bar {
-    display: none;
-    bottom: calc(var(--touch-size) + var(--touch-bottom) + 16px + env(safe-area-inset-bottom, 0px));
-    flex-wrap: wrap;
-    justify-content: center;
-    width: max-content;
-    max-width: calc(100vw - 32px);
-    z-index: 26;
-  }
-  #controls-bar.open { display: flex; }
-  /* Keyboard hints don't apply on touch screens */
-  #controls-bar .control-item { display: none; }
-  #controls-bar .hud-btn { font-size: 9px; padding: 10px 12px; }
 }
 
 @media (min-width: 769px) and (pointer: fine) {
   .menu-toggle { display: none; }
-  /* Desktops use the Esc menu instead of the toolbar along the bottom */
-  #controls-bar { display: none; }
 }
 
 @media (max-width: 768px) {
-  #controls-bar { font-size: 7px; padding: 6px 10px; gap: 8px; }
   .banner-title { font-size: 13px; }
   .banner-subtitle { font-size: 7px; }
 }

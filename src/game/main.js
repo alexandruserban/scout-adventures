@@ -465,12 +465,14 @@
     hasStarted = true;
     Forest.MainMenu.hide();
     Forest.Game.setPaused(false, 'main-menu');
+    Forest.Music.setPaused(false);
   }
 
-  /** Esc during a game: pause and bring up the main menu. */
+  /** Esc (or ☰ on phones) during a game: pause, stop the music and bring up the main menu. */
   function openPauseMenu() {
     if (!hasStarted || Forest.LoadingScreen.isBusy || Forest.MainMenu.isOpen) return;
     Forest.Game.setPaused(true, 'main-menu');
+    Forest.Music.setPaused(true); // the music waits for RESUME
     Forest.MainMenu.show({
       mode: 'pause',
       onPlay: closeMainMenu,
@@ -1169,6 +1171,11 @@
       return isPaused;
     },
 
+    /** Pause the game on the main menu (the ☰ button on phones). Does nothing before the game starts or while loading. */
+    openMenu() {
+      openPauseMenu();
+    },
+
     /**
      * The app left the screen (true: home button, app switcher, exit) or came back (false).
      * Freezes the game and every sound until it returns. Called by the Flutter app, and by the
@@ -1177,6 +1184,8 @@
     setBackgrounded(backgrounded) {
       this.setPaused(backgrounded, 'background');
       Forest.Music.setBackgrounded(backgrounded);
+      // Coming back finds the game waiting on the pause menu, not already running
+      if (backgrounded) openPauseMenu();
     },
 
     /**

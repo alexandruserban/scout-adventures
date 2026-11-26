@@ -112,30 +112,14 @@
     });
   }
 
-  /**
-   * The ☰ button shows/hides the settings bar (music, sound, CRT, difficulty, gallery) on touch
-   * screens. The game is paused while it's open.
-   */
+  /** The ☰ button pauses the game on the main menu (phones have no Esc key). */
   function bindMenuToggle() {
     const toggle = document.getElementById('btn-menu-toggle');
-    const bar = document.getElementById('controls-bar');
-    if (!toggle || !bar) return;
-
-    toggle.addEventListener('click', () => setMenuOpen(!bar.classList.contains('open')));
-  }
-
-  function setMenuOpen(open) {
-    const toggle = document.getElementById('btn-menu-toggle');
-    const bar = document.getElementById('controls-bar');
-    if (!toggle || !bar) return;
-    bar.classList.toggle('open', open);
-    toggle.setAttribute('aria-expanded', String(open));
-    if (Forest.Game) Forest.Game.setPaused(open, 'menu');
-  }
-
-  /** Hide the ☰ settings bar (e.g. when a menu item starts something), resuming the game. */
-  function closeMenu() {
-    setMenuOpen(false);
+    if (!toggle) return;
+    toggle.addEventListener('click', () => {
+      toggle.blur();
+      if (Forest.Game) Forest.Game.openMenu();
+    });
   }
 
   /** Height in CSS pixels, from the bottom of the window, that the touch buttons cover (0 when hidden). */
@@ -145,5 +129,5 @@
     return window.innerHeight - panel.getBoundingClientRect().top;
   }
 
-  Forest.TouchControls = { bind, coveredBottomPixels, closeMenu };
+  Forest.TouchControls = { bind, coveredBottomPixels };
 })(window.Forest);

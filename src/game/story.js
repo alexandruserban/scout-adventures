@@ -10,11 +10,11 @@
  *
  * Story so far: the Night Weaver smashed the Heart Star, the lantern that holds the worlds
  * together, into one shard per world. Each shard turned a gentle creature into a monster (the
- * boss). Scout follows Grandpa's compass from world to world to bring every shard home.
+ * boss). Scott follows Grandpa's compass from world to world to bring every shard home.
  */
 (function (Forest) {
   /** The hero's name, used all through the story. */
-  const HERO = 'Scout';
+  const HERO = 'Scott';
 
   // ==========================================
   // Each world

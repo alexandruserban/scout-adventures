@@ -77,6 +77,14 @@
   const COIN_TALLY_MAX_TICKS = 60;
   /** Beating a level's boss is worth this many points times the level number. */
   const LEVEL_CLEAR_POINTS = 250;
+  /**
+   * Bonuses at the end of a level for picking up every coin in it, and for defeating every
+   * monster placed in it (the boss, its helpers and anything that splits off or hatches don't
+   * count). Harder difficulties pay more (see pointsMultiplier).
+   */
+  const ALL_COINS_BONUS = 1000;
+  const ALL_MONSTERS_BONUS = 1500;
+  const PERFECT_BONUS_SECONDS = 3;
   /** Falling below this height means the boy dropped into a pit. */
   const PIT_Y = -3.5;
   /**
@@ -256,6 +264,11 @@
   let coinsCollected = 0;
   /** Coins picked up in this level, not yet turned into points. */
   let levelCoins = 0;
+  /** Coins picked up and level monsters defeated in the current level (for the perfect-level bonuses). */
+  let levelCoinsPicked = 0;
+  let levelMonstersDefeated = 0;
+  /** True once the perfect-level bonuses (if any) have been shown at the end of the level. */
+  let perfectBonusesShown = false;
   let coinTally = { timer: 0, perTick: 1, cashed: 0 };
   /** High score for this difficulty, read once per run (not every frame). */
   let bestPointsBeforeRun = 0;
@@ -441,6 +454,9 @@
     levelIndex = index;
     if (!course) levelStart = { points, coins: coinsCollected, coinsOffered, maxHp };
     levelCoins = 0;
+    levelCoinsPicked = 0;
+    levelMonstersDefeated = 0;
+    perfectBonusesShown = false;
     const worldTheme = course || Levels.themes[runOrder[index]];
     // A new level opens with its part of the story (a retry goes straight back in)
     const story = course ? null : Forest.Story.levelStart({
@@ -651,22 +667,24 @@
     // About half of them may come down on a ledge above, the rest land on the ground
     // The level may say where it lands (on a sky island, or under one); otherwise it's a coin toss
     const allowLedges = entry.allowLedges !== undefined ? entry.allowLedges : Math.random() < LEDGE_LANDING_CHANCE;
-    if (entry.kind === 'mushroom') {
-      addEnemy(new Forest.EvilMushroom(world, { x: entry.x, patrolDistance: LEVEL_PATROL_DISTANCE, allowLedges }, onEnemyDefeated));
-      return;
-    }
     const options = { x: entry.x, onDefeated: onEnemyDefeated, allowLedges };
-    if (entry.kind === 'mutant') {
+    let enemy;
+    if (entry.kind === 'mushroom') {
+      enemy = new Forest.EvilMushroom(world, { x: entry.x, patrolDistance: LEVEL_PATROL_DISTANCE, allowLedges }, onEnemyDefeated);
+    } else if (entry.kind === 'mutant') {
       // A new random monster every time, so the scrapbook keeps filling up
       // The future-tech worlds are crawling with cybernetic mutants
       const cyber = level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined;
       const genome = Forest.MonsterForge.generate({ power: entry.power, cyber });
-      addEnemy(Forest.MonsterForge.create(world, { ...options, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) }));
-      return;
+      enemy = Forest.MonsterForge.create(world, { ...options, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) });
+    } else {
+      const ramp = levelIndex * RAMP_PER_LEVEL * difficulty.cycleRamp;
+      const stats = Forest.WaveDirector.creatureStats(entry.kind, difficulty, ramp);
+      enemy = new Forest.SkyCreatures[entry.kind](world, { ...options, stats });
     }
-    const ramp = levelIndex * RAMP_PER_LEVEL * difficulty.cycleRamp;
-    const stats = Forest.WaveDirector.creatureStats(entry.kind, difficulty, ramp);
-    addEnemy(new Forest.SkyCreatures[entry.kind](world, { ...options, stats }));
+    // Counts towards the "every monster defeated" bonus
+    enemy.isLevelMonster = true;
+    addEnemy(enemy);
   }
 
   /** Enemies left far behind are removed (no reward), so long levels stay light. */
@@ -695,7 +713,10 @@
       updateCoinTally(deltaSeconds);
     } else if (arenaState === ArenaState.ADVANCING) {
       nextLevelTimer -= deltaSeconds;
-      if (nextLevelTimer <= 0) showLevelEndStory();
+      if (nextLevelTimer > 0) return;
+      // Every coin or every monster: a bonus banner first, then the story
+      if (!perfectBonusesShown && awardPerfectBonuses()) return;
+      showLevelEndStory();
     }
   }
 
@@ -928,6 +949,39 @@
   }
 
   /**
+   * Bonuses for a perfect level: every coin picked up, and every monster placed in it defeated.
+   * Shows them in a banner and returns true, or returns false if there are none.
+   */
+  function awardPerfectBonuses() {
+    perfectBonusesShown = true;
+    const multiplier = Difficulty.current.pointsMultiplier;
+    const lines = [];
+    let total = 0;
+    if (level.coins.length > 0 && levelCoinsPicked >= level.coins.length) {
+      const bonus = Math.round(ALL_COINS_BONUS * multiplier);
+      lines.push(`🪙 EVERY COIN +${bonus.toLocaleString()}`);
+      total += bonus;
+    }
+    if (level.enemies.length > 0 && levelMonstersDefeated >= level.enemies.length) {
+      const bonus = Math.round(ALL_MONSTERS_BONUS * multiplier);
+      lines.push(`⚔ EVERY MONSTER +${bonus.toLocaleString()}`);
+      total += bonus;
+    }
+    if (total === 0) return false;
+    points += total;
+    Sfx.newSpecies();
+    particles.burst(player.x, player.y + player.height + 0.4, 18, '#ffd84a', 1.6, 0.6);
+    hud.showBanner({
+      title: lines.length === 2 ? '🌟 PERFECT LEVEL! 🌟' : '🌟 BONUS! 🌟',
+      subtitle: lines.join(' &middot; '),
+      variant: 'cleared',
+      seconds: PERFECT_BONUS_SECONDS - 0.3
+    });
+    nextLevelTimer = PERFECT_BONUS_SECONDS;
+    return true;
+  }
+
+  /**
    * The level's part of the story once its shard is won back (after the last level, the finale),
    * on the loading screen with the game paused. Moving on starts the next level, or the victory screen.
    */
@@ -1040,6 +1094,7 @@
     floatingText.spawn(`+${reward}`, enemy.x, enemy.centerY + 0.5);
     if (Math.random() < Rewards.heartDropChance(enemy)) hearts.spawn(enemy.x, enemy.centerY);
     if (isTraining) return;
+    if (enemy.isLevelMonster) levelMonstersDefeated++;
     Scrapbook.recordDefeat(enemy);
   }
 
@@ -1047,6 +1102,7 @@
     // Coins are cashed in for points at the end of the level (see startCoinTally)
     coinsCollected++;
     levelCoins++;
+    levelCoinsPicked++;
     Sfx.coin();
   }
 
@@ -1086,8 +1142,9 @@
       hud.showScore(`🎯 TRAINING: ${waves.remainingFoes} LEFT`);
       return;
     }
-    // Coins on the main line, so they show even on narrow screens (which hide the detail line)
-    hud.showScore(`${level.icon} LEVEL ${level.number} &middot; 🪙 ${levelCoins}`);
+    // Coins and monsters out of the level's total (for the perfect-level bonuses), on the main
+    // line so they show even on narrow screens (which hide the detail line)
+    hud.showScore(`${level.icon} LEVEL ${level.number} &middot; 🪙 ${levelCoinsPicked}/${level.coins.length} &middot; ⚔ ${levelMonstersDefeated}/${level.enemies.length}`);
   }
 
   /** End of a training session, won (everything defeated) or lost (the boy fell). */

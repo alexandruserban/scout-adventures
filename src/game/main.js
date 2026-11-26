@@ -64,6 +64,9 @@
   const MUTANT_BOSS_TITLES = ['THE GREAT', 'THE MIGHTY', 'KING', 'QUEEN', 'THE ANCIENT', 'THE COLOSSAL'];
 
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
+  /** The adventure in progress, saved at the start of every level so it can be continued after the game is closed. */
+  const SAVED_RUN_STORAGE_KEY = 'forest-pixel-adventure.savedRun';
+  const SAVED_RUN_VERSION = 1;
 
   /** Each coin is cashed in for this many points once the level's boss is beaten. */
   const COIN_POINTS = 20;
@@ -432,7 +435,7 @@
    * Its world comes from the shuffled run order and gets a freshly rolled course, unless
    * `course` (an already generated level, e.g. on a retry) is given.
    */
-  function startLevel(index, hp, maxHp, course = null, note = '') {
+  function startLevel(index, hp, maxHp, { course = null, note = '', seed } = {}) {
     isTraining = false;
     hasWon = false;
     levelIndex = index;
@@ -456,8 +459,10 @@
       note: [note, worldTheme.trapHint ? `⚠ ${worldTheme.trapHint}` : ''].filter(Boolean).join('<br>'),
       minSeconds: course ? RETRY_LOADING_SECONDS : LEVEL_LOADING_SECONDS,
       build: () => {
-        const levelData = course || Levels.generate(worldTheme, { position: index });
+        // A continued adventure rebuilds the very same course from its saved seed
+        const levelData = course || Levels.generate(worldTheme, { position: index, seed });
         buildLevel(levelData, { hp, maxHp });
+        saveRun(Math.min(hp, maxHp), maxHp);
         coinsOffered = levelStart.coinsOffered + level.coins.length;
         refreshScore();
         refreshPoints();
@@ -496,7 +501,77 @@
     runOrder = Levels.createRun();
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
     const { startHearts } = Difficulty.current;
-    startLevel(0, startHearts, startHearts, null, note);
+    startLevel(0, startHearts, startHearts, { note });
+  }
+
+  // --- Continuing an adventure after the game was closed ---
+  /** Remember where the adventure is: the level just started, with the score, coins and hearts it started with. */
+  function saveRun(hp, maxHp) {
+    try {
+      localStorage.setItem(SAVED_RUN_STORAGE_KEY, JSON.stringify({
+        version: SAVED_RUN_VERSION,
+        difficultyId: Difficulty.current.id,
+        runOrder,
+        levelIndex,
+        seed: level.seed,
+        points: levelStart.points,
+        coins: levelStart.coins,
+        coinsOffered: levelStart.coinsOffered,
+        hp,
+        maxHp
+      }));
+    } catch (error) {
+      // Storage unavailable: the adventure just can't be continued later
+    }
+  }
+
+  /** The saved adventure, or null if there isn't one (or it's from an older version of the game). */
+  function loadSavedRun() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVED_RUN_STORAGE_KEY));
+      const themeCount = Levels.themes.length;
+      const isValid = saved && saved.version === SAVED_RUN_VERSION
+        && Difficulty.LEVELS[saved.difficultyId]
+        && Array.isArray(saved.runOrder) && saved.runOrder.length === themeCount
+        && new Set(saved.runOrder).size === themeCount
+        && saved.runOrder.every(index => Number.isInteger(index) && index >= 0 && index < themeCount)
+        && Number.isInteger(saved.levelIndex) && saved.levelIndex >= 0 && saved.levelIndex < themeCount
+        && ['seed', 'points', 'coins', 'coinsOffered', 'hp', 'maxHp'].every(key => Number.isFinite(saved[key]))
+        && saved.hp > 0 && saved.maxHp > 0;
+      return isValid ? saved : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function clearSavedRun() {
+    try {
+      localStorage.removeItem(SAVED_RUN_STORAGE_KEY);
+    } catch (error) {
+      // Nothing to clear
+    }
+  }
+
+  /** A saved adventure that can be continued at the current difficulty (picking another one means a new game). */
+  function continuableRun() {
+    const saved = loadSavedRun();
+    return saved && saved.difficultyId === Difficulty.current.id ? saved : null;
+  }
+
+  /** Pick the saved adventure up again at the start of the level it was on. */
+  function continueAdventure(saved) {
+    points = saved.points;
+    coinsCollected = saved.coins;
+    coinsOffered = saved.coinsOffered;
+    runOrder = saved.runOrder.slice();
+    bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
+    startLevel(saved.levelIndex, saved.hp, saved.maxHp, { seed: saved.seed, note: '▶ WELCOME BACK! CONTINUING YOUR ADVENTURE' });
+  }
+
+  /** The title screen's big button: CONTINUE when there's a saved adventure at this difficulty, otherwise PLAY. */
+  function titlePlayAction() {
+    const saved = continuableRun();
+    return saved ? { action: 'continue', detail: `LEVEL ${saved.levelIndex + 1}` } : { action: 'title' };
   }
 
   /** Take the main menu away (PLAY, RESUME or Esc) and let the game run again. */
@@ -547,6 +622,7 @@
   // themselves on Esc, so it's left to them while one of them is open.)
   window.addEventListener('keydown', event => {
     if (event.code !== 'Escape' || event.repeat || Forest.MainMenu.isCoveredByOverlay()) return;
+    if (Forest.ExitButton && Forest.ExitButton.isOpen) return; // the exit dialog takes Esc itself
     if (!Forest.MainMenu.isOpen) openPauseMenu();
     else if (hasStarted) playFromPauseMenu();
   }, true);
@@ -556,7 +632,7 @@
     points = levelStart.points;
     coinsCollected = levelStart.coins;
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
-    startLevel(levelIndex, levelStart.maxHp, levelStart.maxHp, level);
+    startLevel(levelIndex, levelStart.maxHp, levelStart.maxHp, { course: level });
   }
 
   function spawnDistanceFor(entry) {
@@ -885,6 +961,7 @@
       return;
     }
     hasWon = true;
+    clearSavedRun(); // the adventure is over: nothing left to continue
     const totalCoins = coinsOffered;
     const previousBest = loadBest(BEST_POINTS_STORAGE_KEY);
     const isNewBestPoints = points > previousBest;
@@ -1144,7 +1221,12 @@
   // big button turns into START GAME (and back into RESUME if the game's own difficulty is picked
   // again). Changed anywhere else during a game, a fresh run starts with that many hearts.
   Difficulty.onChange(changedLevel => {
-    if (!hasStarted) return;
+    if (!hasStarted) {
+      // Title screen: CONTINUE only at the saved adventure's own difficulty
+      const { action, detail } = titlePlayAction();
+      Forest.MainMenu.setPlayAction(action, detail);
+      return;
+    }
     if (Forest.MainMenu.isOpen) {
       Forest.MainMenu.setPlayAction(changedLevel.id === pausedDifficultyId ? 'resume' : 'restart');
       return;
@@ -1249,6 +1331,18 @@
       return isPaused;
     },
 
+    /**
+     * Leave the game for the title screen (the exit door button, when the browser won't close the tab).
+     * The adventure was saved when its level started, so CONTINUE picks it up from there.
+     */
+    exitToTitle() {
+      if (Forest.LoadingScreen.isBusy) return;
+      hasStarted = false;
+      this.setPaused(true, 'main-menu');
+      Forest.Music.setPaused(true);
+      showTitleScreen();
+    },
+
     /** Pause the game on the main menu (the ☰ button on phones). Does nothing before the game starts or while loading. */
     openMenu() {
       openPauseMenu();
@@ -1279,10 +1373,12 @@
       return true;
     },
 
-    /** Leave training and start a fresh adventure. */
+    /** Leave training: back to the saved adventure if there is one, otherwise a fresh adventure. */
     endTraining() {
       isTraining = false;
-      startAdventure();
+      const saved = continuableRun();
+      if (saved) continueAdventure(saved);
+      else startAdventure();
       notifyModeChanged();
     },
 
@@ -1354,14 +1450,32 @@
   window.addEventListener('pagehide', () => Forest.Game.setBackgrounded(true));
   window.addEventListener('pageshow', () => Forest.Game.setBackgrounded(document.hidden));
 
-  // Everything has loaded: the title screen comes up, and the game waits behind it
   Forest.Game.setPaused(true, 'main-menu');
-  Forest.LoadingScreen.finishBoot(() => Forest.MainMenu.show({
-    onPlay: () => {
-      startAdventure(); // pauses for its loading screen before the menu lets go
-      closeMainMenu();
-    },
-    getBestPoints: () => loadBest(BEST_POINTS_STORAGE_KEY)
-  }));
+  /**
+   * The title screen, with the game waiting behind it. With an adventure saved from last time,
+   * the big button continues it and NEW ADVENTURE starts over.
+   */
+  function showTitleScreen() {
+    const { action, detail } = titlePlayAction();
+    Forest.MainMenu.show({
+      playAction: action,
+      playDetail: detail,
+      onPlay: () => {
+        // (pauses for its loading screen before the menu lets go)
+        const saved = continuableRun();
+        if (saved) continueAdventure(saved);
+        else startAdventure();
+        closeMainMenu();
+      },
+      onNewGame: loadSavedRun() ? () => {
+        startAdventure();
+        closeMainMenu();
+      } : null,
+      getBestPoints: () => loadBest(BEST_POINTS_STORAGE_KEY)
+    });
+  }
+
+  // Everything has loaded: up comes the title screen
+  Forest.LoadingScreen.finishBoot(showTitleScreen);
   requestAnimationFrame(runFrame);
 })(window.Forest);

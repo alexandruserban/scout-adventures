@@ -20,7 +20,7 @@
   const boyCanvas = document.getElementById('menu-boy');
 
   const DIFFICULTY_ICONS = { EASY: '🌱', NORMAL: '⚔️', HARD: '💀' };
-  const PLAY_LABELS = { title: '▶ PLAY', resume: '▶ RESUME', restart: '▶ START GAME' };
+  const PLAY_LABELS = { title: '▶ PLAY', continue: '▶ CONTINUE', resume: '▶ RESUME', restart: '▶ START GAME' };
   const BOY_FRAME_MS = 260;
 
   let onPlay = null;
@@ -77,22 +77,29 @@
   /**
    * @param {object} options
    * @param {'title'|'pause'} [options.mode] the title screen, or the pause menu during a game
-   * @param {() => void} options.onPlay starts the adventure (title) or carries on playing (pause)
-   * @param {() => void} [options.onNewGame] pause menu only: start a fresh adventure
+   * @param {() => void} options.onPlay starts (or continues) the adventure (title) or carries on playing (pause)
+   * @param {string} [options.playAction] title screen: 'continue' when there's a saved adventure (see PLAY_LABELS)
+   * @param {string} [options.playDetail] added to the big button's label, e.g. the level a saved adventure is on
+   * @param {() => void} [options.onNewGame] start a fresh adventure (pause menu, or the title screen with a saved one)
    * @param {() => number} [options.getBestPoints] high score for the current difficulty
    */
   function show(options) {
     const isPause = options.mode === 'pause';
     onPlay = options.onPlay;
     onNewGame = options.onNewGame || null;
-    playButton.textContent = isPause ? PLAY_LABELS.resume : PLAY_LABELS.title;
+    setPlayAction(isPause ? 'resume' : options.playAction || 'title', options.playDetail);
     subtitleElement.textContent = isPause ? '⏸ PAUSED' : "THE BOY'S QUEST";
-    newGameButton.style.display = isPause && onNewGame ? '' : 'none';
+    newGameButton.style.display = onNewGame ? '' : 'none';
     if (options.getBestPoints) getBestPoints = options.getBestPoints;
     screen.style.display = 'flex';
     refresh();
     startBoy();
     playButton.focus({ preventScroll: true });
+  }
+
+  /** The big button's label: one of PLAY_LABELS, with an optional detail (e.g. "LEVEL 5"). */
+  function setPlayAction(action, detail) {
+    playButton.textContent = detail ? `${PLAY_LABELS[action]} · ${detail}` : PLAY_LABELS[action];
   }
 
   function hide() {
@@ -165,11 +172,9 @@
     isCoveredByOverlay,
     /**
      * Pause menu: the big button resumes the game ('resume'), or starts a fresh one ('restart')
-     * once a different difficulty has been picked.
+     * once a different difficulty has been picked. Title screen: 'continue' or 'title' (PLAY).
      */
-    setPlayAction(action) {
-      playButton.textContent = PLAY_LABELS[action];
-    },
+    setPlayAction,
     get isOpen() {
       return isOpen();
     }

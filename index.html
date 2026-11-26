@@ -84,6 +84,32 @@
     </div>
   </div>
 
+  <!-- Exit door button (bottom-right corner, above the menus) and its "are you sure?" dialog -->
+  <button id="btn-exit" class="exit-btn" aria-label="Exit game" title="Exit game">
+    <svg viewBox="0 0 16 16" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true">
+      <!-- door frame, with daylight through the open doorway -->
+      <rect x="1" y="1" width="10" height="15" fill="#3b2412"/>
+      <rect x="2" y="2" width="8" height="14" fill="#fde68a"/>
+      <!-- the door, swung open towards us -->
+      <polygon points="2,2 7,3 7,16 2,16" fill="#a0522d"/>
+      <polygon points="2,2 3,2.2 3,16 2,16" fill="#6b3416"/>
+      <rect x="5" y="9" width="1" height="1" fill="#fde047"/>
+      <!-- arrow: out you go -->
+      <rect x="10" y="8" width="4" height="2" fill="#ffffff"/>
+      <polygon points="13,6 16,9 13,12" fill="#ffffff"/>
+    </svg>
+  </button>
+  <div id="exit-dialog">
+    <div class="overlay-card exit-card">
+      <div class="pixel-title text-red">EXIT GAME?</div>
+      <div class="pixel-subtitle">Your adventure is saved at the start of this level.<br>Press CONTINUE next time to carry on.</div>
+      <div class="overlay-buttons">
+        <button id="btn-exit-cancel" class="pixel-btn">◀ STAY</button>
+        <button id="btn-exit-confirm" class="pixel-btn exit-confirm"><span class="x-icon" aria-hidden="true"></span>EXIT</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Controls & Shortcuts Guide Toolbar -->
   <div id="controls-bar">
     <div class="control-item">
@@ -252,5 +278,6 @@
   <script src="src/ui/scrapbookView.js"></script>
 
   <script src="src/game/main.js"></script>
+  <script src="src/ui/exitButton.js"></script>
 </body>
 </html>

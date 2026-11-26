@@ -86,6 +86,8 @@
   const DESPAWN_DISTANCE = 30;
   /** The boss fight starts once the boy is this far into the arena. */
   const ARENA_TRIGGER_INSET = 1.5;
+  /** A beaten boss's star shard always lands at least this far inside the arena walls. */
+  const SHARD_ARENA_MARGIN = 1.5;
   const NEXT_LEVEL_DELAY_SECONDS = 3.2;
   /** The loading screen stays up at least this long before a new level (and before a retry). */
   const LEVEL_LOADING_SECONDS = 1.6;
@@ -142,6 +144,8 @@
     FIGHTING: 'FIGHTING',
     /** The boss is beaten; waiting for its leftovers (e.g. jelly halves) to go. */
     BOSS_DOWN: 'BOSS_DOWN',
+    /** The boss's star shard is waiting to be picked up; only that wins the level. */
+    SHARD: 'SHARD',
     /** Fanfare playing; the coin tally starts soon. */
     CLEARED: 'CLEARED',
     /** The level's coins are being turned into points. */
@@ -277,6 +281,9 @@
   /** The boss's display name (a randomly picked mutant boss is only named once it's generated). */
   let bossName = '';
   let arenaState = ArenaState.CLOSED;
+  /** Where the boss fell (its shard appears there), and the shard itself once it's out. */
+  let bossFallSpot = null;
+  let shard = null;
   let nextLevelTimer = 0;
   /** Seconds since the level started (drives the sandstorm gusts). */
   let levelTime = 0;
@@ -339,6 +346,9 @@
     enemies.forEach(enemy => enemy.remove());
     enemies = [];
     waves.reset();
+    if (shard) shard.remove();
+    shard = null;
+    bossFallSpot = null;
   }
 
   /** Build a level's terrain, scenery and background, and put the boy at its start. */
@@ -538,7 +548,9 @@
     } else if (arenaState === ArenaState.FIGHTING) {
       updateBossFight();
     } else if (arenaState === ArenaState.BOSS_DOWN && enemies.every(enemy => enemy.isGone)) {
-      clearLevel();
+      dropShard();
+    } else if (arenaState === ArenaState.SHARD) {
+      shard.update(deltaSeconds, player);
     } else if (arenaState === ArenaState.CLEARED) {
       nextLevelTimer -= deltaSeconds;
       if (nextLevelTimer <= 0) startCoinTally();
@@ -697,13 +709,38 @@
   function onBossDefeated(enemy) {
     onEnemyDefeated(enemy);
     arenaState = ArenaState.BOSS_DOWN;
+    bossFallSpot = { x: enemy.x, y: enemy.centerY };
     // With their leader gone, the sidekicks blow up too
     enemies.forEach(other => {
       if (other.isBossCompanion && other.isHittable) other.defeat();
     });
   }
 
-  /** Boss and leftovers gone: fanfare, bonus points and an extra heart, then the coins are cashed in. */
+  /**
+   * Boss and leftovers gone: the Heart Star shard it guarded appears where it fell (kept inside the
+   * arena), and the level is only won once the boy picks it up.
+   */
+  function dropShard() {
+    arenaState = ArenaState.SHARD;
+    const { arena } = level;
+    const spot = bossFallSpot || { x: (arena.start + arena.end) / 2, y: Config.GROUND_Y + 3 };
+    const x = Forest.MathUtils.clamp(spot.x, arena.start + SHARD_ARENA_MARGIN, arena.end - SHARD_ARENA_MARGIN);
+    shard = new Forest.StarShard(world, { x, y: Math.max(spot.y, Config.GROUND_Y + 1) }, collectShard);
+    Sfx.newSpecies();
+    hud.showBanner({
+      title: '✨ A STAR SHARD! ✨',
+      subtitle: `${bossName} dropped a shard of the Heart Star. Grab it!`,
+      variant: 'cleared',
+      seconds: 3
+    });
+  }
+
+  function collectShard() {
+    shard = null;
+    clearLevel();
+  }
+
+  /** The shard is picked up: fanfare, bonus points and an extra heart, then the coins are cashed in. */
   function clearLevel() {
     arenaState = ArenaState.CLEARED;
     nextLevelTimer = COIN_TALLY_DELAY_SECONDS;

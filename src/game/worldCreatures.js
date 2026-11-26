@@ -141,7 +141,8 @@
       points: 30, heartChance: 0.1, hp: 2, damage: 1, hpPerCycle: 1,
       spriteScale: 0.8, colors: { main: '#b04aff', accent: '#ffe14d' },
       movement: 'flyer', hoverHeight: 3.0, sideDistance: 3, attack: 'throw', attackEvery: [2.4, 3.4], telegraph: 0.45,
-      shots: [-0.8, 0.8], throwSeconds: 0.9, projectile: { tint: 0xffe14d, trail: ['#ffe14d', '#e8c0ff'] }
+      // One sparkly star at a time, thrown like a fireball
+      shots: [0], throwSeconds: 0.9, projectile: { sprite: 'star', trail: ['#ffe14d', '#fff7b3', '#e8c0ff'] }
     },
     {
       kind: 'drakeling', world: 'mechKeep', latin: 'Draco clankius', common: 'Drakeling',

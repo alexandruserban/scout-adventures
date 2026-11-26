@@ -470,8 +470,10 @@
     onRage() {}
 
     /** Lob a coloured projectile (acorns, spores, sparks) that comes down at `targetX`. */
-    lobAt(targetX, { tint, trail, fromY = this.y + this.height * 0.8, seconds = 1.0 }) {
-      this.world.projectiles.launchFireball(this.x, fromY, targetX, this.floorY + 0.3, seconds, this.damage, { tint, trail });
+    lobAt(targetX, { tint, trail, sprite, fromY = this.y + this.height * 0.8, seconds = 1.0 }) {
+      // `sprite` names something other than a fireball to throw (e.g. 'star', see gameSprites.js)
+      this.world.projectiles.launchFireball(this.x, fromY, targetX, this.floorY + 0.3, seconds, this.damage,
+        { tint, trail, sprite: sprite ? this.world.sprites[sprite] : undefined });
     }
 
     /** Shatter into pixel debris with a flash and shockwaves. */

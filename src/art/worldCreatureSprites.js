@@ -425,4 +425,21 @@
   Object.entries(CREATURES).forEach(([kind, { name, paint, palette }]) => {
     SkyArt.creatures[kind] = { name, palette, frames: framesOf(paint) };
   });
+
+  /** The Pixie's thrown star (8x8, like the fireball). */
+  const star = {
+    palette: { K: '#5a2a8a', Y: '#ffe14d', w: '#ffffff' },
+    rows: [
+      '...KK...',
+      '..KYYK..',
+      'KKKYYKKK',
+      'KYYwYYYK',
+      '.KYYYYK.',
+      '.KYKKYK.',
+      'KYK..KYK',
+      'KK....KK'
+    ]
+  };
+
+  Forest.WorldCreatureSprites = Object.freeze({ star });
 })(window.Forest);

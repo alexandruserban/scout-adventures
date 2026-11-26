@@ -60,6 +60,8 @@
       /** The Octo-Rocker's music notes and the raging spider's web balls (thrown like fireballs). */
       musicNote: createSprite(asciiToCanvas(Forest.StrangeCreatureSprites.musicNote.rows, 1, Forest.StrangeCreatureSprites.musicNote.palette)),
       webBall: createSprite(asciiToCanvas(Forest.StrangeCreatureSprites.webBall.rows, 1, Forest.StrangeCreatureSprites.webBall.palette)),
+      /** The Pixie's star. */
+      star: createSprite(asciiToCanvas(Forest.WorldCreatureSprites.star.rows, 1, Forest.WorldCreatureSprites.star.palette)),
       oakTree: createSprite(Environment.createOakTree()),
       grassTile: createSprite(Environment.createGrassTile()),
       flowerTuft: createSprite(Environment.createFlowerTuft())

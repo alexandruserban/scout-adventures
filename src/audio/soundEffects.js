@@ -233,6 +233,18 @@
 
     shieldUp() {
       synth.playTone({ wave: 'sine', frequency: 440, endFrequency: 1320, duration: 0.25, volume: 0.09 });
+    },
+
+    /** Spikes snapping up out of the ground. */
+    spikesUp() {
+      synth.playTone({ wave: 'square', frequency: 900, endFrequency: 1500, duration: 0.06, volume: 0.05 });
+      synth.playNoise({ duration: 0.05, filterType: 'highpass', filterFrequency: 3500, volume: 0.05 });
+    },
+
+    /** A crumbling ledge giving way. */
+    crumble() {
+      synth.playNoise({ duration: 0.3, filterType: 'lowpass', filterFrequency: 900, endFilterFrequency: 200, volume: 0.12 });
+      synth.playTone({ wave: 'triangle', frequency: 160, endFrequency: 60, duration: 0.2, volume: 0.08, endVolume: 0.005 });
     }
   };
 })(window.Forest);

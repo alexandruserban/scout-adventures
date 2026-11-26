@@ -12,8 +12,11 @@
  * (Forest.Levels.createRun), and the monsters and bosses get tougher with each world visited.
  *
  * Positions are in world units: x along the level, y up from the grass line (0).
- *  - ground:    [left, right] solid segments; the spaces between them are bottomless pits
- *  - platforms: one-way ledges { x: left edge, y: top, width } (bouncy ones launch the boy)
+ *  - ground:    [left, right, height] solid segments; the spaces between them are bottomless pits.
+ *               Segments that touch at different heights are hills (their sides are walls)
+ *  - platforms: one-way ledges { x: left edge, y: top, width } (bouncy ones launch the boy, moving
+ *               ones ferry him across, crumbling ones fall away soon after he lands)
+ *  - traps:     spikes { x: left edge, width, period, phase } that pop up out of the ground
  *  - coins:     { x, y } centre of each coin
  *  - enemies:   { kind, x } each drops in when the boy gets close. kind is 'mushroom', a sky creature
  *               (nutling, thornback, gloomwing, jelly) or 'mutant': a freshly rolled Monster Forge monster
@@ -60,6 +63,8 @@
   function autoCoins({ ground, platforms, arena }, jumpScale) {
     const coins = [];
     platforms.forEach(platform => {
+      // Moving stones over a pit leave their coins to the arc over it
+      if (platform.move && platform.essential) return;
       if (platform.bouncy) {
         coins.push(...coinRow(platform.x + platform.width / 2 - 0.35, platform.y + 3.4, 2));
         return;
@@ -68,15 +73,19 @@
     });
     const sorted = [...ground].sort((a, b) => a[0] - b[0]);
     for (let i = 0; i < sorted.length - 1; i++) {
-      const left = sorted[i][1];
-      const right = sorted[i + 1][0];
+      const [, left, leftHeight = 0] = sorted[i];
+      const [right, , rightHeight = 0] = sorted[i + 1];
       const gap = right - left;
-      const count = Math.max(3, Math.min(5, Math.round(gap / 1.2) + 1));
-      coins.push(...coinArc(left - 0.5, right + 0.5, 0.8, Math.min(2.6, 0.8 + gap * 0.35) * jumpScale, count));
+      if (gap < 0.5) continue; // the foot of a hill, not a pit
+      const count = Math.max(3, Math.min(7, Math.round(gap / 1.2) + 1));
+      const baseY = Math.max(leftHeight, rightHeight) + 0.8;
+      coins.push(...coinArc(left - 0.5, right + 0.5, baseY, Math.min(2.6, 0.8 + gap * 0.35) * jumpScale, count));
     }
-    sorted.forEach(([left, right]) => {
+    sorted.forEach(([left, right, height = 0]) => {
       const end = Math.min(right, arena.start) - 2;
-      if (end - (left + 2) > 10) coins.push(...coinRow((left + end) / 2 - 1.4, GROUND_COIN_Y, 5));
+      if (end - (left + 2) > 10) coins.push(...coinRow((left + end) / 2 - 1.4, height + GROUND_COIN_Y, 5));
+      // A little prize on top of every hill
+      else if (height > 0 && right - left >= 2.5) coins.push(...coinRow((left + right) / 2 - 0.7, height + GROUND_COIN_Y, 3));
     });
     return coins;
   }
@@ -91,6 +100,8 @@
   /** Platforms closer than this across, and this in height, look stacked: the original one is dropped. */
   const CROWDING_MARGIN = 0.4;
   const CROWDING_HEIGHT = 1.8;
+  /** Share of the plain ledges on a high route that crumble. */
+  const ROUTE_CRUMBLE_CHANCE = 0.3;
 
   /**
    * A route high above the level: a way up (a zig-zag tower of ledges, or a lift), then a tricky run
@@ -147,7 +158,8 @@
         cursor += 1.8;
       } else {
         const width = 1.2 + random() * 1.0;
-        const ledge = { x: cursor, y, width };
+        // Some fall away under him: keep moving!
+        const ledge = { x: cursor, y, width, crumble: random() < ROUTE_CRUMBLE_CHANCE };
         platforms.push(ledge);
         coins.push(...coinsOn(ledge, 2));
         cursor += width;
@@ -190,8 +202,30 @@
   /** Ordinary pits, and the wide ones with a stepping stone in the middle (before reach scaling). */
   const PIT_WIDTH = [1.7, 3.2];
   const WIDE_PIT_WIDTH = [4.6, 6.0];
-  const WIDE_PIT_CHANCE = 0.22;
   const SEGMENT_LENGTH = [5, 16];
+  /** Ledges and stairs only go on stretches of ground at least this long (not on hill tops). */
+  const MIN_LEDGE_SEGMENT = 6;
+  /** The tricky obstacles and the spikes reach their most common after this many worlds. */
+  const CHALLENGE_RAMP_WORLDS = 12;
+  /** Each tier of a hill (or cliff) is this much higher: always within a single jump. */
+  const HILL_STEP = [0.9, 1.3];
+  /** Ground never rises more than this above the grass line. */
+  const MAX_GROUND_HEIGHT = 2.6;
+  /** Ground lower than this above the grass line is just flat. */
+  const MIN_STEP = 0.6;
+  /** The pit in front of a cliff going up is narrower, as he has to jump up as well as across. */
+  const CLIFF_UP_PIT = [1.4, 2.1];
+  /** Pits crossed on a ferry, on two bobbing stones, or on two crumbling stones. */
+  const FERRY_PIT_WIDTH = [7, 9];
+  const FERRY_WIDTH = 2.4;
+  /** The ferry stops this far short of each edge (a step across). */
+  const FERRY_EDGE_GAP = 0.3;
+  const BOBBING_PIT_WIDTH = [5.5, 7];
+  const CRUMBLING_PIT_WIDTH = [5, 6.5];
+  /** Spikes: how often a spot on the ground gets them (first world, later worlds), and how wide. */
+  const SPIKE_CHANCE = [0.22, 0.5];
+  const SPIKE_WIDTH = [1.4, 2.2];
+  const SPIKES_FROM_X = 14;
   /** Monster Forge power at the first world, and how much it grows with each world visited. */
   const FIRST_POWER = 1;
   const POWER_PER_LEVEL = 0.55;
@@ -207,13 +241,146 @@
   }
 
   /**
+   * The ground up to `until`: flat stretches broken up by obstacles. Plain pits, wide ones with a
+   * stepping stone, cliffs (a pit with higher or lower ground across it), hills of one or two tiers
+   * (raised islands where the ground isn't solid), and pits crossed only on a ferry, on bobbing
+   * stones or on stones that crumble away under him. The tricky ones turn up more in later worlds.
+   * @returns {{ground:Array<[number, number, number]>, platforms:object[], right:number}} right: where the ground ends
+   */
+  function rollGround({ random, between, reach, lift, challenge, solidSides, until }) {
+    const ground = [];
+    const platforms = [];
+    let height = 0;
+    let right = between(13, 18);
+    ground.push([-8, right, 0]);
+    /** A segment of ground from `left`, `length` long. */
+    const addGround = (left, length, segmentHeight) => {
+      ground.push([left, left + length, segmentHeight]);
+      right = left + length;
+      height = segmentHeight;
+    };
+    const run = () => between(...SEGMENT_LENGTH);
+    const rise = () => between(...HILL_STEP) * lift;
+    const weights = {
+      pit: 30,
+      widePit: 12,
+      cliff: 12,
+      hill: 18,
+      ferry: 7 + 7 * challenge,
+      bobbing: 6 + 6 * challenge,
+      crumbling: 6 + 8 * challenge
+    };
+    const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+    const pickObstacle = () => {
+      let roll = random() * total;
+      for (const [kind, weight] of Object.entries(weights)) {
+        roll -= weight;
+        if (roll < 0) return kind;
+      }
+      return 'pit';
+    };
+
+    const ceiling = MAX_GROUND_HEIGHT * lift;
+    const tallestStep = HILL_STEP[1] * lift;
+    while (right < until) {
+      let kind = pickObstacle();
+      // No room for a hill this high up: step back down instead
+      if (kind === 'hill' && height + tallestStep > ceiling) kind = 'cliff';
+      if (kind === 'widePit') {
+        const pit = between(...WIDE_PIT_WIDTH) * reach;
+        platforms.push({ x: right + pit / 2 - 1, y: height + between(1.0, 1.4) * lift, width: 2, essential: true });
+        addGround(right + pit, run(), height);
+      } else if (kind === 'cliff') {
+        // Up when low, down when already high
+        const goesUp = height + tallestStep <= ceiling && (height === 0 || random() < 0.5);
+        if (goesUp) {
+          addGround(right + between(...CLIFF_UP_PIT) * reach, run(), height + rise());
+        } else {
+          // A step too small to see is levelled off
+          const lower = height - rise();
+          addGround(right + between(...PIT_WIDTH) * reach, run(), lower < MIN_STEP ? 0 : lower);
+        }
+      } else if (kind === 'hill') {
+        const base = height;
+        const twoTiers = base + 2 * tallestStep <= ceiling && random() < 0.35 + 0.3 * challenge;
+        const firstRise = rise();
+        if (solidSides) {
+          // Climb up a tier or two, then down the far side (or leap off it across a pit)
+          addGround(right, between(3, 5), base + firstRise);
+          if (twoTiers) {
+            addGround(right, between(2.5, 4), base + firstRise + rise());
+            addGround(right, between(2.5, 4), base + firstRise);
+          }
+          if (random() < 0.3) addGround(right + between(...PIT_WIDTH) * reach, run(), base);
+          else addGround(right, run(), base);
+        } else {
+          // A raised island with a hop up onto it and a drop off the far side
+          addGround(right + between(...CLIFF_UP_PIT) * reach, between(4, 6), base + firstRise);
+          addGround(right + between(...PIT_WIDTH) * reach, run(), base);
+        }
+      } else if (kind === 'ferry') {
+        // Too wide to jump: wait for the ferry and ride it over
+        const pit = between(...FERRY_PIT_WIDTH) * reach;
+        const travel = pit - 2 * FERRY_EDGE_GAP - FERRY_WIDTH;
+        platforms.push({
+          x: right + FERRY_EDGE_GAP, y: height, width: FERRY_WIDTH, essential: true,
+          move: { dx: travel, dy: 0, period: 2.6 + travel * 0.35, phase: random() }
+        });
+        addGround(right + pit, run(), height);
+      } else if (kind === 'bobbing') {
+        // Two stones rising and sinking in turn: time each hop
+        const pit = between(...BOBBING_PIT_WIDTH) * reach;
+        const period = between(2.6, 3.2);
+        [1, 2].forEach(step => platforms.push({
+          x: right + (pit * step) / 3 - 0.9, y: height - 0.4, width: 1.8, essential: true,
+          move: { dx: 0, dy: 1.6 * lift, period, phase: step === 1 ? 0 : 0.5 }
+        }));
+        addGround(right + pit, run(), height);
+      } else if (kind === 'crumbling') {
+        // Two stones that fall away soon after he lands: keep going!
+        const pit = between(...CRUMBLING_PIT_WIDTH) * reach;
+        [1, 2].forEach(step => platforms.push({
+          x: right + (pit * step) / 3 - 0.75, y: height + 0.7, width: 1.5, essential: true, crumble: true
+        }));
+        addGround(right + pit, run(), height);
+      } else {
+        addGround(right + between(...PIT_WIDTH) * reach, run(), height);
+      }
+    }
+    return { ground, platforms, right };
+  }
+
+  /**
+   * Spikes that pop out of the ground, on the longer flat stretches (never at the very start, by
+   * the high route's way up or in the arena). Later worlds have more of them.
+   */
+  function rollSpikeTraps({ ground, routes, arena, random, between, challenge }) {
+    const traps = [];
+    const chance = SPIKE_CHANCE[0] + (SPIKE_CHANCE[1] - SPIKE_CHANCE[0]) * challenge;
+    const keepClear = routes.map(route => [route.x - 1.5, route.x + 7]);
+    ground.forEach(([left, right, height = 0]) => {
+      const from = Math.max(left + 2.5, SPIKES_FROM_X);
+      const to = Math.min(right - 2.5, arena.start - 4);
+      for (let x = from + random() * 3; x + SPIKE_WIDTH[1] < to; x += between(5, 8)) {
+        if (random() > chance) continue;
+        const width = between(...SPIKE_WIDTH);
+        if (keepClear.some(([clearLeft, clearRight]) => x + width > clearLeft && x < clearRight)) continue;
+        traps.push({ x, width, height, period: between(2.8, 3.6), phase: random() });
+      }
+    });
+    return traps;
+  }
+
+  /**
    * Roll a course: ground with pits, ledges and stairs, a high route, and the enemies.
    * @param {object} theme an entry of THEMES
    * @param {() => number} random
    * @param {number} jumpScale
    * @param {number} position how many worlds came before this one in the adventure
+   * @param {boolean} solidSides the ground is solid earth all the way down (false: floating
+   *   branches, clouds or rainbows, which only get raised islands, never hills)
    */
-  function rollCourse(theme, random, jumpScale, position) {
+  function rollCourse(theme, random, jumpScale, position, solidSides) {
     const between = (low, high) => low + random() * (high - low);
     const pick = list => list[Math.floor(random() * list.length)];
     // Pits widen with the boy's reach (low gravity) and shrink against a headwind
@@ -222,47 +389,38 @@
     const lift = Math.min(1.4, Math.sqrt(jumpScale));
     const arenaTarget = Math.round(between(...ARENA_START_RANGE));
 
-    // Ground broken up by pits; wide ones get a stepping stone in the middle
-    const ground = [];
-    const platforms = [];
-    let left = -8;
-    let right = between(13, 18);
-    while (right < arenaTarget - SEGMENT_LENGTH[1]) {
-      ground.push([left, right]);
-      let pit;
-      if (random() < WIDE_PIT_CHANCE) {
-        pit = between(...WIDE_PIT_WIDTH) * reach;
-        platforms.push({ x: right + pit / 2 - 1, y: between(1.0, 1.4) * lift, width: 2, essential: true });
-      } else {
-        pit = between(...PIT_WIDTH) * reach;
-      }
-      left = right + pit;
-      right = left + between(...SEGMENT_LENGTH);
-    }
-    ground.push([left, right]);
+    const challenge = Math.min(1, position / CHALLENGE_RAMP_WORLDS);
+    const { ground, platforms, right } = rollGround({
+      random, between, reach, lift, challenge, solidSides, until: arenaTarget - SEGMENT_LENGTH[1]
+    });
+    // One more pit, then the flat ground of the arena
     const lastLeft = right + between(PIT_WIDTH[0], 3.0) * reach;
     const arenaStart = Math.max(arenaTarget, lastLeft + 6);
     const arena = { start: arenaStart, end: arenaStart + ARENA_WIDTH };
-    ground.push([lastLeft, arena.end + 8]);
+    ground.push([lastLeft, arena.end + 8, 0]);
 
-    // Ledges, stairs and bounce pads along the ground
+    // Ledges, stairs and bounce pads along the longer stretches of ground
     const bouncy = Boolean(theme.layout && theme.layout.bouncy);
-    ground.forEach(([segmentLeft, segmentRight]) => {
-      const to = Math.min(segmentRight, arena.start - 3);
+    ground.forEach(([segmentLeft, segmentRight, height = 0], index) => {
+      if (segmentRight - segmentLeft < MIN_LEDGE_SEGMENT) return;
+      // Nothing may hang over the hill rising at the end of this stretch
+      const next = ground[index + 1];
+      const risesAfter = next && Math.abs(next[0] - segmentRight) < 0.01 && (next[2] || 0) > height;
+      const to = Math.min(segmentRight - (risesAfter ? 3 : 0), arena.start - 3);
       let x = Math.max(segmentLeft + 1.2, 7) + random() * 2;
       while (x < to - 3) {
         const roll = random();
         if (bouncy && roll < 0.25 && x + 7 < to) {
-          platforms.push({ x, y: 0.6, width: 2.2, bouncy: true });
-          platforms.push({ x: x + 3.4, y: 4.4 * lift, width: 3 });
+          platforms.push({ x, y: height + 0.6, width: 2.2, bouncy: true });
+          platforms.push({ x: x + 3.4, y: height + 4.4 * lift, width: 3 });
           x += 6.4 + between(3, 5);
         } else if (roll < 0.5) {
           const width = between(2.5, 3.5);
-          platforms.push({ x, y: between(1.4, 1.8) * lift, width });
+          platforms.push({ x, y: height + between(1.4, 1.8) * lift, width });
           x += width + between(3, 6);
         } else if (roll < 0.72 && x + 9 < to + 2) {
           const steps = random() < 0.5 ? 2 : 3;
-          for (let step = 0; step < steps; step++) platforms.push({ x: x + step * 3.6, y: (1.5 + step * 1.5) * lift, width: 2.5 });
+          for (let step = 0; step < steps; step++) platforms.push({ x: x + step * 3.6, y: height + (1.5 + step * 1.5) * lift, width: 2.5 });
           x += steps * 3.6 + between(3, 5);
         } else {
           x += between(3, 6);
@@ -272,7 +430,7 @@
 
     // One high route, starting from solid ground
     const routes = [];
-    const routeGround = ground.filter(([l, r]) => r - l >= 7 && l > 8 && r < arena.start - 24);
+    const routeGround = ground.filter(([l, r, h = 0]) => h === 0 && r - l >= 7 && l > 8 && r < arena.start - 24);
     if (routeGround.length > 0) {
       const [l, r] = pick(routeGround);
       const climb = random() < 0.5 ? 'tower' : 'lift';
@@ -283,6 +441,8 @@
         climb
       });
     }
+
+    const traps = rollSpikeTraps({ ground, routes, arena, random, between, challenge });
 
     // Enemies, only over solid ground, getting stronger towards the arena and with every world
     const enemies = [];
@@ -298,7 +458,7 @@
       else enemies.push({ kind: 'mutant', x, power: Math.min(MAX_POWER, basePower + Math.floor((x / arena.start) * 2.5)) });
     }
 
-    return { ground, platforms, routes, enemies, arena };
+    return { ground, platforms, routes, traps, enemies, arena };
   }
 
   /**
@@ -326,7 +486,7 @@
   const BEAT_BOB_HEIGHT = 0.22;
 
   function animatePlatform(platform, layout, random) {
-    if (!layout || platform.move || platform.bouncy) return platform;
+    if (!layout || platform.move || platform.bouncy || platform.crumble) return platform;
     if (layout.rising) {
       return { ...platform, move: { rise: RISE_DISTANCE, period: RISE_PERIOD[0] + random() * (RISE_PERIOD[1] - RISE_PERIOD[0]), phase: random() } };
     }
@@ -390,7 +550,8 @@
    */
   function generate(theme, { position = 0, seed = randomSeed() } = {}) {
     const random = createSeededRandom(seed);
-    const course = rollCourse(theme, random, jumpScaleOf(theme), position);
+    const solidSides = !Forest.LevelScenery || Forest.LevelScenery.hasSolidGround(theme.theme);
+    const course = rollCourse(theme, random, jumpScaleOf(theme), position, solidSides);
     const boss = {
       ...pickBoss(theme, random, position),
       hp: Math.round(BOSS_FIRST_HP + position * BOSS_HP_PER_LEVEL),
@@ -685,6 +846,7 @@
       ground: [[-8, TRAINING_WIDTH + 8]],
       platforms,
       coins: [],
+      traps: [],
       enemies: [],
       routes: [],
       arena: { start: 0, end: TRAINING_WIDTH },

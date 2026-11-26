@@ -1221,12 +1221,19 @@
   class ProjectileSystem {
     /** @param {object} world shared game systems (scene, sprites, particles, effects) */
     constructor(world) {
+      this.world = world;
       this.scene = world.scene;
       this.particles = world.particles;
       this.effects = world.effects;
       this.sprite = world.sprites.fireball;
       this.variants = world.sprites.fireballVariants || [];
       this.fireballs = [];
+    }
+
+    /** Where a fireball hits the ground (hills stop them higher up). */
+    groundTopAt(x) {
+      const terrain = this.world.terrain;
+      return terrain ? terrain.groundTopAt(x) : GROUND_Y;
     }
 
     /**
@@ -1284,7 +1291,7 @@
           if (fireball.entangle) player.entangle(fireball.entangle.seconds, fireball.entangle.speedFactor);
           this.burst(fireball);
           this.removeAt(i);
-        } else if (fireball.y <= GROUND_Y + 0.1 || fireball.x < LEVEL_START_X - 2 || fireball.x > LEVEL_END_X + 2) {
+        } else if (fireball.y <= this.groundTopAt(fireball.x) + 0.1 || fireball.x < LEVEL_START_X - 2 || fireball.x > LEVEL_END_X + 2) {
           this.burst(fireball);
           this.removeAt(i);
         }

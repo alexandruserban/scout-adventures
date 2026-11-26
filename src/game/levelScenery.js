@@ -1,6 +1,7 @@
 /**
- * Builds the static scenery of one level: the ground segments with whatever lies beneath them,
- * dark pits between them, floating platforms and themed decorations (oaks and flowers in the
+ * Builds the static scenery of one level: the ground segments (hills drawn at their height, with
+ * cliff faces down to the lower ground beside them) with whatever lies beneath them, dark pits
+ * between them, floating platforms (cracked ones crumble and fall) and themed decorations (oaks and flowers in the
  * forest, braziers and bones in the dungeon, leaf clumps and trunks in the treetops).
  *
  * Everything goes into one THREE.Group so a level can be torn down in one go (see dispose).
@@ -32,6 +33,13 @@
   /** Props in the rising world float this high (units) before reappearing on the ground, at about this speed. */
   const FLOAT_HEIGHT = 9;
   const FLOAT_SPEED = 0.9;
+  /** A crumbling ledge rattles this far side to side, then falls (units/s²) and fades out over this long. */
+  const CRUMBLE_SHAKE = 0.06;
+  const CRUMBLE_FALL_GRAVITY = 18;
+  const CRUMBLE_FADE_SECONDS = 0.7;
+  /** Coming back, it fades in over this long. */
+  const CRUMBLE_RETURN_FADE_SECONDS = 0.4;
+  const CRACK_COLOR = 'rgba(25, 12, 6, 0.8)';
 
   const THEME_STYLE = {
     forest: { fill: '#290f02', edge: '#170800', pit: '#080402' },
@@ -71,6 +79,21 @@
     return value - Math.floor(value);
   }
 
+  /** Scratch jagged cracks down from the walking surface of a painted ledge (a crumbling one). */
+  function crackCanvas(canvas, surfaceRow) {
+    const context = canvas.getContext('2d');
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    const isPainted = (x, y) => x >= 0 && x < canvas.width && y >= 0 && y < canvas.height && data[(y * canvas.width + x) * 4 + 3] > 0;
+    context.fillStyle = CRACK_COLOR;
+    for (let startX = 3; startX < canvas.width - 2; startX += 5 + Math.floor(hash(startX) * 3)) {
+      let x = startX;
+      for (let y = surfaceRow; y < Math.min(canvas.height, surfaceRow + 6); y++) {
+        if (isPainted(x, y)) context.fillRect(x, y, 1, 1);
+        x += hash(startX * 31 + y) < 0.5 ? -1 : 1;
+      }
+    }
+  }
+
   class LevelScenery {
     /**
      * @param {THREE.Scene} scene
@@ -89,6 +112,10 @@
       this.ownTextures = [];
       /** Meshes of moving platforms, with the terrain surface each one follows. */
       this.movingMeshes = [];
+      /** Meshes of crumbling ledges, with their terrain surface and resting spot. */
+      this.crumblingMeshes = [];
+      /** Height of the ground segment being decorated. */
+      this.groundTop = GROUND_Y;
       /** Brazier meshes whose flames flicker, each on its own clock. */
       this.braziers = [];
       /** Props that float up off the ground (the rising world). */
@@ -99,7 +126,7 @@
       this.stickyWebs = [];
 
       const segments = [...level.ground].sort((a, b) => a[0] - b[0]);
-      segments.forEach(([left, right], index) => this.addGroundSegment(left, right, index));
+      segments.forEach((segment, index) => this.addGroundSegment(segment, index, segments));
       if (this.style.pit) this.addPits(segments);
       level.platforms.forEach((platform, index) => this.addPlatform(platform, terrain.platforms[index]));
       scene.add(this.group);
@@ -127,8 +154,8 @@
       return this.add(mesh, centerX, centerY, z);
     }
 
-    /** A strip of tiles exactly `width` wide, its pattern locked to world x so neighbours line up. */
-    tiledStrip(tileSprite, left, width) {
+    /** A strip of tiles exactly `width` wide with its top at `top`, its pattern locked to world x so neighbours line up. */
+    tiledStrip(tileSprite, left, width, top = GROUND_Y) {
       const tileWidth = tileSprite.width * PIXEL_SCALE;
       const tileHeight = tileSprite.height * PIXEL_SCALE;
       const texture = createPixelTexture(tileSprite.canvas, { repeatX: width / tileWidth });
@@ -138,23 +165,41 @@
         new THREE.PlaneGeometry(width, tileHeight),
         new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.05 })
       );
-      return this.add(mesh, left + width / 2, GROUND_Y - tileHeight / 2, GROUND_Z);
+      return this.add(mesh, left + width / 2, top - tileHeight / 2, GROUND_Z);
     }
 
-    addGroundSegment(left, right, index) {
+    /**
+     * @param {[number, number, number?]} segment [left, right, height] (see Forest.Levels)
+     * @param {number} index
+     * @param {Array} segments all of them, sorted, to find the ones touching this one
+     */
+    addGroundSegment([left, right, height = 0], index, segments) {
       const width = right - left;
+      const top = GROUND_Y + height;
       const tile = this.tiles[this.theme];
       const tileHeight = tile.height * PIXEL_SCALE;
-      this.tiledStrip(tile, left, width);
+      this.tiledStrip(tile, left, width, top);
 
       if (this.style.fill) {
         // Solid earth/stone beneath, with darker cliff edges at both ends
-        this.solidRect(this.style.fill, width, FILL_DEPTH, left + width / 2, GROUND_Y - tileHeight - FILL_DEPTH / 2 + PIXEL_SCALE, FILL_Z);
-        const edgeHeight = FILL_DEPTH + tileHeight - 0.4;
-        const edgeCenterY = GROUND_Y - 0.4 - edgeHeight / 2;
-        this.solidRect(this.style.edge, EDGE_WIDTH, edgeHeight, left + EDGE_WIDTH / 2, edgeCenterY, EDGE_Z);
-        this.solidRect(this.style.edge, EDGE_WIDTH, edgeHeight, right - EDGE_WIDTH / 2, edgeCenterY, EDGE_Z);
+        this.solidRect(this.style.fill, width, FILL_DEPTH, left + width / 2, top - tileHeight - FILL_DEPTH / 2 + PIXEL_SCALE, FILL_Z);
+        const neighbourHeight = edgeX => {
+          const neighbour = segments.find((other, otherIndex) => otherIndex !== index
+            && (Math.abs(other[1] - edgeX) < 0.01 || Math.abs(other[0] - edgeX) < 0.01));
+          return neighbour ? neighbour[2] || 0 : null;
+        };
+        [[left, left + EDGE_WIDTH / 2], [right, right - EDGE_WIDTH / 2]].forEach(([edgeX, centerX]) => {
+          const besideHeight = neighbourHeight(edgeX);
+          // Next to a pit the edge runs all the way down; beside lower ground it is a cliff face
+          // down to that ground's grass, and beside higher ground there is none
+          const bottom = besideHeight === null ? top - tileHeight - FILL_DEPTH : GROUND_Y + besideHeight;
+          const edgeHeight = top - 0.4 - bottom;
+          if (edgeHeight <= 0) return;
+          this.solidRect(this.style.edge, EDGE_WIDTH, edgeHeight, centerX, top - 0.4 - edgeHeight / 2, EDGE_Z);
+        });
       }
+
+      this.groundTop = top;
 
       if (this.theme === 'forest') this.decorateForest(left, right, index);
       else if (this.theme === 'dungeon') this.decorateDungeon(left, right, index);
@@ -162,32 +207,52 @@
       else this.decorateWorld(left, right, index);
     }
 
-    /** Dark shafts between the ground segments. */
+    /** Dark shafts between the ground segments (starting below the lower rim). */
     addPits(segments) {
       for (let i = 0; i < segments.length - 1; i++) {
         const left = segments[i][1];
         const right = segments[i + 1][0];
-        if (right <= left) continue;
+        if (right <= left + 0.01) continue;
+        const rim = GROUND_Y + Math.min(segments[i][2] || 0, segments[i + 1][2] || 0);
         const width = right - left + 0.02;
         const centerX = (left + right) / 2;
         const molten = MOLTEN_PITS[this.style.pit];
         if (molten) {
           // Molten lava a little below the rim, glowing up the walls
-          this.solidRect(molten.body, width, FILL_DEPTH, centerX, GROUND_Y - 1.1 - FILL_DEPTH / 2, PIT_Z);
-          this.solidRect(molten.top, width, 0.25, centerX, GROUND_Y - 1.0, PIT_Z + 0.001);
-          this.solidRect(molten.crust, width, 0.1, centerX, GROUND_Y - 0.88, PIT_Z + 0.002);
-          this.solidRect(molten.rim, width, 0.8, centerX, GROUND_Y - 0.4, PIT_Z);
+          this.solidRect(molten.body, width, FILL_DEPTH, centerX, rim - 1.1 - FILL_DEPTH / 2, PIT_Z);
+          this.solidRect(molten.top, width, 0.25, centerX, rim - 1.0, PIT_Z + 0.001);
+          this.solidRect(molten.crust, width, 0.1, centerX, rim - 0.88, PIT_Z + 0.002);
+          this.solidRect(molten.rim, width, 0.8, centerX, rim - 0.4, PIT_Z);
         } else {
-          this.solidRect(this.style.pit, width, FILL_DEPTH, centerX, GROUND_Y - FILL_DEPTH / 2 - 0.3, PIT_Z);
+          this.solidRect(this.style.pit, width, FILL_DEPTH, centerX, rim - FILL_DEPTH / 2 - 0.3, PIT_Z);
         }
       }
     }
 
-    /** Keep the moving platforms' meshes on their terrain surfaces and flicker the brazier flames. */
+    /** Keep the moving platforms' meshes on their terrain surfaces, crumble ledges and flicker the brazier flames. */
     update(deltaSeconds = 0) {
       this.movingMeshes.forEach(({ mesh, surface, offsetY }) => {
         mesh.position.x = surface.left + surface.width / 2;
         mesh.position.y = surface.top + offsetY;
+      });
+      this.crumblingMeshes.forEach(({ mesh, surface, restX, restY }) => {
+        const seconds = surface.stateSeconds;
+        let x = restX;
+        let y = restY;
+        let opacity = 1;
+        if (surface.crumbleState === 'shaking') {
+          x += Math.sin(seconds * 70) * CRUMBLE_SHAKE;
+          y -= seconds * 0.1;
+        } else if (surface.crumbleState === 'fallen') {
+          y -= 0.05 + 0.5 * CRUMBLE_FALL_GRAVITY * seconds * seconds;
+          opacity = Math.max(0, 1 - seconds / CRUMBLE_FADE_SECONDS);
+        } else {
+          opacity = Math.min(1, seconds / CRUMBLE_RETURN_FADE_SECONDS);
+        }
+        mesh.position.x = x;
+        mesh.position.y = y;
+        mesh.material.opacity = opacity;
+        mesh.visible = opacity > 0;
       });
       const frames = this.tiles.brazier;
       this.braziers.forEach(brazier => {
@@ -208,12 +273,13 @@
       });
     }
 
-    addPlatform({ x, y, width, bouncy }, surface) {
+    addPlatform({ x, y, width, bouncy, crumble }, surface) {
       const widthPixels = Math.round(width / PIXEL_SCALE);
       const painters = { forest: Art.createForestLedge, dungeon: Art.createStoneSlab, treetops: Art.createCloudPlatform, ...WorldArt.platforms };
       const bouncePad = (WorldArt.bouncePads && WorldArt.bouncePads[this.theme]) || WorldArt.createMarshmallowPad;
       const paint = bouncy ? bouncePad : painters[this.theme];
       const { canvas, surfaceRow } = paint(widthPixels);
+      if (crumble) crackCanvas(canvas, surfaceRow);
       const sprite = createSprite(canvas);
       this.ownTextures.push(sprite.texture);
       const mesh = createSpriteMesh(sprite, PIXEL_SCALE);
@@ -221,6 +287,7 @@
       const offsetY = surfaceRow * PIXEL_SCALE - heightUnits / 2;
       this.add(mesh, x + width / 2, y + offsetY, PLATFORM_Z);
       if (surface && surface.move) this.movingMeshes.push({ mesh, surface, offsetY });
+      else if (surface && surface.isCrumbly) this.crumblingMeshes.push({ mesh, surface, restX: mesh.position.x, restY: mesh.position.y });
     }
 
     // ==========================================
@@ -236,33 +303,33 @@
     decorateForest(left, right, index) {
       // Oaks behind the path on the longer stretches
       for (let x = left + 3; x < right - 2; x += 10 + hash(index * 31 + x) * 4) {
-        this.addSprite(this.sprites.oakTree, 1.3 + hash(x) * 0.2, x, GROUND_Y - 0.2, TREE_Z);
+        this.addSprite(this.sprites.oakTree, 1.3 + hash(x) * 0.2, x, this.groundTop - 0.2, TREE_Z);
       }
       // Wildflower tufts
       for (let x = left + 0.6; x < right - 0.6; x += 3.2 + hash(x * 3) * 2) {
-        this.addSprite(this.sprites.flowerTuft, FLOWER_SCALE, x, GROUND_Y - 0.05, FRONT_DECOR_Z);
+        this.addSprite(this.sprites.flowerTuft, FLOWER_SCALE, x, this.groundTop - 0.05, FRONT_DECOR_Z);
       }
     }
 
     decorateDungeon(left, right, index) {
       for (let x = left + 2.5; x < right - 2; x += 12 + hash(index * 17 + x) * 4) {
         const frame = Math.floor(hash(x * 13) * this.tiles.brazier.length);
-        const mesh = this.addSprite(this.tiles.brazier[frame], 1.4, x, GROUND_Y - 0.05, DECOR_Z);
+        const mesh = this.addSprite(this.tiles.brazier[frame], 1.4, x, this.groundTop - 0.05, DECOR_Z);
         this.braziers.push({ mesh, frame, timer: hash(x * 19) * BRAZIER_FRAME_SECONDS });
       }
       for (let x = left + 1.5; x < right - 1; x += 7 + hash(x * 5) * 6) {
-        if (hash(x * 11) < 0.5) this.addSprite(this.tiles.bones, 1, x, GROUND_Y - 0.05, FRONT_DECOR_Z);
+        if (hash(x * 11) < 0.5) this.addSprite(this.tiles.bones, 1, x, this.groundTop - 0.05, FRONT_DECOR_Z);
       }
     }
 
     decorateTreetops(left, right, index) {
       const clump = this.tiles.leafClump;
       // Leaves hide the cut ends of the branch
-      this.addSprite(clump, 0.75, left + 0.35, GROUND_Y - 1.4, FRONT_DECOR_Z);
-      this.addSprite(clump, 0.75, right - 0.35, GROUND_Y - 1.4, FRONT_DECOR_Z);
+      this.addSprite(clump, 0.75, left + 0.35, this.groundTop - 1.4, FRONT_DECOR_Z);
+      this.addSprite(clump, 0.75, right - 0.35, this.groundTop - 1.4, FRONT_DECOR_Z);
       // Small sprigs growing up from the moss, behind the path
       for (let x = left + 1.5; x < right - 1.5; x += 4 + hash(index * 7 + x) * 4) {
-        this.addSprite(clump, 0.5, x, GROUND_Y - 0.3, DECOR_Z);
+        this.addSprite(clump, 0.5, x, this.groundTop - 0.3, DECOR_Z);
       }
       // Long branches hang from a trunk dropping away into the clouds
       if (right - left > 8) this.addTrunk((left + right) / 2 + (hash(index) - 0.5) * 3);
@@ -274,11 +341,11 @@
       for (let x = left + 1.8; x < right - 1.2; x += 4.5 + hash(index * 13 + x) * 4) {
         const prop = props[Math.floor(hash(x * 7) * props.length)];
         const scale = 1.3 + hash(x) * 0.4;
-        const mesh = this.addSprite(prop, scale, x, GROUND_Y - 0.05, hash(x * 3) < 0.6 ? DECOR_Z : FRONT_DECOR_Z);
+        const mesh = this.addSprite(prop, scale, x, this.groundTop - 0.05, hash(x * 3) < 0.6 ? DECOR_Z : FRONT_DECOR_Z);
         if (prop.canvas.isStickyWeb) {
           // The silk between the twigs (a little narrower than the whole picture)
           const halfWidth = prop.width * PIXEL_SCALE * scale * 0.4;
-          this.stickyWebs.push({ left: x - halfWidth, right: x + halfWidth, top: GROUND_Y - 0.05 + prop.height * PIXEL_SCALE * scale });
+          this.stickyWebs.push({ left: x - halfWidth, right: x + halfWidth, top: this.groundTop - 0.05 + prop.height * PIXEL_SCALE * scale });
         }
         // In the world that falls up, the props drift off the ground into the sky, over and over
         if (this.theme === 'rising') this.floaters.push({ mesh, baseY: mesh.position.y, climbed: hash(x * 23) * FLOAT_HEIGHT, speed: FLOAT_SPEED * (0.7 + hash(x * 29) * 0.6) });
@@ -288,11 +355,14 @@
     addTrunk(x) {
       const TRUNK_WIDTH = 1.4;
       const tileHeight = this.tiles.treetops.height * PIXEL_SCALE;
-      this.solidRect('#5a3a25', TRUNK_WIDTH, FILL_DEPTH, x, GROUND_Y - tileHeight - FILL_DEPTH / 2 + 0.3, FILL_Z);
-      this.solidRect('#3f2819', TRUNK_WIDTH * 0.3, FILL_DEPTH, x - TRUNK_WIDTH * 0.35, GROUND_Y - tileHeight - FILL_DEPTH / 2 + 0.3, EDGE_Z);
-      this.solidRect('#7a5235', TRUNK_WIDTH * 0.15, FILL_DEPTH, x + TRUNK_WIDTH * 0.4, GROUND_Y - tileHeight - FILL_DEPTH / 2 + 0.3, EDGE_Z);
+      this.solidRect('#5a3a25', TRUNK_WIDTH, FILL_DEPTH, x, this.groundTop - tileHeight - FILL_DEPTH / 2 + 0.3, FILL_Z);
+      this.solidRect('#3f2819', TRUNK_WIDTH * 0.3, FILL_DEPTH, x - TRUNK_WIDTH * 0.35, this.groundTop - tileHeight - FILL_DEPTH / 2 + 0.3, EDGE_Z);
+      this.solidRect('#7a5235', TRUNK_WIDTH * 0.15, FILL_DEPTH, x + TRUNK_WIDTH * 0.4, this.groundTop - tileHeight - FILL_DEPTH / 2 + 0.3, EDGE_Z);
     }
   }
+
+  /** True when a world's ground is solid all the way down (it can have hills), not floating branches or clouds. */
+  LevelScenery.hasSolidGround = themeId => Boolean(THEME_STYLE[themeId] && THEME_STYLE[themeId].fill);
 
   Forest.LevelScenery = LevelScenery;
 })(window.Forest);

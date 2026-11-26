@@ -260,7 +260,7 @@
         chunk.mesh.rotation.z += chunk.spinSpeed * deltaSeconds;
 
         // Bounce and skid on the grass
-        const restingY = GROUND_Y + chunk.size / 2;
+        const restingY = (this.terrain ? this.terrain.groundTopAt(chunk.mesh.position.x) : GROUND_Y) + chunk.size / 2;
         const isOverPit = this.terrain && !this.terrain.groundAt(chunk.mesh.position.x);
         if (!isOverPit && chunk.mesh.position.y < restingY) {
           chunk.mesh.position.y = restingY;

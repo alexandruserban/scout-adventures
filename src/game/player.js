@@ -417,6 +417,7 @@
     // Per-frame update
     // ==========================================
     update(deltaSeconds) {
+      const xAtStart = this.x;
       this.rideMovingPlatform();
       const previousY = this.y;
       this.applyGravity(deltaSeconds);
@@ -432,6 +433,7 @@
       this.updateStuck(deltaSeconds, xBeforeMove);
 
       this.x = clamp(this.x, this.minX, this.maxX);
+      this.stopAtWalls(xAtStart);
       this.relaxSquash(deltaSeconds);
       this.syncMeshes();
     }
@@ -465,6 +467,16 @@
         this.particles.burst(this.x, this.y + Math.random() * this.height, 1, WEB_COLOR, 0.5, 0.35);
       }
       if (this.stuckSeconds <= 0) this.stuckSpeedFactor = 1;
+    }
+
+    /** Hills and cliff faces taller than his feet stop him (and his momentum, so ice can't push him through). */
+    stopAtWalls(fromX) {
+      const terrain = this.world.terrain;
+      if (!terrain || !terrain.blockSideways) return;
+      const x = terrain.blockSideways(fromX, this.x, this.y, FOOT_HALF_WIDTH);
+      if (x === this.x) return;
+      this.x = x;
+      this.velocityX = 0;
     }
 
     /** The current level's rules: gravity scale, slippery ground, wind. */

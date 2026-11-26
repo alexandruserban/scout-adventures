@@ -38,7 +38,10 @@
     'Gravity is weak on the moon. Float across the gaps!',
     'Sandstorm gusts push you around. Time your jumps!',
     'Train against creatures you have met: pick them in the scrapbook.',
-    'Press Esc to pause the game.'
+    'Press Esc to pause the game.',
+    'Cracked stones crumble soon after you land on them. Keep moving!',
+    'Spikes rattle in the ground just before they pop up.',
+    'Too wide to jump? Wait for a ferry to carry you across.'
   ];
 
   /** Bumped by every run() and showStory(), so an older load that is still waiting gives up. */

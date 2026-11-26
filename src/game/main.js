@@ -275,6 +275,8 @@
   /** Coins laid out in every level played so far this adventure (for the victory screen). */
   let coinsOffered = 0;
   let scenery = null;
+  /** The current level's pop-up spikes (see Forest.SpikeTraps). */
+  let spikeTraps = null;
   /** Enemies not dropped in yet, in the order the boy will reach them. */
   let pendingEnemies = [];
   let boss = null;
@@ -357,6 +359,10 @@
     level = levelData;
     Forest.Music.setLevel(level.theme); // each world has its own soundtrack
     world.terrain = new Forest.Terrain(level);
+    world.terrain.onCrumble = ledge => {
+      Sfx.crumble();
+      particles.burst((ledge.left + ledge.right) / 2, ledge.top - 0.1, 10, '#8a6a4a', 1.4, 0.5);
+    };
     world.levelPhysics = { gravityScale: 1, slippery: false, windSpeed: 0, ...(level.physics || {}) };
     levelTime = 0;
     // Each windy level's first gust comes from a random side
@@ -365,6 +371,8 @@
     effects.terrain = world.terrain;
     if (scenery) scenery.dispose();
     scenery = new Forest.LevelScenery(stage.scene, sprites, level, world.terrain);
+    if (spikeTraps) spikeTraps.dispose();
+    spikeTraps = new Forest.SpikeTraps(stage.scene, level.traps);
     background.setTheme(level.theme);
     stage.scene.background = new THREE.Color(background.topColor);
     // The silent film turns the whole picture black and white, with flickering old-film grain
@@ -874,7 +882,7 @@
     // Never respawn past the left edge of what he can reach (e.g. the arena wall): use solid ground ahead
     if (!player.isDefeated && player.x < player.minX + 0.5) {
       player.x = world.terrain.safeGroundFrom(player.minX + 0.5);
-      player.y = Config.GROUND_Y;
+      player.y = world.terrain.groundTopAt(player.x);
     }
     cameraController.snapTo(player);
   }
@@ -1095,9 +1103,10 @@
     // Gameplay freezes during hit-stop, but the camera keeps shaking
     const gameDeltaSeconds = hitStop.consume(realDeltaSeconds);
 
-    world.terrain.update(gameDeltaSeconds);
+    world.terrain.update(gameDeltaSeconds, player);
     scenery.update(gameDeltaSeconds);
     player.update(gameDeltaSeconds);
+    spikeTraps.update(gameDeltaSeconds, player);
     checkPitFall();
     checkStickyWebs();
     if (!player.isDefeated) {

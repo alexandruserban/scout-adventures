@@ -12,11 +12,13 @@
       startHearts: 10,
       /** Boss rewards can raise the hearts up to this many. */
       maxHearts: 12,
-      /** Share of a level's heart spots (see Forest.Levels) that have a heart waiting. */
-      placedHeartShare: 1,
+      /**
+       * How many hearts wait in each level, on its heart spots (see Forest.Levels; a level has 6-8).
+       * Infinity: every spot.
+       */
+      placedHearts: Infinity,
       /** Share of the falling lava bombs that come down close to the boy (the rest land clear of him). */
       lavaBombAimedChance: 0.1,
-      heartsPerWaveCleared: 2,
       /** Multiplies the chance of a defeated foe dropping a heart. */
       heartDropScale: 2,
       /** Multiplies how fast sky creatures move and attack. */
@@ -42,9 +44,8 @@
       label: 'NORMAL',
       startHearts: 5,
       maxHearts: 8,
-      placedHeartShare: 0.5,
+      placedHearts: 7,
       lavaBombAimedChance: 0.2,
-      heartsPerWaveCleared: 1,
       heartDropScale: 1.5,
       creatureSpeed: 1,
       creatureHpBonus: 0,
@@ -59,10 +60,8 @@
       label: 'HARD',
       startHearts: 3,
       maxHearts: 6,
-      placedHeartShare: 0.25,
+      placedHearts: 4,
       lavaBombAimedChance: 0.35,
-      /** No healing between waves; only beating a boss restores hearts. */
-      heartsPerWaveCleared: 0,
       heartDropScale: 1,
       creatureSpeed: 1.25,
       creatureHpBonus: 1,

@@ -369,7 +369,7 @@
   /** Lay out the hearts waiting in the level: all of its heart spots on Easy, fewer on harder settings (spread evenly). */
   function placeHearts() {
     const spots = level.heartSpots || [];
-    const count = Math.round(spots.length * (Difficulty.current.placedHeartShare || 0));
+    const count = Math.min(spots.length, Difficulty.current.placedHearts || 0);
     for (let i = 0; i < count; i++) {
       const spot = spots[Math.floor(((i + 0.5) * spots.length) / count)];
       hearts.place(spot.x, spot.y);

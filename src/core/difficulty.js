@@ -14,6 +14,8 @@
       maxHearts: 12,
       /** Share of a level's heart spots (see Forest.Levels) that have a heart waiting. */
       placedHeartShare: 1,
+      /** Share of the falling lava bombs that come down close to the boy (the rest land clear of him). */
+      lavaBombAimedChance: 0.1,
       heartsPerWaveCleared: 2,
       /** Multiplies the chance of a defeated foe dropping a heart. */
       heartDropScale: 2,
@@ -41,6 +43,7 @@
       startHearts: 5,
       maxHearts: 8,
       placedHeartShare: 0.5,
+      lavaBombAimedChance: 0.2,
       heartsPerWaveCleared: 1,
       heartDropScale: 1.5,
       creatureSpeed: 1,
@@ -57,6 +60,7 @@
       startHearts: 3,
       maxHearts: 6,
       placedHeartShare: 0.25,
+      lavaBombAimedChance: 0.35,
       /** No healing between waves; only beating a boss restores hearts. */
       heartsPerWaveCleared: 0,
       heartDropScale: 1,

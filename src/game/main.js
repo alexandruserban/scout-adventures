@@ -107,6 +107,12 @@
   const LAVA_BOMB_INTERVAL = [1.8, 3.2];
   const LAVA_BOMB_FLIGHT_SECONDS = 1.5;
   /**
+   * Most bombs come down at least this far from the boy (where he is, and where he's heading); only
+   * the difficulty's lavaBombAimedChance of them land close to him. Each one's landing spot flashes.
+   */
+  const LAVA_BOMB_SAFE_DISTANCE = 1.6;
+  const LAVA_BOMB_MARKER_COLOR = '#ff3b3b';
+  /**
    * Walking through a sticky web on the ground (the rainbow) slows the boy to this share of his
    * speed, and he stays stuck this long after getting out of it. Jumping over it is fine.
    */
@@ -904,13 +910,26 @@
     } else if (level.hazard === 'lavaBombs' && arenaState !== ArenaState.CLEARED && !player.isDefeated) {
       lavaBombTimer -= deltaSeconds;
       if (lavaBombTimer <= 0) {
-        lavaBombTimer = Forest.MathUtils.randomBetween(...LAVA_BOMB_INTERVAL);
-        const fromX = player.x + Forest.MathUtils.randomBetween(-3, 9);
-        const targetX = player.x + Forest.MathUtils.randomBetween(-2.5, 4);
-        world.projectiles.launchFireball(fromX, stage.camera.position.y + stage.viewHeightUnits / 2 + 1, targetX, Config.GROUND_Y + 0.3, LAVA_BOMB_FLIGHT_SECONDS, 1, level.bombStyle);
+        lavaBombTimer = Forest.MathUtils.randomBetween(...LAVA_BOMB_INTERVAL) * Difficulty.current.spawnIntervalScale;
+        const targetX = pickLavaBombTarget();
+        const fromX = targetX + Forest.MathUtils.randomBetween(-3, 3);
+        world.projectiles.launchFireball(fromX, stage.camera.position.y + stage.viewHeightUnits / 2 + 1, targetX, Config.GROUND_Y + 0.3,
+          LAVA_BOMB_FLIGHT_SECONDS, 1, { ...level.bombStyle, marker: LAVA_BOMB_MARKER_COLOR });
         Sfx.skyWhistle();
       }
     }
+  }
+
+  /** Where the next falling bomb comes down: usually clear of the boy and of where he's heading, now and then close by. */
+  function pickLavaBombTarget() {
+    const { randomBetween } = Forest.MathUtils;
+    const headingX = player.x + player.velocityX * LAVA_BOMB_FLIGHT_SECONDS;
+    if (Math.random() < Difficulty.current.lavaBombAimedChance) return headingX + randomBetween(-1, 1);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const x = player.x + randomBetween(-4, 8);
+      if (Math.abs(x - player.x) > LAVA_BOMB_SAFE_DISTANCE && Math.abs(x - headingX) > LAVA_BOMB_SAFE_DISTANCE) return x;
+    }
+    return headingX + (Math.random() < 0.5 ? -1 : 1) * (LAVA_BOMB_SAFE_DISTANCE + 1);
   }
 
   /** Walking (not jumping) through a sticky web on the ground slows the boy down. */

@@ -1291,7 +1291,7 @@
      * @param {{seconds:number, speedFactor:number}} [style.entangle] sticky (web balls): a hit slows the boy
      *   down like this (see Player.entangle). With `damage` 0 it only slows him, without hurting.
      */
-    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS, randomColor = false, colorIndex, sprite: customSprite, entangle = null } = {}) {
+    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS, randomColor = false, colorIndex, sprite: customSprite, entangle = null, marker = null } = {}) {
       let sprite = customSprite || this.sprite;
       let burstColors = customSprite ? [trail[0], trail[trail.length - 1]] : ['#ffb347', '#ff5a1f'];
       const pickedIndex = colorIndex !== undefined ? colorIndex : (randomColor ? Math.floor(Math.random() * this.variants.length) : -1);
@@ -1305,8 +1305,17 @@
       if (tint !== undefined) mesh.material.color.setHex(tint);
       mesh.position.set(fromX, fromY, FIREBALL_Z);
       this.scene.add(mesh);
+      // A flashing mark on the ground where it will come down, so there's time to get out of the way
+      let markerMesh = null;
+      if (marker) {
+        markerMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.09), new THREE.MeshBasicMaterial({ color: marker, transparent: true, opacity: 0.8 }));
+        markerMesh.position.set(toX, this.groundTopAt(toX) + 0.045, FIREBALL_Z - 0.01);
+        this.scene.add(markerMesh);
+      }
       this.fireballs.push({
         mesh,
+        marker: markerMesh,
+        age: 0,
         x: fromX,
         y: fromY,
         velocityX: (toX - fromX) / flightSeconds,
@@ -1326,6 +1335,8 @@
         fireball.y += fireball.velocityY * deltaSeconds;
         fireball.mesh.position.set(fireball.x, fireball.y, FIREBALL_Z);
         fireball.mesh.rotation.z += FIREBALL_SPIN_SPEED * deltaSeconds;
+        fireball.age += deltaSeconds;
+        if (fireball.marker) fireball.marker.material.opacity = Math.floor(fireball.age * 8) % 2 ? 0.9 : 0.35;
 
         if (Math.random() < 0.6) {
           const color = fireball.trail[Math.floor(Math.random() * fireball.trail.length)];
@@ -1374,6 +1385,7 @@
 
     removeAt(index) {
       removeMesh(this.scene, this.fireballs[index].mesh, { disposeGeometry: true });
+      if (this.fireballs[index].marker) removeMesh(this.scene, this.fireballs[index].marker, { disposeGeometry: true });
       this.fireballs.splice(index, 1);
     }
 

@@ -95,6 +95,8 @@
       this.floaters = [];
       /** Gives every decoration its own depth, so overlapping props never flicker. */
       this.decorationCount = 0;
+      /** Sticky spider webs on the ground (the rainbow): { left, right, top } in world units. */
+      this.stickyWebs = [];
 
       const segments = [...level.ground].sort((a, b) => a[0] - b[0]);
       segments.forEach(([left, right], index) => this.addGroundSegment(left, right, index));
@@ -271,7 +273,13 @@
       const props = this.tiles.worldDecor[this.theme];
       for (let x = left + 1.8; x < right - 1.2; x += 4.5 + hash(index * 13 + x) * 4) {
         const prop = props[Math.floor(hash(x * 7) * props.length)];
-        const mesh = this.addSprite(prop, 1.3 + hash(x) * 0.4, x, GROUND_Y - 0.05, hash(x * 3) < 0.6 ? DECOR_Z : FRONT_DECOR_Z);
+        const scale = 1.3 + hash(x) * 0.4;
+        const mesh = this.addSprite(prop, scale, x, GROUND_Y - 0.05, hash(x * 3) < 0.6 ? DECOR_Z : FRONT_DECOR_Z);
+        if (prop.canvas.isStickyWeb) {
+          // The silk between the twigs (a little narrower than the whole picture)
+          const halfWidth = prop.width * PIXEL_SCALE * scale * 0.4;
+          this.stickyWebs.push({ left: x - halfWidth, right: x + halfWidth, top: GROUND_Y - 0.05 + prop.height * PIXEL_SCALE * scale });
+        }
         // In the world that falls up, the props drift off the ground into the sky, over and over
         if (this.theme === 'rising') this.floaters.push({ mesh, baseY: mesh.position.y, climbed: hash(x * 23) * FLOAT_HEIGHT, speed: FLOAT_SPEED * (0.7 + hash(x * 29) * 0.6) });
       }

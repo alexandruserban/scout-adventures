@@ -100,6 +100,11 @@
   const RECOIL_FLASH_RATE = 20;
   const INVULNERABLE_BLINK_RATE = 35;
 
+  // --- Stuck in spider web ---
+  /** Seconds between the little strands of web that fly off him while he's stuck. */
+  const WEB_STRAND_SECONDS = 0.12;
+  const WEB_COLOR = '#f4f0ff';
+
   // --- Slam hit area, relative to the boy ---
   const SLAM_REACH_X = 1.15;
   const SLAM_HEIGHT_RATIO = 0.6;
@@ -197,6 +202,10 @@
       this.isJumpCutPending = false;
       this.isButtonJump = false;
       this.invulnerableSeconds = 0;
+      /** Seconds left stuck in spider web, and the share of his normal sideways speed meanwhile. */
+      this.stuckSeconds = 0;
+      this.stuckSpeedFactor = 1;
+      this.webStrandTimer = 0;
 
       this.state = PlayerState.IDLE;
       this.stateTimer = 0;
@@ -418,11 +427,44 @@
       this.resolveGround(previousY);
 
       this.updateInvulnerability(deltaSeconds);
+      const xBeforeMove = this.x;
       this.updateState(deltaSeconds);
+      this.updateStuck(deltaSeconds, xBeforeMove);
 
       this.x = clamp(this.x, this.minX, this.maxX);
       this.relaxSquash(deltaSeconds);
       this.syncMeshes();
+    }
+
+    /**
+     * Caught in spider web (a web ball, or a web on the ground): he moves sideways at only
+     * `speedFactor` of his normal speed for the next `seconds`. A longer or stickier web wins.
+     */
+    entangle(seconds, speedFactor) {
+      if (this.isDefeated) return;
+      const wasStuck = this.isStuck;
+      this.stuckSeconds = Math.max(this.stuckSeconds, seconds);
+      this.stuckSpeedFactor = wasStuck ? Math.min(this.stuckSpeedFactor, speedFactor) : speedFactor;
+      if (wasStuck) return;
+      this.particles.burst(this.x, this.y + this.height * 0.5, 10, WEB_COLOR, 1.0, 0.45);
+      if (this.events.onEntangled) this.events.onEntangled();
+    }
+
+    get isStuck() {
+      return this.stuckSeconds > 0;
+    }
+
+    /** While stuck, only part of this frame's sideways movement happens, and strands of web fly off. */
+    updateStuck(deltaSeconds, xBeforeMove) {
+      if (!this.isStuck) return;
+      this.stuckSeconds -= deltaSeconds;
+      this.x = xBeforeMove + (this.x - xBeforeMove) * this.stuckSpeedFactor;
+      this.webStrandTimer -= deltaSeconds;
+      if (this.webStrandTimer <= 0) {
+        this.webStrandTimer = WEB_STRAND_SECONDS;
+        this.particles.burst(this.x, this.y + Math.random() * this.height, 1, WEB_COLOR, 0.5, 0.35);
+      }
+      if (this.stuckSeconds <= 0) this.stuckSpeedFactor = 1;
     }
 
     /** The current level's rules: gravity scale, slippery ground, wind. */

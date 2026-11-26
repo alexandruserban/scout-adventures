@@ -1,12 +1,17 @@
 /**
- * The title screen shown when the game first starts: play, difficulty, scrapbook and audio.
- * Forest.Game shows it (with what PLAY does) once everything has loaded.
+ * The main menu: the title screen when the game first starts, and the pause menu (Esc) during play.
+ * Forest.Game shows it, saying what PLAY / RESUME and NEW ADVENTURE do.
+ * It also holds the toolbar's buttons (CRT, gallery), since desktops hide the toolbar.
  */
 (function (Forest) {
   const { Difficulty, Synth, Music, AudioControls } = Forest;
 
   const screen = document.getElementById('main-menu');
   const playButton = document.getElementById('menu-play');
+  const newGameButton = document.getElementById('menu-new');
+  const subtitleElement = document.getElementById('menu-subtitle');
+  const crtButton = document.getElementById('menu-crt');
+  const galleryButton = document.getElementById('menu-gallery');
   const difficultyButton = document.getElementById('menu-difficulty');
   const scrapbookButton = document.getElementById('menu-scrapbook');
   const musicButton = document.getElementById('menu-music');
@@ -18,6 +23,7 @@
   const BOY_FRAME_MS = 260;
 
   let onPlay = null;
+  let onNewGame = null;
   let getBestPoints = () => 0;
   let boyTimer = null;
   /** Music is on by default but only starts on the first tap or key press (see AudioControls). */
@@ -28,12 +34,18 @@
     return screen.style.display === 'flex';
   }
 
+  /** The scrapbook or the sprite gallery is open on top of the menu. */
+  function isCoveredByOverlay() {
+    return ['scrapbook-overlay', 'gallery-overlay'].some(id => document.getElementById(id).style.display === 'flex');
+  }
+
   function refresh() {
     const level = Difficulty.current;
     difficultyButton.textContent = `${DIFFICULTY_ICONS[level.id]} ${level.label} · ${level.startHearts} ♥`;
     difficultyButton.dataset.level = level.id;
     musicButton.textContent = Music.isPlaying || !hasInteracted ? '🎵 MUSIC: ON' : '🎵 MUSIC: OFF';
     soundButton.textContent = Synth.muted ? '🔇 SOUND: OFF' : '🔊 SOUND: ON';
+    crtButton.textContent = document.getElementById('btn-crt').textContent;
     const best = getBestPoints();
     bestElement.textContent = best > 0 ? `HIGH SCORE (${level.label}): ${best.toLocaleString()}` : '';
   }
@@ -63,11 +75,18 @@
 
   /**
    * @param {object} options
-   * @param {() => void} options.onPlay starts the adventure
+   * @param {'title'|'pause'} [options.mode] the title screen, or the pause menu during a game
+   * @param {() => void} options.onPlay starts the adventure (title) or carries on playing (pause)
+   * @param {() => void} [options.onNewGame] pause menu only: start a fresh adventure
    * @param {() => number} [options.getBestPoints] high score for the current difficulty
    */
   function show(options) {
+    const isPause = options.mode === 'pause';
     onPlay = options.onPlay;
+    onNewGame = options.onNewGame || null;
+    playButton.textContent = isPause ? '▶ RESUME' : '▶ PLAY';
+    subtitleElement.textContent = isPause ? '⏸ PAUSED' : "THE BOY'S QUEST";
+    newGameButton.style.display = isPause && onNewGame ? '' : 'none';
     if (options.getBestPoints) getBestPoints = options.getBestPoints;
     screen.style.display = 'flex';
     refresh();
@@ -87,6 +106,10 @@
   }
 
   playButton.addEventListener('click', play);
+  newGameButton.addEventListener('click', () => {
+    newGameButton.blur();
+    if (isOpen() && onNewGame) onNewGame();
+  });
   difficultyButton.addEventListener('click', () => {
     Difficulty.cycle();
     difficultyButton.blur();
@@ -105,16 +128,24 @@
     soundButton.blur();
     refresh();
   });
+  crtButton.addEventListener('click', () => {
+    document.getElementById('btn-crt').click();
+    crtButton.blur();
+    refresh();
+  });
+  galleryButton.addEventListener('click', () => {
+    galleryButton.blur();
+    document.getElementById('btn-gallery').click();
+  });
 
   Difficulty.onChange(() => {
     if (isOpen()) refresh();
   });
 
-  // Enter starts the game; other keys (B, M) may have changed the audio, so the labels follow
+  // Enter plays (or resumes); other keys (B, M) may have changed the audio, so the labels follow
   window.addEventListener('keydown', event => {
     if (!isOpen()) return;
-    const scrapbookOpen = document.getElementById('scrapbook-overlay').style.display === 'flex';
-    if (event.key === 'Enter' && !scrapbookOpen) {
+    if (event.key === 'Enter' && !isCoveredByOverlay()) {
       event.preventDefault();
       play();
     }
@@ -130,6 +161,7 @@
   Forest.MainMenu = {
     show,
     hide,
+    isCoveredByOverlay,
     get isOpen() {
       return isOpen();
     }

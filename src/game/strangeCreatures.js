@@ -1,7 +1,7 @@
 /**
  * The creatures of the strange worlds, built on the same SkyCreature base as the original five:
  *   - Rainbow Spider: lowers itself on a silk thread instead of crashing down, scuttles about and
- *     pounces; a raging spider also flings balls of web
+ *     pounces, and spits balls of sticky web that slow the boy down (raging, they hurt too)
  *   - Alien Crawler: skitters in quick bursts along the hull, rears up and spits acid
  *   - Octo-Rocker:   an octopus rock star that hops around the stage, shreds music notes at the
  *     boy and, raging, plays power chords that shake the floor
@@ -42,7 +42,18 @@
   const SPIDER_COOLDOWN_SECONDS = 1.6;
   const SPIDER_FRAME_SECONDS = 0.1;
   const SPIDER_THREAD_TOP = 14;
-  const SPIDER_WEB_INTERVAL = 2.4;
+  /**
+   * Every spider spits balls of sticky web at the boy when he's within range: a hit slows him
+   * down for a while. Calm spiders spit now and then and their web only slows him; raging
+   * ones spit faster and their web hurts too.
+   */
+  const SPIDER_WEB_INTERVAL = [3.2, 4.6];
+  const SPIDER_RAGING_WEB_INTERVAL = 2.4;
+  const SPIDER_WEB_RANGE = 9;
+  /** Too close to bother spitting: it pounces instead. */
+  const SPIDER_WEB_MIN_RANGE = 1.5;
+  const SPIDER_WEB_FLIGHT_SECONDS = 0.9;
+  const SPIDER_WEB_STICK = { seconds: 2.2, speedFactor: 0.4 };
   const SPIDER_ANGRY_TINT = 0xffb0f0;
 
   class RainbowSpider extends SkyCreature {
@@ -56,7 +67,7 @@
       });
       this.cooldown = 0.8;
       this.animationTimer = 0;
-      this.webTimer = SPIDER_WEB_INTERVAL;
+      this.webTimer = randomBetween(...SPIDER_WEB_INTERVAL);
       this.thread = null;
       if (this.state === CreatureState.FALLING) {
         // Lowers itself on a silk thread instead of crashing down
@@ -137,16 +148,7 @@
         this.showFrame(this.frameName === 'walk1' ? 'walk2' : 'walk1');
       }
 
-      // Raging: flings balls of sticky web
-      if (this.isRaging && !player.isDefeated) {
-        this.webTimer -= deltaSeconds;
-        if (this.webTimer <= 0) {
-          this.webTimer = SPIDER_WEB_INTERVAL;
-          this.world.projectiles.launchFireball(this.x, this.y + this.height * 0.6, player.x, this.floorY + 0.3, 0.9, this.damage,
-            { sprite: this.world.sprites.webBall, trail: ['#ffffff', '#cfd8ff'] });
-          Sfx.fireballLaunch();
-        }
-      }
+      this.updateWebSpitting(deltaSeconds, player, distance);
 
       if (this.cooldown <= 0 && this.isOnGround && !player.isDefeated && distance < SPIDER_POUNCE_RANGE * this.sizeScale) {
         this.state = CreatureState.TELEGRAPH;
@@ -154,6 +156,21 @@
         this.showFrame('crouch');
         Sfx.beetleGrowl();
       }
+    }
+
+    /** Spits a ball of sticky web at the boy every few seconds while he's in range (see SPIDER_WEB_INTERVAL). */
+    updateWebSpitting(deltaSeconds, player, distance) {
+      if (player.isDefeated) return;
+      this.webTimer -= deltaSeconds;
+      const range = SPIDER_WEB_RANGE * Math.sqrt(this.sizeScale || 1);
+      if (this.webTimer > 0 || distance > range || distance < SPIDER_WEB_MIN_RANGE) return;
+      this.webTimer = this.isRaging ? SPIDER_RAGING_WEB_INTERVAL : randomBetween(...SPIDER_WEB_INTERVAL);
+      // Aim at where his body will be, not his feet, so a web ball can't fly under a standing boy
+      this.world.projectiles.launchFireball(this.x, this.y + this.height * 0.6, player.x, player.y + 0.4, SPIDER_WEB_FLIGHT_SECONDS,
+        this.isRaging ? this.damage : 0,
+        { sprite: this.world.sprites.webBall, trail: ['#ffffff', '#cfd8ff'], entangle: SPIDER_WEB_STICK });
+      this.setSquash(1.15, 0.85);
+      Sfx.fireballLaunch();
     }
 
     updateCrouch(player) {

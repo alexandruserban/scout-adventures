@@ -368,8 +368,9 @@
         '...gg..',
         '...g...'
       ], 1, { y: '#ffe14d', Y: '#ffd23f', W: '#ffffff', g: '#5fe07a' }),
-      // A spider web strung between two twigs
-      () => paintProp(16, 16, (x, y) => {
+      // A spider web strung between two twigs. It's sticky: walking through it slows the boy
+      // down (the scenery spots these by the isStickyWeb mark)
+      () => Object.assign(paintProp(16, 16, (x, y) => {
         if (x === 0 || x === 15) return y > 1 ? '#8a6a4a' : null;
         const dx = x - 7.5;
         const dy = y - 6.5;
@@ -379,7 +380,7 @@
         const isSpoke = Math.abs(Math.sin(angle * 4)) < 0.12;
         const isRing = Math.abs(r - Math.round(r / 2.3) * 2.3) < 0.35;
         return isSpoke || isRing ? '#ffffff' : null;
-      })
+      }), { isStickyWeb: true })
     ],
     rising: [
       // A floating boulder

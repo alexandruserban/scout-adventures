@@ -154,4 +154,7 @@
 
   openButton.addEventListener('click', open);
   closeButton.addEventListener('click', close);
+  window.addEventListener('keydown', event => {
+    if (event.code === 'Escape' && overlay.style.display === 'flex') close();
+  });
 })(window.Forest);

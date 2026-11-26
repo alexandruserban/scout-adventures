@@ -651,6 +651,8 @@ body.screen-noir .film-overlay {
 
 @media (min-width: 769px) and (pointer: fine) {
   .menu-toggle { display: none; }
+  /* Desktops use the Esc menu instead of the toolbar along the bottom */
+  #controls-bar { display: none; }
 }
 
 @media (max-width: 768px) {
@@ -1220,4 +1222,10 @@ body.screen-noir .film-overlay {
   .loading-title { font-size: 14px; margin-bottom: 8px; }
   .loading-boy { width: 48px; height: 48px; margin-top: 8px; }
   .loading-bar { margin: 10px auto 8px; }
+}
+
+/* Pause menu: NEW ADVENTURE gets a row of its own under RESUME (but not on short screens) */
+.menu-new { grid-column: 1 / -1; }
+@media (max-height: 450px) {
+  .menu-new { grid-column: auto; }
 }

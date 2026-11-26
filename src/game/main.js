@@ -104,6 +104,12 @@
   /** Lava bombs fall from the sky this often (seconds, random in the range). */
   const LAVA_BOMB_INTERVAL = [1.8, 3.2];
   const LAVA_BOMB_FLIGHT_SECONDS = 1.5;
+  /**
+   * Walking through a sticky web on the ground (the rainbow) slows the boy to this share of his
+   * speed, and he stays stuck this long after getting out of it. Jumping over it is fine.
+   */
+  const GROUND_WEB_SPEED_FACTOR = 0.35;
+  const GROUND_WEB_STUCK_SECONDS = 0.5;
 
   const THEME_LEAF_COLORS = {
     forest: ['#86d66e', '#ffd166', '#86d66e'],
@@ -221,7 +227,8 @@
   const player = new Forest.Player(world, {
     onHealthChanged: refreshHealth,
     onDefeated: showGameOver,
-    onSlamLanded: hitEnemiesInArea
+    onSlamLanded: hitEnemiesInArea,
+    onEntangled: () => floatingText.spawn('STUCK!', player.x, player.y + player.height + 0.4, '#f4f0ff')
   });
 
   // ==========================================
@@ -433,12 +440,36 @@
     startLevel(0, startHearts, startHearts, null, note);
   }
 
-  /** PLAY on the title screen. */
-  function leaveTitleScreen() {
+  /** Take the main menu away (PLAY, RESUME or Esc) and let the game run again. */
+  function closeMainMenu() {
     hasStarted = true;
     Forest.MainMenu.hide();
-    Forest.Game.setPaused(false, 'title');
+    Forest.Game.setPaused(false, 'main-menu');
   }
+
+  /** Esc during a game: pause and bring up the main menu. */
+  function openPauseMenu() {
+    if (!hasStarted || Forest.LoadingScreen.isBusy || Forest.MainMenu.isOpen) return;
+    Forest.Game.setPaused(true, 'main-menu');
+    Forest.MainMenu.show({
+      mode: 'pause',
+      onPlay: closeMainMenu,
+      onNewGame: () => {
+        if (isTraining) Forest.Game.endTraining();
+        else startAdventure(); // pauses for its loading screen before the menu lets go
+        closeMainMenu();
+      },
+      getBestPoints: () => loadBest(BEST_POINTS_STORAGE_KEY)
+    });
+  }
+
+  // Esc opens the pause menu, and closes it again. (The scrapbook and the gallery close
+  // themselves on Esc, so it's left to them while one of them is open.)
+  window.addEventListener('keydown', event => {
+    if (event.code !== 'Escape' || event.repeat || Forest.MainMenu.isCoveredByOverlay()) return;
+    if (!Forest.MainMenu.isOpen) openPauseMenu();
+    else if (hasStarted) closeMainMenu();
+  }, true);
 
   /** Try the current level again from its start, with full health (same course as before). */
   function retryLevel() {
@@ -752,6 +783,13 @@
     }
   }
 
+  /** Walking (not jumping) through a sticky web on the ground slows the boy down. */
+  function checkStickyWebs() {
+    if (!scenery || player.isDefeated) return;
+    const isInWeb = scenery.stickyWebs.some(web => player.x > web.left && player.x < web.right && player.y < web.top - 0.4);
+    if (isInWeb) player.entangle(GROUND_WEB_STUCK_SECONDS, GROUND_WEB_SPEED_FACTOR);
+  }
+
   /** Dropped into a pit: a heart lost and back to solid ground (or defeat on the last heart). */
   function checkPitFall() {
     if (player.isDefeated || player.y >= PIT_Y) return;
@@ -958,6 +996,8 @@
     const note = `DIFFICULTY: ${changedLevel.label} · ${changedLevel.startHearts} HEARTS`;
     if (isTraining) startTrainingSession(note);
     else startAdventure(note);
+    // Picked on the pause menu: the fresh game starts straight away
+    if (Forest.MainMenu.isOpen) closeMainMenu();
   });
 
   // ==========================================
@@ -982,6 +1022,7 @@
     scenery.update(gameDeltaSeconds);
     player.update(gameDeltaSeconds);
     checkPitFall();
+    checkStickyWebs();
     if (!player.isDefeated) {
       if (isTraining) waves.update(gameDeltaSeconds);
       else spawnApproachingEnemies();
@@ -1070,8 +1111,8 @@
     startTraining() {
       if (Training.selectedCreatureCount === 0) return false;
       startTrainingSession();
-      // Training can be started from the scrapbook on the title screen
-      if (!hasStarted) leaveTitleScreen();
+      // Training can be started from the scrapbook on the main menu
+      if (Forest.MainMenu.isOpen) closeMainMenu();
       notifyModeChanged();
       return true;
     },
@@ -1118,6 +1159,11 @@
       return world.terrain;
     },
 
+    /** The current level's sticky ground webs, as { left, right, top } (read-only, for the console and tests). */
+    get stickyWebs() {
+      return scenery ? scenery.stickyWebs : [];
+    },
+
     /** The current level's data (read-only). */
     get level() {
       return level;
@@ -1147,11 +1193,11 @@
   window.addEventListener('pageshow', () => Forest.Game.setBackgrounded(document.hidden));
 
   // Everything has loaded: the title screen comes up, and the game waits behind it
-  Forest.Game.setPaused(true, 'title');
+  Forest.Game.setPaused(true, 'main-menu');
   Forest.LoadingScreen.finishBoot(() => Forest.MainMenu.show({
     onPlay: () => {
-      startAdventure(); // pauses for its loading screen before the title screen lets go
-      leaveTitleScreen();
+      startAdventure(); // pauses for its loading screen before the menu lets go
+      closeMainMenu();
     },
     getBestPoints: () => loadBest(BEST_POINTS_STORAGE_KEY)
   }));

@@ -1235,8 +1235,10 @@
      *   recolour it (e.g. a cyber monster's rockets); `randomColor` picks one of the coloured fireball
      *   variants at random and `colorIndex` a given one; `sprite` throws something else entirely
      *   (music notes, web balls), bursting in its trail colours
+     * @param {{seconds:number, speedFactor:number}} [style.entangle] sticky (web balls): a hit slows the boy
+     *   down like this (see Player.entangle). With `damage` 0 it only slows him, without hurting.
      */
-    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS, randomColor = false, colorIndex, sprite: customSprite } = {}) {
+    launchFireball(fromX, fromY, toX, toY, flightSeconds, damage, { tint, trail = FLAME_COLORS, randomColor = false, colorIndex, sprite: customSprite, entangle = null } = {}) {
       let sprite = customSprite || this.sprite;
       let burstColors = customSprite ? [trail[0], trail[trail.length - 1]] : ['#ffb347', '#ff5a1f'];
       const pickedIndex = colorIndex !== undefined ? colorIndex : (randomColor ? Math.floor(Math.random() * this.variants.length) : -1);
@@ -1257,6 +1259,7 @@
         velocityX: (toX - fromX) / flightSeconds,
         velocityY: (toY - fromY + 0.5 * FIREBALL_GRAVITY * flightSeconds * flightSeconds) / flightSeconds,
         damage,
+        entangle,
         trail,
         burstColors
       });
@@ -1277,7 +1280,8 @@
         }
 
         if (this.isHittingPlayer(fireball, player)) {
-          player.takeDamage(fireball.damage, fireball.x);
+          if (fireball.damage > 0) player.takeDamage(fireball.damage, fireball.x);
+          if (fireball.entangle) player.entangle(fireball.entangle.seconds, fireball.entangle.speedFactor);
           this.burst(fireball);
           this.removeAt(i);
         } else if (fireball.y <= GROUND_Y + 0.1 || fireball.x < LEVEL_START_X - 2 || fireball.x > LEVEL_END_X + 2) {

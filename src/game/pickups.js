@@ -75,6 +75,13 @@
       this.particles.burst(x, y, 6, '#ff6b6b', 0.8, 0.4);
     }
 
+    /** A heart already lying in the level at (x, y), standing on whatever is there; it never blinks away. */
+    place(x, y) {
+      const mesh = createSpriteMesh(this.sprite, this.unitsPerPixel);
+      this.scene.add(mesh);
+      this.hearts.push({ mesh, x, y, velocityX: 0, velocityY: 0, age: HEART_PICKUP_DELAY, stays: true });
+    }
+
     update(deltaSeconds, player) {
       for (let i = this.hearts.length - 1; i >= 0; i--) {
         const heart = this.hearts[i];
@@ -88,7 +95,7 @@
           this.removeAt(i);
         } else if (heart.y < FALLEN_AWAY_Y) {
           this.removeAt(i);
-        } else if (heart.age >= HEART_LIFETIME) {
+        } else if (!heart.stays && heart.age >= HEART_LIFETIME) {
           this.particles.burst(heart.x, heart.y + this.size / 2, 5, '#a81c2b', 0.6, 0.3);
           this.removeAt(i);
         }
@@ -115,7 +122,7 @@
       heart.mesh.position.set(heart.x, heart.y + this.size / 2 + bob, HEART_Z);
 
       const blinkStartsAt = HEART_LIFETIME - HEART_BLINK_SECONDS;
-      heart.mesh.visible = heart.age < blinkStartsAt || Math.floor(heart.age * 10) % 2 === 0;
+      heart.mesh.visible = heart.stays || heart.age < blinkStartsAt || Math.floor(heart.age * 10) % 2 === 0;
     }
 
     isTouching(heart, player) {

@@ -9,9 +9,11 @@
     EASY: Object.freeze({
       id: 'EASY',
       label: 'EASY',
-      startHearts: 7,
+      startHearts: 10,
       /** Boss rewards can raise the hearts up to this many. */
-      maxHearts: 9,
+      maxHearts: 12,
+      /** Share of a level's heart spots (see Forest.Levels) that have a heart waiting. */
+      placedHeartShare: 1,
       heartsPerWaveCleared: 2,
       /** Multiplies the chance of a defeated foe dropping a heart. */
       heartDropScale: 2,
@@ -38,6 +40,7 @@
       label: 'NORMAL',
       startHearts: 5,
       maxHearts: 8,
+      placedHeartShare: 0.5,
       heartsPerWaveCleared: 1,
       heartDropScale: 1.5,
       creatureSpeed: 1,
@@ -53,6 +56,7 @@
       label: 'HARD',
       startHearts: 3,
       maxHearts: 6,
+      placedHeartShare: 0.25,
       /** No healing between waves; only beating a boss restores hearts. */
       heartsPerWaveCleared: 0,
       heartDropScale: 1,

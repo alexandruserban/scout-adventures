@@ -22,6 +22,8 @@
  *  - coins:     { x, y } centre of each coin
  *  - specialTraps: where the world's own trap goes (`trap`, see Forest.WorldTraps): { x, height,
  *               left, right } with the ends of the ground it stands on
+ *  - heartSpots: where hearts wait to be picked up (on the sky islands, at the end of the high
+ *               route and along the ground); how many of them are used depends on the difficulty
  *  - featured:  the level's own creature, which makes up a good share of its enemies (a Monster
  *               Forge species with a fixed seed, so it's the same monster each time, or a sky creature)
  *  - enemies:   { kind, x } each drops in when the boy gets close. kind is 'mushroom', a sky creature
@@ -75,9 +77,11 @@
         for (let x = platform.x + 1.5; x < platform.x + platform.width - 1.5; x += 3) coins.push(...coinRow(x, platform.y + GROUND_COIN_Y, 2));
         return;
       }
-      if (platform.bouncy && platform.essential) {
-        // The trampoline up to a sky island: one coin just above it (any higher is inside the island)
-        coins.push({ x: platform.x + platform.width / 2, y: platform.y + 1.1 });
+      if (platform.leadsTo) {
+        // The trampoline up to a sky island: a trail of coins up and across onto it
+        const x = platform.x + platform.width / 2;
+        const island = platform.leadsTo;
+        coins.push({ x, y: platform.y + 1.3 }, { x: x + 0.7, y: (platform.y + island.y) / 2 + 0.9 }, { x: island.x + 0.7, y: island.y + 1.2 });
         return;
       }
       if (platform.bouncy) {
@@ -260,11 +264,17 @@
   /** Room taken by the surface tiles on top, and the share of the slab the tapering steps add. */
   const ISLAND_SURFACE_DEPTH = 0.5;
   const ISLAND_TAPER_SHARE = 0.8;
-  /** And at least this far above any ground under them, so he can walk (and jump) underneath. */
-  const ISLAND_CLEARANCE = 2.8;
+  /**
+   * And at least this far above any ground under them, so he can walk underneath, and an ordinary
+   * jump from below can't bump his head into the monsters up there.
+   */
+  const ISLAND_CLEARANCE = 3.2;
   const TRAMPOLINE_WIDTH = 2.2;
-  /** The trampoline starts this far in under the island's near end. */
-  const TRAMPOLINE_INSET = 0.2;
+  /**
+   * The trampoline stands this far in front of the island's near end (not under it), so he bounces
+   * up beside it and drifts across onto it, instead of coming up through the monsters on top.
+   */
+  const TRAMPOLINE_GAP = 0.5;
   /** Share of the spots along the ground that get a trampoline (with a high ledge), outside the bouncy worlds. */
   const TRAMPOLINE_CHANCE = 0.14;
   /** The ice world's thin ice: every this-many-th obstacle is thin ice, over a pit this wide. */
@@ -424,7 +434,7 @@
 
   /**
    * Huge islands floating high above the course, so it feels like a second ground level up there.
-   * Each one has a trampoline on the ground under its near end to bounce up onto it, and solid
+   * Each one has a trampoline on the ground just in front of its near end to bounce up onto it, and solid
    * ground under its far end to drop back down to. They keep clear of the high route.
    * @returns {{islands:object[], trampolines:object[]}}
    */
@@ -441,7 +451,7 @@
       if (keepClear.some(([clearLeft, clearRight]) => end > clearLeft && x < clearRight)) continue;
       if (islands.some(other => end > other.x - ISLAND_SPACING && x < other.x + other.width + ISLAND_SPACING)) continue;
       // Solid ground under the trampoline, and under the drop off the far end
-      const padX = x + TRAMPOLINE_INSET;
+      const padX = x - TRAMPOLINE_GAP - TRAMPOLINE_WIDTH;
       const padGround = segmentAt(padX - 0.3);
       if (!padGround || padGround[1] < padX + TRAMPOLINE_WIDTH + 0.3) continue;
       if (!ground.some(([l, r]) => l <= end - 0.5 && r >= end + 2.5)) continue;
@@ -453,7 +463,7 @@
       const roomForSlab = (y - highestBelow - ISLAND_SURFACE_DEPTH - ISLAND_HEADROOM) / (1 + ISLAND_TAPER_SHARE);
       const thickness = Math.max(ISLAND_THICKNESS[0], Math.min(roomForSlab, between(...ISLAND_THICKNESS)));
       islands.push({ x, y, width, thickness, island: true, essential: true });
-      trampolines.push({ x: padX, y: padTop, width: TRAMPOLINE_WIDTH, bouncy: true, essential: true });
+      trampolines.push({ x: padX, y: padTop, width: TRAMPOLINE_WIDTH, bouncy: true, essential: true, leadsTo: { x, y } });
     }
     return { islands, trampolines };
   }
@@ -689,7 +699,32 @@
     const kept = level.platforms.filter(platform => platform.essential || !routePlatforms.some(other => isCrowding(platform, other)));
     const coins = [...autoCoins({ ...level, platforms: kept }, jumpScale), ...routeCoins];
     const allPlatforms = [...kept, ...routePlatforms].map(platform => animatePlatform(platform, level.layout, random));
-    return Object.freeze({ ...level, platforms: allPlatforms, coins });
+    const heartSpots = placeHearts(level, routePlatforms);
+    return Object.freeze({ ...level, platforms: allPlatforms, coins, heartSpots });
+  }
+
+  /** Hearts along the ground: one in each of this many stretches of the course. */
+  const GROUND_HEARTS = 4;
+
+  /**
+   * Where hearts wait to be picked up: the middle of every sky island, the stash at the end of the
+   * high route, and a few spread out along safe ground. Sorted from the start of the level.
+   */
+  function placeHearts(level, routePlatforms) {
+    const spots = level.platforms.filter(platform => platform.island)
+      .map(island => ({ x: island.x + island.width / 2, y: island.y }));
+    if (routePlatforms.length) {
+      const stash = routePlatforms[routePlatforms.length - 1];
+      spots.push({ x: stash.x + stash.width / 2, y: stash.y });
+    }
+    const groundSegments = [...level.ground].sort((a, b) => a[0] - b[0]);
+    for (let i = 1; i <= GROUND_HEARTS; i++) {
+      const wanted = (level.arena.start * i) / (GROUND_HEARTS + 1);
+      const segment = groundSegments.find(([, right]) => right - 1.5 > wanted) || groundSegments[0];
+      const x = Math.max(segment[0] + 1.5, wanted);
+      spots.push({ x, y: segment[2] || 0 });
+    }
+    return spots.sort((a, b) => a.x - b.x);
   }
 
   /** Still ledges in the rising world float up (and pop back down); on the concert stage they bob to the beat. */
@@ -1104,6 +1139,7 @@
       coins: [],
       traps: [],
       specialTraps: [],
+      heartSpots: [],
       enemies: [],
       routes: [],
       arena: { start: 0, end: TRAINING_WIDTH },

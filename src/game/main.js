@@ -357,6 +357,16 @@
     bossFallSpot = null;
   }
 
+  /** Lay out the hearts waiting in the level: all of its heart spots on Easy, fewer on harder settings (spread evenly). */
+  function placeHearts() {
+    const spots = level.heartSpots || [];
+    const count = Math.round(spots.length * (Difficulty.current.placedHeartShare || 0));
+    for (let i = 0; i < count; i++) {
+      const spot = spots[Math.floor(((i + 0.5) * spots.length) / count)];
+      hearts.place(spot.x, spot.y);
+    }
+  }
+
   /** Build a level's terrain, scenery and background, and put the boy at its start. */
   function buildLevel(levelData, { hp, maxHp }) {
     clearWorld();
@@ -394,6 +404,7 @@
     ambientLeaves.setWind(0);
     background.setWind(0);
     coins.place(level.coins);
+    placeHearts();
 
     pendingEnemies = level.enemies
       .map(entry => ({ ...entry, triggerX: entry.x - spawnDistanceFor(entry) }))

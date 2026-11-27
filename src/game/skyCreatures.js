@@ -448,6 +448,12 @@
       if (this.flyHomeX === undefined) {
         this.flyHomeX = this.x;
         this.flyDirection = randomDirection();
+        // In the air it isn't held to the ground or ledge under it (that kept flyers waiting at the
+        // edge of it), just to its stretch of sky; a boss arena still keeps it on screen
+        if (!this.isConfined) {
+          this.minX = Math.max(LEVEL_START_X + LEVEL_MARGIN, this.flyHomeX - FLY_PATROL_RANGE - 0.5);
+          this.maxX = Math.min(LEVEL_END_X - LEVEL_MARGIN, this.flyHomeX + FLY_PATROL_RANGE + 0.5);
+        }
       }
       this.x += this.flyDirection * FLY_PATROL_SPEED * this.speed * deltaSeconds;
       if (this.x > this.flyHomeX + FLY_PATROL_RANGE) this.flyDirection = -1;
@@ -474,6 +480,7 @@
      */
     confineTo(left, right) {
       const halfWidth = Math.min(this.width * 0.5, (right - left) / 2);
+      this.isConfined = true;
       this.minX = Math.max(this.minX, left + halfWidth);
       this.maxX = Math.min(this.maxX, right - halfWidth);
       if (this.maxX < this.minX) this.minX = this.maxX = (left + right) / 2;

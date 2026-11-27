@@ -761,6 +761,7 @@
     pendingEnemies = [];
     hud.hideBanner();
     hud.showBossTitle(BOSS_INTRO_SECONDS + 0.4);
+    Forest.Music.setBossFight(true); // this boss's own fight theme
     Sfx.golemRoar();
     cameraController.shake(0.2, 0.6);
   }
@@ -910,6 +911,7 @@
     if (arenaSpikes) arenaSpikes.dispose();
     arenaSpikes = null;
     hud.hideBossBar();
+    Forest.Music.setBossFight(false); // back to the world's own music
     bossFallSpot = { x: enemy.x, y: enemy.centerY };
     // With their leader gone, the sidekicks blow up too
     enemies.forEach(other => {

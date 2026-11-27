@@ -1,11 +1,12 @@
 /**
- * Background music: each world plays its own MIDI soundtrack (src/level-soundtrack) on loop.
+ * Background music: each world plays its own MIDI soundtrack (src/level-soundtrack) on loop,
+ * and switches to its boss's fight theme (src/boss-soundtrack) during the boss fight.
  * Without a level track it plays soundtrack.mp3, and falls back to a procedural chiptune
  * if that file can't be played.
  */
 (function (Forest) {
   const synth = Forest.Synth;
-  const { Midi, LevelTracks } = Forest;
+  const { Midi, LevelTracks, BossTracks } = Forest;
 
   const SOUNDTRACK_URL = 'soundtrack.mp3';
   const SOUNDTRACK_VOLUME = 0.55;
@@ -37,22 +38,57 @@
     concert: '22_The_Octopus_Rock_Concert'
   });
 
+  /** Which file in src/boss-soundtrack each world's boss fights to. */
+  const BOSS_TRACK_BY_THEME = Object.freeze({
+    forest: '01_King_Thunder_Jelly',
+    dungeon: '02_The_Cinder_Golem',
+    treetops: '03_The_Gloomwing_Queen',
+    desert: '04_The_Dune_Thornback',
+    ice: '05_The_Frost_Behemoth',
+    volcano: '06_The_Magma_Golem',
+    candy: '07_The_Jawbreaker',
+    moon: '08_The_Star_Devourer',
+    neon: '09_The_Neon_Wyrm',
+    crystal: '10_The_Crystal_Sentinel',
+    clockwork: '11_The_Brass_Beetle_Titan',
+    atlantis: '12_The_Abyssal_Megajelly',
+    fae: '13_The_Pixie_Moth_Empress',
+    mechKeep: '14_The_Dragon_Mech',
+    rift: '15_The_Void_Knight',
+    station: '16_The_Cosmic_Archmage',
+    noir: '17_The_Ink_Blot_Golem',
+    mothership: '18_The_Hive_Queen',
+    rainbow: '19_The_Prism_Widow',
+    rising: '20_The_Gravity_Thief',
+    kitchen: '21_The_Mighty_Jello',
+    concert: '22_The_Tentacle_King_Of_Rock'
+  });
+
   const parsedSongs = new Map();
 
-  /** The parsed MIDI song for a world, or null if it has none (or it can't be read). */
-  function songForTheme(themeId) {
-    const key = LEVEL_TRACK_BY_THEME[themeId];
-    if (!key || !LevelTracks || !LevelTracks[key]) return null;
+  /** A bundled track parsed once and cached; null if it's missing or can't be read. */
+  function parsedSong(tracks, key) {
+    if (!key || !tracks || !tracks[key]) return null;
     if (!parsedSongs.has(key)) {
       let song = null;
       try {
-        song = Midi.parse(Midi.bytesFromBase64(LevelTracks[key]));
+        song = Midi.parse(Midi.bytesFromBase64(tracks[key]));
       } catch (error) {
-        console.warn(`Level track ${key} could not be read, using the default soundtrack`, error);
+        console.warn(`Track ${key} could not be read`, error);
       }
       parsedSongs.set(key, song);
     }
     return parsedSongs.get(key);
+  }
+
+  /** The parsed MIDI song for a world, or null if it has none (or it can't be read). */
+  function songForTheme(themeId) {
+    return parsedSong(LevelTracks, LEVEL_TRACK_BY_THEME[themeId]);
+  }
+
+  /** The parsed fight theme of a world's boss, or null if it has none. */
+  function bossSongForTheme(themeId) {
+    return parsedSong(BossTracks, BOSS_TRACK_BY_THEME[themeId]);
   }
 
   // ==========================================
@@ -135,6 +171,8 @@
       this.chiptuneTimer = null;
       this.soundtrack = this.createSoundtrackElement();
       this.themeId = null;
+      /** True during a boss fight: the boss's theme plays instead of the world's. */
+      this.bossFight = false;
       this.levelLoop = null;
       /** Why everything is silenced right now ('background', 'pause'); it plays again once none are left. */
       this.quietReasons = new Set();
@@ -142,17 +180,27 @@
 
     /** Switch to a world's soundtrack (theme id); restarts the music if it's playing. */
     setLevel(themeId) {
-      if (themeId === this.themeId) return;
+      if (themeId === this.themeId && !this.bossFight) return;
       this.themeId = themeId;
+      this.bossFight = false; // (re)starting a level always begins with the world's own music
       if (this.isPlaying) this.start();
     }
 
-    /** Play the current world's MIDI track. Returns false if it has none. */
+    /** The boss fight starts (true) or ends (false): swap between the boss's theme and the world's. */
+    setBossFight(active) {
+      if (active === this.bossFight) return;
+      this.bossFight = active;
+      if (this.isPlaying) this.start();
+    }
+
+    /** Play the current world's MIDI track, or its boss's theme in a fight. Returns false if it has none. */
     startLevelTrack() {
-      const song = songForTheme(this.themeId);
+      const bossSong = this.bossFight ? bossSongForTheme(this.themeId) : null;
+      const song = bossSong || songForTheme(this.themeId);
       if (!song || !song.notes.length) return false;
       try {
-        this.levelLoop = new Midi.MidiLoop(synth.resume(), song, LEVEL_TRACK_VOLUME);
+        // Boss themes are written to end on the bar line, so they repeat without a pause
+        this.levelLoop = new Midi.MidiLoop(synth.resume(), song, LEVEL_TRACK_VOLUME, bossSong ? { loopGap: 0 } : undefined);
         this.levelLoop.setMuted(synth.muted, LEVEL_TRACK_VOLUME);
         this.levelLoop.start();
         return true;

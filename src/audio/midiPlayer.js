@@ -206,11 +206,12 @@
      * @param {AudioContext} context
      * @param {{notes: Array, duration: number}} song  from `parse`
      * @param {number} volume  master volume (0..1)
+     * @param {{loopGap?: number}} options  silence between repeats (seconds); 0 for tracks written to loop seamlessly
      */
-    constructor(context, song, volume) {
+    constructor(context, song, volume, { loopGap = LOOP_GAP_SECONDS } = {}) {
       this.context = context;
       this.song = song;
-      this.loopLength = song.duration + LOOP_GAP_SECONDS;
+      this.loopLength = song.duration + loopGap;
       this.timer = null;
       this.activeSources = new Set();
 

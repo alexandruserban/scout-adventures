@@ -46,7 +46,8 @@
         <button id="menu-music" class="hud-btn menu-option">🎵 MUSIC: ON</button>
         <button id="menu-sound" class="hud-btn menu-option">🔊 SOUND: ON</button>
         <button id="menu-crt" class="hud-btn menu-option" title="Retro TV scanlines">📺 CRT: ON</button>
-        <button id="menu-gallery" class="hud-btn menu-option">🎨 SPRITE GALLERY</button>
+        <!-- TESTING ONLY (to be removed): play any one level, see src/ui/testLevelPicker.js -->
+        <button id="menu-test-level" class="hud-btn menu-option">🧪 TEST LEVEL</button>
       </div>
       <div id="menu-best" class="menu-best"></div>
       <div class="menu-hint">A / D: WALK &middot; W / SPACE: JUMP &middot; J / CLICK: ATTACK<br>B: MUSIC &middot; M: SOUND &middot; R: RESTART &middot; ESC: MENU</div>
@@ -97,6 +98,19 @@
       <!-- Points Card -->
       <div class="hud-card">
         <div id="hud-points" class="hud-points">POINTS: 0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TESTING ONLY (to be removed): pick a world and a level number to play just that level -->
+  <div id="test-level-dialog">
+    <div class="overlay-card test-level-card">
+      <div class="pixel-title">🧪 TEST LEVEL</div>
+      <label class="test-level-field">WORLD <select id="test-level-world"></select></label>
+      <button id="test-level-resume" class="pixel-btn test-level-resume" style="display: none"></button>
+      <div class="overlay-buttons">
+        <button id="test-level-cancel" class="pixel-btn">◀ CANCEL</button>
+        <button id="test-level-play" class="pixel-btn">▶ PLAY</button>
       </div>
     </div>
   </div>
@@ -306,5 +320,6 @@
 
   <script src="src/game/main.js"></script>
   <script src="src/ui/exitButton.js"></script>
+  <script src="src/ui/testLevelPicker.js"></script>
 </body>
 </html>

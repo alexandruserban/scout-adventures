@@ -33,8 +33,6 @@
   const HOP_SPEED_Y = [5, 6.5];
   const HOP_INTERVAL = 0.8;
   const HOVER_HEIGHT = 2.4;
-  const HOVER_SIDE_DISTANCE = 2.4;
-  const HOVER_FOLLOW_RATE = 2.2;
   const FLAP_SECONDS = 0.12;
 
   // --- Attacking ---
@@ -236,7 +234,8 @@
       }
 
       this.attackCooldown -= deltaSeconds;
-      if (this.attackCooldown <= 0 && !player.isDefeated) this.tryStartAttack(player);
+      // Flyers only attack when he's close (they patrol, so he may be far away)
+      if (this.attackCooldown <= 0 && !player.isDefeated && (!this.isFlyer || this.isWithinAttackRange(player))) this.tryStartAttack(player);
     }
 
     walk(deltaSeconds, player) {
@@ -268,12 +267,10 @@
     /** Drift to one side of the boy, bobbing up and down and flapping. */
     hover(deltaSeconds, player) {
       this.animate(deltaSeconds, FLAP_SECONDS, 'idle', 'move');
-      const targetX = player.x + this.side * HOVER_SIDE_DISTANCE;
+      // Patrols its stretch of sky (not hanging beside the boy), bobbing up and down
+      this.patrolFlight(deltaSeconds, player);
       const targetY = this.hoverY + Math.sin(this.time * 3) * 0.3;
-      this.x += (targetX - this.x) * Math.min(1, HOVER_FOLLOW_RATE * deltaSeconds);
       this.y += (targetY - this.y) * Math.min(1, 3 * deltaSeconds);
-      this.facing = player.x >= this.x ? 1 : -1;
-      this.keepInsideLevel();
       if (Math.random() < 0.05) this.particles.burst(this.x, this.y, 1, this.colors.accent, 0.3, 0.6);
     }
 

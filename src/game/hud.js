@@ -134,8 +134,9 @@
      * @param {() => void} onRetry restart the level
      * @param {{levelLabel:string, points:number, lostPoints?:number, bestPoints:number, isNewBestPoints:boolean}} run
      */
-    showGameOver(onRetry, { levelLabel, points, lostPoints = 0, bestPoints, isNewBestPoints }) {
-      const lost = lostPoints > 0 ? `<span class="game-over-lost">-${lostPoints.toLocaleString()} POINTS FROM THIS LEVEL LOST</span><br>` : '';
+    showGameOver(onRetry, { levelLabel, inBossFight = false, points, lostPoints = 0, bestPoints, isNewBestPoints }) {
+      const lostWhat = inBossFight ? 'POINTS LOST (THE BOSS FIGHT\'S, AND 10%)' : 'POINTS FROM THIS LEVEL LOST';
+      const lost = lostPoints > 0 ? `<span class="game-over-lost">-${lostPoints.toLocaleString()} ${lostWhat}</span><br>` : '';
       const message = `The boy fell in ${levelLabel}.<br><br>${lost}POINTS: ${points.toLocaleString()}<br>`
         + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
       this.showOverlay({
@@ -143,7 +144,7 @@
         titleClass: 'text-red',
         title: 'DEFEATED!',
         message,
-        buttonLabel: 'PRESS [ R ] TO TRY THE LEVEL AGAIN',
+        buttonLabel: inBossFight ? 'PRESS [ R ] TO TRY THE BOSS AGAIN' : 'PRESS [ R ] TO TRY THE LEVEL AGAIN',
         onRestart: onRetry
       });
     }

@@ -64,14 +64,15 @@
       this.physicsChanges = [];
     }
 
-    /** Begin the fight's powers. */
-    start({ signature, arena, boss, player }) {
+    /** Begin the fight's powers. intervalScale stretches the time between casts (e.g. for the first boss). */
+    start({ signature, arena, boss, player, intervalScale = 1 }) {
       this.clear();
       this.power = POWERS[signature] || null;
       this.arena = arena;
       this.boss = boss;
       this.player = player;
       this.stage = 1;
+      this.intervalScale = intervalScale;
       this.active = Boolean(this.power);
       this.castTimer = FIRST_CAST_DELAY;
     }
@@ -94,9 +95,11 @@
       // Hazards already out finish what they're doing even after the boss falls
       for (let i = this.hazards.length - 1; i >= 0; i--) {
         const hazard = this.hazards[i];
+        // A hazard that defeats the boy clears them all (the DEFEATED card) while this loop is running
+        if (!hazard) continue;
         hazard.age += deltaSeconds;
         const keep = hazard.update(deltaSeconds, hazard);
-        if (keep === false) {
+        if (keep === false && this.hazards[i] === hazard) {
           this.disposeHazard(hazard);
           this.hazards.splice(i, 1);
         }
@@ -111,7 +114,7 @@
       this.castTimer -= deltaSeconds;
       if (this.castTimer > 0) return;
       const scale = DIFFICULTY_INTERVAL_SCALE[Forest.Difficulty.current.id] || 1;
-      this.castTimer = (CAST_INTERVAL[this.stage - 1] + randomBetween(-CAST_JITTER, CAST_JITTER)) * scale;
+      this.castTimer = (CAST_INTERVAL[this.stage - 1] + randomBetween(-CAST_JITTER, CAST_JITTER)) * scale * this.intervalScale;
       this.cast();
     }
 

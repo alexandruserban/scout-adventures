@@ -1,7 +1,7 @@
 /**
  * The main menu: the title screen when the game first starts, and the pause menu (Esc) during play.
  * Forest.Game shows it, saying what PLAY / RESUME and NEW ADVENTURE do.
- * It also holds the toolbar's buttons (CRT, gallery), since desktops hide the toolbar.
+ * It also holds the toolbar's CRT button, since desktops hide the toolbar.
  */
 (function (Forest) {
   const { Difficulty, Synth, Music, AudioControls } = Forest;
@@ -11,7 +11,6 @@
   const newGameButton = document.getElementById('menu-new');
   const subtitleElement = document.getElementById('menu-subtitle');
   const crtButton = document.getElementById('menu-crt');
-  const galleryButton = document.getElementById('menu-gallery');
   const difficultyButton = document.getElementById('menu-difficulty');
   const scrapbookButton = document.getElementById('menu-scrapbook');
   const musicButton = document.getElementById('menu-music');
@@ -159,10 +158,6 @@
     document.getElementById('btn-crt').click();
     crtButton.blur();
     refresh();
-  });
-  galleryButton.addEventListener('click', () => {
-    galleryButton.blur();
-    document.getElementById('btn-gallery').click();
   });
 
   Difficulty.onChange(() => {

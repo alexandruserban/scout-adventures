@@ -18,6 +18,8 @@
  * Forest.MonsterSpecies, Forest.Rewards and Forest.WaveDirector read from here.
  */
 (function (Forest) {
+  /** Droppers only drop their bomb when the boy is about this close to right below them. */
+  const DROP_ATTACK_RANGE = 1.5;
   const { clamp, randomBetween, randomDirection, isBodyTouching } = Forest.MathUtils;
   const { CreatureState, SkyCreature } = Forest;
   const Sfx = Forest.SoundEffects;
@@ -430,13 +432,13 @@
       }
       if (this.state !== CreatureState.HOVER) return;
       this.flap(deltaSeconds);
-      // Drift beside the boy (droppers stay right over him), bobbing up and down
-      const targetX = player.x + this.side * this.spec.sideDistance;
+      // Patrol its stretch of sky (not hanging beside the boy), bobbing up and down
+      this.patrolFlight(deltaSeconds, player);
       const targetY = this.hoverY + Math.sin(this.time * 3) * 0.3;
-      this.x += (targetX - this.x) * Math.min(1, 1.6 * deltaSeconds);
       this.y += (targetY - this.y) * Math.min(1, 3 * deltaSeconds);
-      this.facing = directionTowards(this.x, player.x);
-      this.keepInsideLevel();
+      // Out of range, it holds off (without the warning flash): droppers wait until he's right below
+      const range = this.spec.attack === 'drop' ? DROP_ATTACK_RANGE : undefined;
+      if (!this.isWithinAttackRange(player, range)) this.stateTimer = Math.max(this.stateTimer, this.spec.telegraph + 0.1);
       // The warning: it flashes just before attacking
       const warning = this.stateTimer < this.spec.telegraph;
       this.tint = warning && Math.sin(this.stateTimer * 30) > 0 ? WARNING_TINT : WHITE;

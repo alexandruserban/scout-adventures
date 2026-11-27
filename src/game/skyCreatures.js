@@ -53,6 +53,14 @@
   /** He counts as within reach this far past either end, and when no more than this far above or below. */
   const REACH_MARGIN = 0.3;
   const REACH_HEIGHT = 1.5;
+  /**
+   * Flying creatures patrol back and forth this far either side of where they came down, at this
+   * speed, instead of hanging beside the boy (where he'd jump straight into them). They only attack
+   * when he's within this distance.
+   */
+  const FLY_PATROL_RANGE = 4;
+  const FLY_PATROL_SPEED = 1.6;
+  const FLY_ATTACK_RANGE = 7;
 
   // --- Drawing ---
   const MESH_Z = 0.26;
@@ -432,6 +440,27 @@
       return this.keepInsideLevel();
     }
 
+    /**
+     * A flyer's patrol: back and forth around where it came down (see FLY_PATROL_RANGE), turning at
+     * the ends and at the edges of where it may go. It looks at the boy when he's close.
+     */
+    patrolFlight(deltaSeconds, player) {
+      if (this.flyHomeX === undefined) {
+        this.flyHomeX = this.x;
+        this.flyDirection = randomDirection();
+      }
+      this.x += this.flyDirection * FLY_PATROL_SPEED * this.speed * deltaSeconds;
+      if (this.x > this.flyHomeX + FLY_PATROL_RANGE) this.flyDirection = -1;
+      else if (this.x < this.flyHomeX - FLY_PATROL_RANGE) this.flyDirection = 1;
+      if (this.keepInsideLevel()) this.flyDirection = this.x <= this.minX ? 1 : -1;
+      this.facing = this.isWithinAttackRange(player) && !player.isDefeated ? directionTowards(this.x, player.x) : this.flyDirection;
+    }
+
+    /** The boy is close enough for a flyer to attack him (droppers pass `range` for "right below"). */
+    isWithinAttackRange(player, range = FLY_ATTACK_RANGE) {
+      return Math.abs(player.x - this.x) < range;
+    }
+
     keepInsideLevel() {
       const clampedX = clamp(this.x, this.minX, this.maxX);
       const hitEdge = clampedX !== this.x;
@@ -772,7 +801,6 @@
   // Tier 3: Gloomwing
   // ==========================================
   const MOTH_HOVER_HEIGHT = 2.5;
-  const MOTH_SIDE_DISTANCE = 2.6;
   const MOTH_HOVER_SECONDS = [2.2, 3.4];
   const MOTH_SWOOP_SECONDS = 1.3;
   /** Before diving it stops and glows for this long, so the boy can see the dive coming. */
@@ -782,8 +810,6 @@
   /** Moths that have started a dive (finished ones are filtered out by state). */
   const divingMoths = new Set();
   const MOTH_FLAP_SECONDS = 0.11;
-  /** How quickly it drifts towards its hover spot. */
-  const MOTH_FOLLOW_RATE = 2.5;
   /** Lowest point of a dive (its feet), just above the grass. */
   const MOTH_DIVE_BOTTOM = 0.3;
   const MOTH_DIVE_TINT = 0xffc0ff;
@@ -828,13 +854,12 @@
       }
     }
 
-    /** Drift to one side of the boy, bobbing up and down. */
+    /** Patrol its stretch of sky, bobbing up and down, and dive at the boy when he comes close. */
     updateHover(deltaSeconds, player) {
       this.flapWings(deltaSeconds);
-      this.facing = directionTowards(this.x, player.x);
 
       // Warning: hold still and glow just before diving
-      if (this.stateTimer <= MOTH_WARNING_SECONDS && (this.isWarning || !this.anotherMothIsDiving())) {
+      if (this.stateTimer <= MOTH_WARNING_SECONDS && (this.isWarning || (this.isWithinAttackRange(player) && !this.anotherMothIsDiving()))) {
         if (!this.isWarning) {
           this.isWarning = true;
           divingMoths.add(this);
@@ -844,11 +869,10 @@
         return;
       }
 
-      const targetX = player.x + this.side * MOTH_SIDE_DISTANCE;
+      // Patrols its stretch of sky (it doesn't hang beside the boy), bobbing up and down
+      this.patrolFlight(deltaSeconds, player);
       const targetY = this.hoverY + Math.sin(this.time * 3) * 0.3;
-      this.x += (targetX - this.x) * Math.min(1, MOTH_FOLLOW_RATE * deltaSeconds);
       this.y += (targetY - this.y) * Math.min(1, 3 * deltaSeconds);
-      this.keepInsideLevel();
 
       // Drifting spores
       if (Math.random() < 0.06) {
@@ -1334,6 +1358,8 @@
     update(deltaSeconds, player) {
       for (let i = this.fireballs.length - 1; i >= 0; i--) {
         const fireball = this.fireballs[i];
+        // Cleared while this loop was running (e.g. a hit that ended the fight)
+        if (!fireball) continue;
         fireball.velocityY -= FIREBALL_GRAVITY * deltaSeconds;
         fireball.x += fireball.velocityX * deltaSeconds;
         fireball.y += fireball.velocityY * deltaSeconds;
@@ -1400,6 +1426,7 @@
     }
 
     removeAt(index) {
+      if (!this.fireballs[index]) return;
       removeMesh(this.scene, this.fireballs[index].mesh, { disposeGeometry: true });
       if (this.fireballs[index].marker) removeMesh(this.scene, this.fireballs[index].marker, { disposeGeometry: true });
       this.fireballs.splice(index, 1);

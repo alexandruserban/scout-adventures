@@ -170,28 +170,41 @@
     '....gLGGLg....'
   ];
 
+  /** A flytrap opens its mouth when the boy is this close (and snaps at him when he's closer still). */
+  const FLYTRAP_OPEN_DISTANCE = 3.5;
+
   class Flytrap extends Trap {
     constructor(context, spot) {
       super(context, spot);
       this.openSprite = pixelSprite('flytrap-open', FLYTRAP_OPEN, FLYTRAP_PALETTE);
       this.shutSprite = pixelSprite('flytrap-shut', FLYTRAP_SHUT, FLYTRAP_PALETTE);
-      this.mesh = this.addSprite(this.openSprite, 1.4, this.x, this.top - 0.05);
+      // Resting with its mouth shut; it only opens wide as the boy comes near
+      this.mesh = this.addSprite(this.shutSprite, 1.4, this.x, this.top - 0.05);
       this.restY = this.mesh.position.y;
       this.shutSeconds = 0;
+      this.isOpen = false;
+    }
+
+    setOpen(open) {
+      if (open === this.isOpen) return;
+      this.isOpen = open;
+      this.mesh.material.map = (open ? this.openSprite : this.shutSprite).texture;
     }
 
     update(deltaSeconds, player) {
       super.update(deltaSeconds);
       if (this.shutSeconds > 0) {
         this.shutSeconds -= deltaSeconds;
-        if (this.shutSeconds <= 0) this.mesh.material.map = this.openSprite.texture;
         return;
       }
       const distance = Math.abs(player.x - this.x);
-      // Its jaws quiver as he comes near
-      this.mesh.position.x = this.x + (distance < 3 ? Math.sin(this.time * 40) * 0.03 : 0);
+      // Its jaws open and quiver as he comes near (a warning), and close again when he's gone
+      const isNear = distance < FLYTRAP_OPEN_DISTANCE && !player.isDefeated;
+      this.setOpen(isNear);
+      this.mesh.position.x = this.x + (isNear ? Math.sin(this.time * 40) * 0.03 : 0);
       if (distance < 1.1 && player.y < this.top + 1.6 && !player.isDefeated) {
-        this.mesh.material.map = this.shutSprite.texture;
+        this.setOpen(false);
+        this.mesh.position.x = this.x;
         this.shutSeconds = 1.6;
         this.sound(player, 'acornCrack');
         if (touchesBox(player, this.x - 0.65, this.x + 0.65, this.top, this.top + 1.0)) this.hurt(player);
@@ -215,7 +228,11 @@
     '..dss......ssd..',
     '...d........d...'
   ];
-  const PENDULUM_PIVOT_HEIGHT = 6.2;
+  /**
+   * High enough that at the bottom of its swing the blade passes over the boy's head (lowest edge
+   * about 1.65 up, he's about 1.3 tall): it only gets him if he jumps into it.
+   */
+  const PENDULUM_PIVOT_HEIGHT = 7.1;
   const PENDULUM_LENGTH = 4.9;
   const PENDULUM_SWING = 1.0;
   const PENDULUM_PERIOD = 2.6;

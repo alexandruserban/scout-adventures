@@ -32,6 +32,16 @@
   const STAGE_MINIONS = [2, 3, 4];
   const COMPANION_EXTRA_FROM_LEVEL = 8;
   const MINION_TRICKLE_SECONDS = [9, 7, 5.5];
+  /**
+   * The first bosses of an adventure go easier on a new player: less health, fewer minions in every
+   * stage (but always at least one), minions trickling in more slowly, and the power cast less often.
+   * The 1st (level 1) is the easiest, the 2nd a little harder; from the 3rd on, bosses are normal.
+   */
+  const EARLY_BOSSES = [
+    { hpScale: 0.65, fewerMinions: 1, trickleScale: 1.5, castIntervalScale: 1.4 },
+    { hpScale: 0.8, fewerMinions: 1, trickleScale: 1.25, castIntervalScale: 1.2 }
+  ];
+  const NORMAL_BOSS = { hpScale: 1, fewerMinions: 0, trickleScale: 1, castIntervalScale: 1 };
   /** Never more minions than this at once (egg hatchlings included). */
   const MAX_MINIONS = 6;
   /** Sidekicks are this much stronger than the level's own monsters at its start. */
@@ -84,6 +94,13 @@
    */
   const MUSHROOM_SPAWN_DISTANCE = 14;
   const SKY_SPAWN_DISTANCE = 10;
+  /**
+   * A monster that has just appeared can't hurt the boy by touching him while it drops in, nor for
+   * this long after it lands, so nothing bumps into him the moment it shows up. And it never comes
+   * down closer to him than this.
+   */
+  const SPAWN_GRACE_SECONDS = 0.8;
+  const SPAWN_MIN_DISTANCE = 4;
   /** Enemies left this far behind are quietly removed. */
   const DESPAWN_DISTANCE = 30;
   /** The boss fight starts once the boy is this far into the arena. */
@@ -319,8 +336,6 @@
   let bossStage = 1;
   let minionTimer = 0;
   let introTimer = 0;
-  /** The arena floor's spikes, out from the second stage (see level.arenaSpikes). */
-  let arenaSpikes = null;
   /** Where the boss fell (its shard appears there), and the shard itself once it's out. */
   let bossFallSpot = null;
   let shard = null;
@@ -332,6 +347,16 @@
   let lavaBombTimer = 0;
   /** Restored when the level is retried after a defeat. */
   let levelStart = { points: 0, coins: 0, coinsOffered: 0, maxHp: 0 };
+  /**
+   * Losing the boss fight brings the boy back at the start of the fight (not the level), with the
+   * points he had when it started, less this share of them. That's never saved: leaving the game
+   * and resuming still goes back to the start of the level, with the points from back then.
+   */
+  const BOSS_RETRY_PENALTY = 0.1;
+  /** Points, coins and max hearts when the boss fight started (null outside the fight). */
+  let bossFightStart = null;
+  /** What trying again does after a defeat: the whole level, or just the boss fight. */
+  let retryAfterDefeat = null;
 
   const waves = new Forest.WaveDirector({
     spawnCreature: ({ kind, stats, genome }, x) => {
@@ -353,6 +378,7 @@
   /** Every enemy enters play through here, so the scrapbook hears about it. */
   function addEnemy(enemy) {
     enemies.push(enemy);
+    enemy.spawnGrace = SPAWN_GRACE_SECONDS;
     // Anything appearing once the boss fight starts (the boss, sidekicks, split jellies, broodlings) stays on screen
     if (!isTraining && level && level.boss && arenaState !== ArenaState.CLOSED) confineToArena(enemy);
     if (isTraining) return;
@@ -373,6 +399,8 @@
   // ==========================================
   /** Wipe everything left over from the last level or attempt. */
   function clearWorld() {
+    bossFightStart = null;
+    retryAfterDefeat = null;
     hud.hideOverlay();
     hud.hideBanner();
     hud.hideToast();
@@ -390,8 +418,6 @@
     shard = null;
     bossFallSpot = null;
     bossPowers.clear();
-    if (arenaSpikes) arenaSpikes.dispose();
-    arenaSpikes = null;
     hud.hideBossBar();
     hud.hideBossTitle();
   }
@@ -496,7 +522,9 @@
         // A continued adventure rebuilds the very same course from its saved seed
         const levelData = course || Levels.generate(worldTheme, { position: index, seed });
         buildLevel(levelData, { hp, maxHp });
-        saveRun(Math.min(hp, maxHp), maxHp);
+        // A test level has its own save, so it never overwrites the saved adventure
+        if (isTestLevel) saveTestLevel();
+        else saveRun(Math.min(hp, maxHp), maxHp);
         coinsOffered = levelStart.coinsOffered + level.coins.length;
         refreshScore();
         refreshPoints();
@@ -529,6 +557,7 @@
    * @param {string} [note] an extra line for the loading screen
    */
   function startAdventure(note = '') {
+    isTestLevel = false;
     points = 0;
     coinsCollected = 0;
     coinsOffered = 0;
@@ -595,6 +624,7 @@
 
   /** Pick the saved adventure up again at the start of the level it was on. */
   function continueAdventure(saved) {
+    isTestLevel = false;
     points = saved.points;
     coinsCollected = saved.coins;
     coinsOffered = saved.coinsOffered;
@@ -686,6 +716,8 @@
     // About half of them may come down on a ledge above, the rest land on the ground
     // The level may say where it lands (on a sky island, or under one); otherwise it's a coin toss
     const allowLedges = entry.allowLedges !== undefined ? entry.allowLedges : Math.random() < LEDGE_LANDING_CHANCE;
+    // Never right on top of the boy (he may have run ahead): a few steps further on
+    if (Math.abs(entry.x - player.x) < SPAWN_MIN_DISTANCE) entry = { ...entry, x: player.x + SPAWN_MIN_DISTANCE };
     const options = { x: entry.x, onDefeated: onEnemyDefeated, allowLedges };
     let enemy;
     if (entry.kind === 'mushroom') {
@@ -749,6 +781,7 @@
   /** Walking in shuts the arena behind the boy and puts BOSS FIGHT up on the screen. */
   function enterArena() {
     const { arena } = level;
+    if (!bossFightStart) bossFightStart = { points, coins: coinsCollected, maxHp: player.maxHp };
     arenaState = ArenaState.INTRO;
     introTimer = BOSS_INTRO_SECONDS;
     player.setBounds(arena.start + 0.5, arena.end - 0.3);
@@ -772,8 +805,9 @@
     arenaState = ArenaState.FIGHTING;
     bossStage = 1;
     const difficulty = Difficulty.current;
+    const { hpScale } = bossEase();
     const stats = {
-      hp: Math.max(8, bossData.hp + difficulty.creatureHpBonus * 6),
+      hp: Math.max(8, Math.round((bossData.hp + difficulty.creatureHpBonus * 6) * hpScale)),
       damage: 1,
       speed: difficulty.creatureSpeed
     };
@@ -789,17 +823,31 @@
     }
     addEnemy(boss);
     summonCompanions(stageMinions());
-    minionTimer = MINION_TRICKLE_SECONDS[0];
-    bossPowers.start({ signature: bossData.signature, arena: level.arena, boss, player });
+    minionTimer = minionTrickleSeconds();
+    bossPowers.start({
+      signature: bossData.signature, arena: level.arena, boss, player,
+      intervalScale: bossEase().castIntervalScale
+    });
     Sfx.waveStart();
     hud.showBossBar(bossName, 1, 1);
     hud.showBanner({ title: `BOSS: ${bossName}`, subtitle: `${bossData.flavor}<br>STAGE 1 OF 3 &middot; It brought little helpers!`, variant: 'boss', seconds: 3.4 });
   }
 
+  /** How much easier this level's boss goes (see EARLY_BOSSES). */
+  function bossEase() {
+    return EARLY_BOSSES[level.number - 1] || NORMAL_BOSS;
+  }
+
   /** How many minions the current stage keeps in the arena. */
   function stageMinions() {
     const extra = level.number >= COMPANION_EXTRA_FROM_LEVEL ? 1 : 0;
-    return Math.max(1, STAGE_MINIONS[bossStage - 1] + extra + (Difficulty.current.bossMinionBonus || 0));
+    const fewer = bossEase().fewerMinions;
+    return Math.max(1, STAGE_MINIONS[bossStage - 1] + extra - fewer + (Difficulty.current.bossMinionBonus || 0));
+  }
+
+  /** Time between minions trickling in during the current stage. */
+  function minionTrickleSeconds() {
+    return MINION_TRICKLE_SECONDS[bossStage - 1] * bossEase().trickleScale;
   }
 
   function livingMinions() {
@@ -860,7 +908,7 @@
 
   /**
    * During the fight: at two thirds and one third of its health the boss moves on to its next
-   * stage (the last one is its rage), with more minions, spikes in the floor and its power cast
+   * stage (the last one is its rage), with more minions and its power cast
    * more often. Between stages, minions keep trickling in while there are fewer than the stage wants.
    */
   function updateBossFight(deltaSeconds) {
@@ -870,7 +918,7 @@
 
     minionTimer -= deltaSeconds;
     if (minionTimer <= 0) {
-      minionTimer = MINION_TRICKLE_SECONDS[bossStage - 1];
+      minionTimer = minionTrickleSeconds();
       if (livingMinions() < stageMinions()) summonCompanions(1);
     }
     // Angry red embers rising off it in the last stage
@@ -882,12 +930,8 @@
   function enterBossStage(newStage) {
     bossStage = newStage;
     bossPowers.setStage(newStage);
-    // The floor spikes for this stage pop out
-    const spikes = (level.arenaSpikes || []).filter(spike => spike.stage <= newStage);
-    if (arenaSpikes) arenaSpikes.dispose();
-    arenaSpikes = new Forest.SpikeTraps(stage.scene, spikes);
     summonCompanions(Math.max(0, stageMinions() - livingMinions()));
-    minionTimer = MINION_TRICKLE_SECONDS[newStage - 1];
+    minionTimer = minionTrickleSeconds();
     Sfx.golemRoar();
     cameraController.shake(0.25, 0.5);
     hitStop.trigger(0.12);
@@ -895,10 +939,10 @@
     if (newStage === 3) {
       boss.enterRage();
       effects.spawnRing({ color: '#ff3b3b', x: boss.x, y: boss.centerY, fromScale: 0.5, toScale: 9, lifetime: 0.5, z: 0.62 });
-      hud.showBanner({ title: `FINAL STAGE: ${bossName} IS ENRAGED!`, subtitle: 'Faster, meaner, more spikes... and the whole gang is here!', variant: 'boss', seconds: 2.8 });
+      hud.showBanner({ title: `FINAL STAGE: ${bossName} IS ENRAGED!`, subtitle: 'Faster, meaner... and the whole gang is here!', variant: 'boss', seconds: 2.8 });
     } else {
       effects.spawnRing({ color: '#ffb347', x: boss.x, y: boss.centerY, fromScale: 0.5, toScale: 7, lifetime: 0.45, z: 0.62 });
-      hud.showBanner({ title: `STAGE ${newStage} OF 3`, subtitle: `${bossName} gets angry! Spikes in the floor, and more minions are coming!`, variant: 'boss', seconds: 2.6 });
+      hud.showBanner({ title: `STAGE ${newStage} OF 3`, subtitle: `${bossName} gets angry, and more minions are coming!`, variant: 'boss', seconds: 2.6 });
     }
   }
 
@@ -906,10 +950,8 @@
     onEnemyDefeated(enemy);
     Forest.Stats.add('bossesDefeated');
     arenaState = ArenaState.BOSS_DOWN;
-    // Its powers and the floor spikes stop with it
+    // Its powers stop with it
     bossPowers.clear();
-    if (arenaSpikes) arenaSpikes.dispose();
-    arenaSpikes = null;
     hud.hideBossBar();
     Forest.Music.setBossFight(false); // back to the world's own music
     bossFallSpot = { x: enemy.x, y: enemy.centerY };
@@ -1034,6 +1076,10 @@
    */
   function showLevelEndStory() {
     arenaState = ArenaState.STORY;
+    if (isTestLevel) {
+      finishTestLevel();
+      return;
+    }
     const total = runOrder.length;
     const isLast = levelIndex === total - 1;
     Forest.Game.setPaused(true, 'loading');
@@ -1052,6 +1098,82 @@
         Forest.LoadingScreen.hide();
         Forest.Game.setPaused(false, 'loading');
         advanceToNextLevel();
+      }
+    });
+  }
+
+  // --- TESTING ONLY (to be removed): play any one level (see src/ui/testLevelPicker.js) ---
+  /**
+   * Playing a single level picked on the menu. It has its own save (separate from the adventure's),
+   * and winning it goes back to the title screen.
+   */
+  let isTestLevel = false;
+  const TEST_LEVEL_STORAGE_KEY = 'forest-pixel-adventure.testLevel';
+
+  /**
+   * Play just one world. It plays as the level it has in the adventure's order (the worlds are listed
+   * in that order: the forest is level 1), which sets how tough it is.
+   * @param {string} worldId
+   * @param {number} [seed] the course to play again (a resumed test level); a new one otherwise
+   */
+  function playTestLevel(worldId, seed) {
+    const index = Levels.themes.findIndex(theme => theme.id === worldId);
+    if (index < 0) return;
+    isTestLevel = true;
+    points = 0;
+    coinsCollected = 0;
+    coinsOffered = 0;
+    // The adventure's order puts every world at its own index
+    runOrder = Levels.themes.map((_, themeIndex) => themeIndex);
+    bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
+    const { startHearts } = Difficulty.current;
+    const note = seed === undefined ? `🧪 TEST LEVEL ${index + 1}` : `🧪 RESUMING TEST LEVEL ${index + 1}`;
+    startLevel(index, startHearts, startHearts, { note, seed });
+    closeMainMenu();
+  }
+
+  function saveTestLevel() {
+    try {
+      localStorage.setItem(TEST_LEVEL_STORAGE_KEY, JSON.stringify({ worldId: level.id, seed: level.seed }));
+    } catch (error) {
+      // Storage unavailable: the test level just can't be resumed later
+    }
+  }
+
+  /** The test level left unfinished, or null. */
+  function loadTestLevel() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TEST_LEVEL_STORAGE_KEY));
+      const theme = saved && Levels.themes.find(candidate => candidate.id === saved.worldId);
+      return theme && Number.isFinite(saved.seed) ? { worldId: theme.id, seed: saved.seed, name: theme.name, icon: theme.icon } : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function clearTestLevel() {
+    try {
+      localStorage.removeItem(TEST_LEVEL_STORAGE_KEY);
+    } catch (error) {
+      // Nothing to clear
+    }
+  }
+
+  /** A test level is won: say so, then back to the title screen. */
+  function finishTestLevel() {
+    clearTestLevel();
+    Forest.Game.setPaused(true, 'loading');
+    Forest.LoadingScreen.showStory({
+      icon: '🧪',
+      heading: 'TEST LEVEL CLEARED!',
+      title: level.name,
+      story: [`Level ${levelIndex + 1} done. Points: ${points.toLocaleString()}.`],
+      buttonLabel: 'BACK TO MENU ▶',
+      onContinue: () => {
+        Forest.LoadingScreen.hide();
+        Forest.Game.setPaused(false, 'loading');
+        isTestLevel = false;
+        Forest.Game.exitToTitle();
       }
     });
   }
@@ -1077,16 +1199,20 @@
     });
   }
 
-  /** The level's own hazard: sandstorm gusts or lava bombs raining down. */
+  /**
+   * The level's own hazard: sandstorm gusts or lava bombs raining down. Both stop once the boy is in
+   * the boss arena: the boss fight is just the ledges, the boss and its minions.
+   */
   function updateHazards(deltaSeconds) {
     levelTime += deltaSeconds;
+    const inArena = arenaState !== ArenaState.CLOSED;
     if (level.hazard === 'wind') {
       // -1..1: which way it blows and how hard, easing through a calm each time it turns round
       const swing = windDirection * Math.sin((levelTime / WIND_GUST_PERIOD) * Math.PI * 2);
-      world.levelPhysics.windSpeed = player.isDefeated ? 0 : WIND_BASE_SPEED * swing + WIND_GUST_SPEED * swing * Math.abs(swing);
+      world.levelPhysics.windSpeed = player.isDefeated || inArena ? 0 : WIND_BASE_SPEED * swing + WIND_GUST_SPEED * swing * Math.abs(swing);
       ambientLeaves.setWind(world.levelPhysics.windSpeed);
       background.setWind(world.levelPhysics.windSpeed);
-    } else if (level.hazard === 'lavaBombs' && arenaState !== ArenaState.CLEARED && !player.isDefeated) {
+    } else if (level.hazard === 'lavaBombs' && !inArena && !player.isDefeated) {
       lavaBombTimer -= deltaSeconds;
       if (lavaBombTimer <= 0) {
         lavaBombTimer = Forest.MathUtils.randomBetween(...LAVA_BOMB_INTERVAL) * Difficulty.current.spawnIntervalScale;
@@ -1216,9 +1342,13 @@
       return;
     }
     Forest.Stats.add('gameOvers');
-    // Everything earned in this level is lost: the retry starts from the points it began with
-    const lostPoints = Math.max(0, points - levelStart.points);
-    points = levelStart.points;
+    // Beaten by the boss: back to the start of the fight, with its starting points less the penalty.
+    // Anywhere else, everything earned in this level is lost: the retry starts from the points it began with.
+    const inBossFight = Boolean(bossFightStart) && (arenaState === ArenaState.INTRO || arenaState === ArenaState.FIGHTING);
+    const retryPoints = inBossFight ? Math.round(bossFightStart.points * (1 - BOSS_RETRY_PENALTY)) : levelStart.points;
+    const lostPoints = Math.max(0, points - retryPoints);
+    points = retryPoints;
+    retryAfterDefeat = inBossFight ? retryBossFight : retryLevel;
     refreshPoints();
     bossPowers.clear();
     hud.hideBossBar();
@@ -1226,8 +1356,9 @@
     const isNewBestPoints = points > previousBestPoints;
     if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, points);
 
-    hud.showGameOver(retryLevel, {
+    hud.showGameOver(retryAfterDefeat, {
       levelLabel: `LEVEL ${level.number}: ${level.name}`,
+      inBossFight,
       points,
       lostPoints,
       bestPoints: Math.max(previousBestPoints, points),
@@ -1274,6 +1405,11 @@
   function updateEnemies(deltaSeconds) {
     enemies.forEach(enemy => {
       enemy.update(deltaSeconds, player);
+      // Harmless to touch while it drops in and just after (see SPAWN_GRACE_SECONDS); never the boss
+      if (enemy.spawnGrace > 0 && enemy !== boss) {
+        if (enemy.state !== Forest.CreatureState.FALLING) enemy.spawnGrace -= deltaSeconds;
+        return;
+      }
       if (enemy.canHurtPlayer && enemy.isTouching(player)) {
         player.takeDamage(enemy.damage || 1, enemy.x);
       }
@@ -1293,7 +1429,39 @@
       startAdventure();
       return;
     }
+    // After a defeat, R does what the DEFEATED card's button does (the boss fight or the whole level)
+    if (player.isDefeated && retryAfterDefeat) {
+      retryAfterDefeat();
+      return;
+    }
     retryLevel();
+  }
+
+  /**
+   * Try the boss fight again (see BOSS_RETRY_PENALTY): the arena is cleared, the boy is back at its
+   * entrance with full hearts, and the boss comes down again.
+   */
+  function retryBossFight() {
+    retryAfterDefeat = null;
+    hud.hideOverlay();
+    hud.hideBanner();
+    hud.hideBossBar();
+    effects.clear();
+    world.projectiles.clear();
+    floatingText.clear();
+    hitStop.reset();
+    cameraController.stopShake();
+    enemies.forEach(enemy => enemy.remove());
+    enemies = [];
+    boss = null;
+    bossPowers.clear();
+    coinsCollected = bossFightStart.coins;
+    player.reset(level.arena.start + ARENA_TRIGGER_INSET + 0.5, bossFightStart.maxHp);
+    refreshHealth();
+    refreshPoints();
+    cameraController.snapTo(player);
+    arenaState = ArenaState.CLOSED;
+    enterArena();
   }
 
   function startTrainingSession(note = '') {
@@ -1373,7 +1541,6 @@
     scenery.update(gameDeltaSeconds);
     player.update(gameDeltaSeconds);
     spikeTraps.update(gameDeltaSeconds, player);
-    if (arenaSpikes) arenaSpikes.update(gameDeltaSeconds, player);
     bossPowers.update(gameDeltaSeconds);
     worldTraps.update(gameDeltaSeconds, player);
     checkPitFall();
@@ -1513,6 +1680,22 @@
      * Jump straight to a level of this adventure (1-22), e.g. from the console: Forest.Game.goToLevel(3)
      * @param {number} number
      */
+    /** TESTING ONLY (to be removed): play just one world (see playTestLevel). */
+    playTestLevel(worldId) {
+      playTestLevel(worldId);
+    },
+
+    /** TESTING ONLY: pick the unfinished test level up again on the same course. */
+    resumeTestLevel() {
+      const saved = loadTestLevel();
+      if (saved) playTestLevel(saved.worldId, saved.seed);
+    },
+
+    /** TESTING ONLY: the unfinished test level ({worldId, seed, name, icon}), or null. */
+    get savedTestLevel() {
+      return loadTestLevel();
+    },
+
     goToLevel(number) {
       startLevel(Math.max(0, Math.min(runOrder.length - 1, number - 1)), player.maxHp, player.maxHp);
     },

@@ -71,6 +71,10 @@
     platforms.forEach(platform => {
       // Moving stones over a pit leave their coins to the arc over it; the boss arena's ledges have none
       if ((platform.move && platform.essential) || platform.arenaLedge) return;
+      if (platform.island && platform.width < 4.5) {
+        coins.push(...coinsOn(platform, 2));
+        return;
+      }
       if (platform.island) {
         for (let x = platform.x + 1.5; x < platform.x + platform.width - 1.5; x += 3) coins.push(...coinRow(x, platform.y + GROUND_COIN_Y, 2));
         return;
@@ -222,11 +226,6 @@
    * floor attacks and to get above a giant boss.
    */
   const ARENA_LEDGES = [[2, 1.6, 2.2], [17.8, 1.6, 2.2], [6.2, 3.2, 2], [13.8, 3.2, 2], [10, 4.8, 2]];
-  /**
-   * Spikes in the arena floor (x from the arena's start, width, and the fight stage they come out
-   * in): under the gaps between the ledges, so there's always a safe ledge above them.
-   */
-  const ARENA_SPIKES = [[4.7, 1.4, 2], [15.9, 1.4, 2], [10.3, 1.4, 3]];
   /** Ordinary pits, and the wide ones with a stepping stone in the middle (before reach scaling). */
   const PIT_WIDTH = [1.7, 3.2];
   const WIDE_PIT_WIDTH = [4.6, 6.0];
@@ -256,7 +255,32 @@
   const SPIKES_FROM_X = 14;
   /** Sky islands: how many (rounded), how wide, how far apart, and never before this x. */
   const ISLAND_COUNT = [4, 6.8];
-  const ISLAND_WIDTH = [7, 28];
+  /**
+   * Each island is built in one of these styles, never the same one twice in a row:
+   *  - solid:   one big island
+   *  - chain:   a row of small islands with hops between them, at slightly different heights
+   *  - pattern: lots of tiny ledges in a shape (stairs up and down, a zigzag, an arch, a wave)
+   * Each style has its own range of overall widths.
+   */
+  const ISLAND_STYLE_WIDTH = { solid: [7, 28], chain: [13, 26], pattern: [10, 18] };
+  /** Chains: each small island this wide, this far apart (times the jump scale), and up to this much higher. */
+  const CHAIN_PIECE_WIDTH = [2.6, 4.6];
+  const CHAIN_GAP = [1.3, 2.0];
+  const CHAIN_RISE = 1.0;
+  /** Patterns: each tiny ledge this wide, this far apart (times the jump scale), and the shapes. */
+  const PATTERN_LEDGE_WIDTH = [0.9, 1.5];
+  const PATTERN_GAP = [1.0, 1.6];
+  const PATTERN_SHAPES = ['stairs', 'zigzag', 'arch', 'wave'];
+  /**
+   * How high (above the island's height) each shape's ledges go, for t from 0 (first) to 1 (last).
+   * Every shape starts at 0, where the trampoline drops the boy.
+   */
+  const PATTERN_HEIGHT = {
+    stairs: t => 2.2 * (1 - Math.abs(t * 2 - 1)),
+    zigzag: (t, index) => (index % 2) * 1.1,
+    arch: t => 1.8 * Math.sin(t * Math.PI),
+    wave: t => 0.6 - 0.6 * Math.cos(t * Math.PI * 3)
+  };
   const ISLAND_SPACING = 10;
   const ISLANDS_FROM_X = 20;
   /**
@@ -452,12 +476,16 @@
    */
   function rollSkyIslands({ ground, routes, arena, random, between, jumpScale }) {
     const islands = [];
+    const pieces = [];
     const trampolines = [];
     const segmentAt = x => ground.find(([l, r]) => x >= l && x <= r);
     const keepClear = routes.map(route => [route.x - 4, route.x + 34]);
     const count = Math.round(between(...ISLAND_COUNT));
+    let lastStyle = null;
     for (let attempt = 0; attempt < 60 && islands.length < count; attempt++) {
-      const width = between(...ISLAND_WIDTH);
+      const styles = Object.keys(ISLAND_STYLE_WIDTH).filter(style => style !== lastStyle);
+      const style = styles[Math.floor(random() * styles.length)];
+      const width = between(...ISLAND_STYLE_WIDTH[style]);
       const x = between(ISLANDS_FROM_X, arena.start - 8 - width);
       const end = x + width;
       if (keepClear.some(([clearLeft, clearRight]) => end > clearLeft && x < clearRight)) continue;
@@ -474,10 +502,54 @@
       // Thin decks and chunky slabs, as thick as the room underneath allows
       const roomForSlab = (y - highestBelow - ISLAND_SURFACE_DEPTH - ISLAND_HEADROOM) / (1 + ISLAND_TAPER_SHARE);
       const thickness = Math.max(ISLAND_THICKNESS[0], Math.min(roomForSlab, between(...ISLAND_THICKNESS)));
-      islands.push({ x, y, width, thickness, island: true, essential: true });
+      const island = { x, y, width, style };
+      island.pieces = buildIsland(island, thickness, random, between, jumpScale);
+      islands.push(island);
+      pieces.push(...island.pieces);
       trampolines.push({ x: padX, y: padTop, width: TRAMPOLINE_WIDTH, bouncy: true, essential: true, leadsTo: { x, y } });
+      lastStyle = style;
     }
-    return { islands, trampolines };
+    return { islands, pieces, trampolines };
+  }
+
+  /**
+   * The platforms of one sky island in its style (see ISLAND_STYLE_WIDTH). The first piece always
+   * starts at the island's near end and height, where the trampoline drops the boy. Exactly one
+   * piece is marked `heart` (a heart waits there).
+   */
+  function buildIsland({ x, y, width, style }, thickness, random, between, jumpScale) {
+    if (style === 'solid') return [{ x, y, width, thickness, island: true, essential: true, heart: true }];
+    const end = x + width;
+    const pieces = [];
+    if (style === 'chain') {
+      let cursor = x;
+      let pieceY = y;
+      while (cursor < end - CHAIN_PIECE_WIDTH[0]) {
+        const pieceWidth = Math.min(end - cursor, between(...CHAIN_PIECE_WIDTH));
+        pieces.push({ x: cursor, y: pieceY, width: pieceWidth, thickness: Math.min(thickness, 0.9), island: true, essential: true });
+        cursor += pieceWidth + between(...CHAIN_GAP) * jumpScale;
+        // Up a little or back down, never lower than the island's height
+        pieceY = y + random() * CHAIN_RISE;
+      }
+      pieces[Math.floor(pieces.length / 2)].heart = true;
+      return pieces;
+    }
+    // A pattern of tiny ledges
+    const shape = PATTERN_SHAPES[Math.floor(random() * PATTERN_SHAPES.length)];
+    const ledges = [];
+    let cursor = x;
+    while (cursor < end) {
+      const ledgeWidth = between(...PATTERN_LEDGE_WIDTH);
+      ledges.push({ x: cursor, width: ledgeWidth });
+      cursor += ledgeWidth + between(...PATTERN_GAP) * jumpScale;
+    }
+    ledges.forEach((ledge, index) => {
+      const t = ledges.length === 1 ? 0 : index / (ledges.length - 1);
+      pieces.push({ x: ledge.x, y: y + PATTERN_HEIGHT[shape](t, index), width: ledge.width, essential: true });
+    });
+    // The heart waits on the highest ledge
+    pieces.reduce((best, piece) => (piece.y > best.y ? piece : best)).heart = true;
+    return pieces;
   }
 
   /**
@@ -625,8 +697,8 @@
     });
 
     // Huge islands in the sky; ledges that would crowd them make way
-    const { islands, trampolines } = rollSkyIslands({ ground, routes, arena, random, between, jumpScale });
-    const skyPlatforms = [...islands, ...trampolines];
+    const { islands, pieces, trampolines } = rollSkyIslands({ ground, routes, arena, random, between, jumpScale });
+    const skyPlatforms = [...pieces, ...trampolines];
     const roomyPlatforms = platforms.filter(platform => platform.essential || !islands.some(island => isCrowding(platform, island)));
     platforms.length = 0;
     platforms.push(...roomyPlatforms, ...skyPlatforms);
@@ -661,10 +733,22 @@
       if (islands.some(island => x > island.x - 1 && x < island.x + island.width + 1)) entry.allowLedges = false;
       enemies.push(entry);
     }
-    // Every sky island has monsters of its own (fewer in the first levels, but always at least one)
+    // Every sky island has monsters of its own (fewer in the first levels, but always at least one).
+    // A chain's monsters stand on its small islands; the tiny ledges of a pattern have none.
     islands.forEach(island => {
+      if (island.style === 'pattern') return;
       const fullCount = Math.max(island.width >= 12 ? 2 : 1, Math.round(island.width / ISLAND_UNITS_PER_MONSTER));
       const count = Math.max(1, Math.round(fullCount * monsterShare));
+      if (island.style === 'chain') {
+        // Never on the first small island, where the boy lands
+        const spots = island.pieces.slice(1);
+        const used = Math.min(count, spots.length);
+        for (let i = 0; i < used; i++) {
+          const piece = spots[Math.floor(((i + 0.5) * spots.length) / used)];
+          enemies.push({ ...rollEnemy(piece.x + piece.width / 2), allowLedges: true });
+        }
+        return;
+      }
       for (let i = 0; i < count; i++) {
         const x = island.x + 2 + ((island.width - 4) * (i + 0.5)) / count;
         enemies.push({ ...rollEnemy(x), allowLedges: true });
@@ -714,11 +798,11 @@
   const GROUND_HEARTS = 8;
 
   /**
-   * Where hearts wait to be picked up: the middle of every sky island, the stash at the end of the
+   * Where hearts wait to be picked up: one on every sky island, the stash at the end of the
    * high routes, and a few spread out along safe ground. Sorted from the start of the level.
    */
   function placeHearts(level, routeStashes) {
-    const spots = level.platforms.filter(platform => platform.island)
+    const spots = level.platforms.filter(platform => platform.heart)
       .map(island => ({ x: island.x + island.width / 2, y: island.y }));
     routeStashes.forEach(stash => spots.push({ x: stash.x + stash.width / 2, y: stash.y }));
     const groundSegments = [...level.ground].sort((a, b) => a[0] - b[0]);
@@ -773,11 +857,8 @@
     };
     const arenaLift = Math.min(1.4, Math.sqrt(jumpScaleOf(theme)));
     const arenaLedges = ARENA_LEDGES.map(([x, y, width]) => ({ x: course.arena.start + x, y: y * arenaLift, width, essential: true, arenaLedge: true }));
-    const arenaSpikes = ARENA_SPIKES.map(([x, width, stage]) => ({
-      x: course.arena.start + x, width, height: 0, stage, period: 3.4 + random() * 0.6, phase: random()
-    }));
     return finishLevel({
-      ...theme, ...course, platforms: [...course.platforms, ...arenaLedges], arenaSpikes, number: position + 1, seed, playerStartX: 2, boss
+      ...theme, ...course, platforms: [...course.platforms, ...arenaLedges], number: position + 1, seed, playerStartX: 2, boss
     }, random);
   }
 
@@ -828,7 +909,7 @@
       id: 'dungeon',
       natives: { kinds: ['bonerattler'], share: NATIVE_SHARE },
       trap: 'pendulum',
-      trapHint: 'Giant axes swing from the ceiling. Time your run!',
+      trapHint: 'Giant axes swing from the ceiling. Walk under them, but time your jumps!',
       name: 'THE SUNKEN DUNGEON',
       icon: '🏰',
       flavor: 'Torchlit halls and bottomless pits. Something big is smouldering below...',

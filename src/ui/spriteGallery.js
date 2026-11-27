@@ -1,4 +1,8 @@
-/** "Sprite Gallery" modal showcasing every piece of pixel art in the game. */
+/**
+ * "Sprite Gallery" modal showcasing the game's pixel art. The hero and the scenery are always there;
+ * each creature's sprites unlock once the boy has met one (it's in the scrapbook), and until then
+ * it shows as a dark silhouette. The random mutants shown are the ones he has met.
+ */
 (function (Forest) {
   const { scaleCanvas, asciiToCanvas } = Forest.PixelCanvas;
   const Boy = Forest.BoySprites;
@@ -14,18 +18,45 @@
   const ZOOM = 3;
   const SLAM_ZOOM = 2; // slam frames are twice as big, so show them smaller
   const TREE_ZOOM = 2;
-  /** One random monster per entry, from gentle to nasty. */
-  const MONSTER_POWERS = [1, 2, 3, 4, 6, 8, 10, 12];
+  const SILHOUETTE_COLOR = '#06100d';
+  const LOCKED_CAPTION = '??? MEET IT TO UNLOCK';
 
-  let isPopulated = false;
+  /** The scrapbook count the gallery was last built for: it's rebuilt when new species turn up. */
+  let builtForCount = -1;
 
   function open() {
     overlay.style.display = 'flex';
     if (Forest.Game) Forest.Game.setPaused(true, 'gallery');
-    if (!isPopulated) {
+    const count = Forest.Scrapbook.discoveredCount;
+    if (count !== builtForCount) {
+      content.innerHTML = '';
       populate();
-      isPopulated = true;
+      builtForCount = count;
     }
+    overlay.querySelector('.gallery-card').scrollTop = 0;
+  }
+
+  function isMet(speciesId) {
+    return Boolean(Forest.Scrapbook.entryFor(speciesId));
+  }
+
+  /** The sprite painted solid dark: a creature not met yet. */
+  function silhouette(canvas) {
+    const copy = document.createElement('canvas');
+    copy.width = canvas.width;
+    copy.height = canvas.height;
+    const context = copy.getContext('2d');
+    context.drawImage(canvas, 0, 0);
+    context.globalCompositeOperation = 'source-in';
+    context.fillStyle = SILHOUETTE_COLOR;
+    context.fillRect(0, 0, copy.width, copy.height);
+    return copy;
+  }
+
+  /** All the frames of a creature that's been met, or just its silhouette. */
+  function creatureItems(speciesId, frames) {
+    if (isMet(speciesId)) return frames;
+    return [{ canvas: silhouette(frames[0].canvas), caption: LOCKED_CAPTION, locked: true }];
   }
 
   function close() {
@@ -57,23 +88,27 @@
       { canvas: scaleCanvas(Boy.defeated, ZOOM), caption: 'Defeated' }
     ]);
 
-    addSection('EVIL MUSHROOM', [
+    addSection(isMet('mushroom') ? 'EVIL MUSHROOM' : '??? (LOCKED)', creatureItems('mushroom', [
       { canvas: asciiToCanvas(Mushroom.walk[0], ZOOM), caption: 'Patrol' },
       { canvas: asciiToCanvas(Mushroom.aggro, ZOOM), caption: 'Aggro (Fangs)' },
       { canvas: asciiToCanvas(Mushroom.squash, ZOOM), caption: 'Hit: Squash' },
       { canvas: asciiToCanvas(Mushroom.dazed, ZOOM), caption: 'Hit: Dazed' }
-    ]);
+    ]));
 
-    const skyCreatureFrames = Object.values(SkyArt.creatures).flatMap((creature, tierIndex) =>
-      Object.entries(creature.frames).map(([frameName, rows]) => ({
+    // The keys of SkyArt.creatures are also their scrapbook species ids
+    const skyCreatures = Object.entries(SkyArt.creatures);
+    const skyCreatureItems = skyCreatures.flatMap(([speciesId, creature], tierIndex) => {
+      const frames = Object.entries(creature.frames).map(([frameName, rows]) => ({
         canvas: asciiToCanvas(rows, ZOOM, creature.palette),
         caption: `T${tierIndex + 1} ${creature.name}: ${frameName}`
-      }))
-    );
-    addSection('LEVEL MONSTERS & BOSSES', [
-      ...skyCreatureFrames,
-      { canvas: asciiToCanvas(SkyArt.fireball.rows, ZOOM, SkyArt.fireball.palette), caption: 'Golem Fireball' }
-    ]);
+      }));
+      if (speciesId === 'golem') {
+        frames.push({ canvas: asciiToCanvas(SkyArt.fireball.rows, ZOOM, SkyArt.fireball.palette), caption: 'Golem Fireball' });
+      }
+      return creatureItems(speciesId, frames);
+    });
+    const metSky = skyCreatures.filter(([speciesId]) => isMet(speciesId)).length;
+    addSection(`LEVEL MONSTERS & BOSSES (${metSky}/${skyCreatures.length})`, skyCreatureItems);
 
     addMonsterForgeSection();
 
@@ -85,28 +120,30 @@
   }
 
   /**
-   * A fresh batch of random monsters every time (display only - not clickable), with a button
-   * to reroll the whole batch. (Forest.MonsterForge loads after this script, so it's looked up lazily.)
+   * The random mutants he has met: the specimen of every mutant species in the scrapbook.
+   * (Forest.MonsterForge loads after this script, so it's looked up lazily.)
    */
   function addMonsterForgeSection() {
-    const section = addSection('MONSTER FORGE (RANDOM MUTANTS)', []);
+    const mutantSpecies = Forest.MonsterSpecies.ALL.filter(species => !species.isNative);
+    const specimens = mutantSpecies
+      .map(species => Forest.Scrapbook.entryFor(species.id))
+      .filter(entry => entry && entry.specimen)
+      .map(entry => entry.specimen);
+    const section = addSection(`MONSTER FORGE MUTANTS (${specimens.length}/${mutantSpecies.length})`, []);
     const row = section.querySelector('.sprite-row');
-
-    const rerollButton = createElement('button', 'pixel-btn', '🎲 REROLL MONSTERS');
-    rerollButton.style.cssText = 'display:block; margin:12px auto 0; padding:8px 14px; font-size:8px;';
-    rerollButton.addEventListener('click', () => fillMonsterRow(row));
-    section.appendChild(rerollButton);
-
-    fillMonsterRow(row);
+    if (specimens.length === 0) {
+      row.appendChild(createElement('div', 'sprite-caption', 'NONE MET YET: EVERY NEW KIND OF MUTANT YOU MEET SHOWS UP HERE'));
+      return;
+    }
+    fillMonsterRow(row, specimens);
   }
 
-  function fillMonsterRow(row) {
+  function fillMonsterRow(row, genomes) {
     const Forge = Forest.MonsterForge;
-    row.innerHTML = '';
-    MONSTER_POWERS.forEach(power => {
-      const genome = Forge.generate({ power });
+    genomes.forEach(genome => {
+      const power = genome.power;
       const box = createElement('div', 'sprite-box');
-      box.title = `${Forge.describe(genome)}\nSeed ${genome.seed}, power ${power}.`;
+      box.title = Forge.describe(genome);
 
       const frames = createElement('div', 'monster-frames');
       frames.style.cssText = 'display:flex; gap:6px; align-items:flex-end;';
@@ -134,8 +171,8 @@
     section.appendChild(createElement('div', 'section-name', title));
 
     const row = createElement('div', 'sprite-row');
-    items.forEach(({ canvas, caption }) => {
-      const box = createElement('div', 'sprite-box');
+    items.forEach(({ canvas, caption, locked }) => {
+      const box = createElement('div', locked ? 'sprite-box locked' : 'sprite-box');
       box.appendChild(canvas);
       box.appendChild(createElement('div', 'sprite-caption', caption));
       row.appendChild(box);

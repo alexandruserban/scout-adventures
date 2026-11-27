@@ -314,6 +314,11 @@
   const SKY_KINDS = ['nutling', 'thornback', 'gloomwing', 'jelly'];
   /** Share of a world's enemies that are its own creature (see `natives`). */
   const NATIVE_SHARE = 0.45;
+  /**
+   * The first levels are calmer: share of the full number of monsters in the 1st, 2nd, 3rd and 4th
+   * level of an adventure. From the 5th level on, every level gets them all.
+   */
+  const EARLY_MONSTER_SHARE = [0.4, 0.55, 0.7, 0.85];
 
 
   /** How much higher and further the boy jumps in a world (low gravity). */
@@ -639,6 +644,7 @@
     // Enemies, only over solid ground, getting stronger towards the arena and with every world
     const enemies = [];
     const basePower = FIRST_POWER + Math.floor(position * POWER_PER_LEVEL);
+    const monsterShare = position < EARLY_MONSTER_SHARE.length ? EARLY_MONSTER_SHARE[position] : 1;
     // Some worlds are crawling with their own creatures (spiders on the rainbow, crawlers on the ship)
     const natives = theme.natives || null;
     const rollEnemy = x => {
@@ -647,16 +653,18 @@
       if (roll < 0.36) return { kind: pick(SKY_KINDS), x };
       return { kind: 'mutant', x, power: Math.min(MAX_POWER, basePower + Math.floor((x / arena.start) * 2.5)) };
     };
-    for (let x = between(12, 16); x < arena.start - 4; x += between(6, 9)) {
+    // Fewer monsters in the first levels: they stand further apart
+    for (let x = between(12, 16); x < arena.start - 4; x += between(6, 9) / monsterShare) {
       if (!ground.some(([l, r]) => x > l + 1 && x < r - 1)) continue;
       const entry = rollEnemy(x);
       // The ones under a sky island stay down on the ground
       if (islands.some(island => x > island.x - 1 && x < island.x + island.width + 1)) entry.allowLedges = false;
       enemies.push(entry);
     }
-    // Every sky island has monsters of its own
+    // Every sky island has monsters of its own (fewer in the first levels, but always at least one)
     islands.forEach(island => {
-      const count = Math.max(island.width >= 12 ? 2 : 1, Math.round(island.width / ISLAND_UNITS_PER_MONSTER));
+      const fullCount = Math.max(island.width >= 12 ? 2 : 1, Math.round(island.width / ISLAND_UNITS_PER_MONSTER));
+      const count = Math.max(1, Math.round(fullCount * monsterShare));
       for (let i = 0; i < count; i++) {
         const x = island.x + 2 + ((island.width - 4) * (i + 0.5)) / count;
         enemies.push({ ...rollEnemy(x), allowLedges: true });

@@ -1320,6 +1320,8 @@
         age: 0,
         x: fromX,
         y: fromY,
+        fromX,
+        fromY,
         velocityX: (toX - fromX) / flightSeconds,
         velocityY: (toY - fromY + 0.5 * FIREBALL_GRAVITY * flightSeconds * flightSeconds) / flightSeconds,
         damage,
@@ -1350,11 +1352,23 @@
           if (fireball.entangle) player.entangle(fireball.entangle.seconds, fireball.entangle.speedFactor);
           this.burst(fireball);
           this.removeAt(i);
-        } else if (fireball.y <= this.groundTopAt(fireball.x) + 0.1 || fireball.x < LEVEL_START_X - 2 || fireball.x > LEVEL_END_X + 2) {
+        } else if (fireball.y <= this.groundTopAt(fireball.x) + 0.1 || this.isHittingPlatform(fireball)
+          || fireball.x < LEVEL_START_X - 2 || fireball.x > LEVEL_END_X + 2) {
           this.burst(fireball);
           this.removeAt(i);
         }
       }
+    }
+
+    /**
+     * Ledges and sky islands stop fireballs too, but only once they've left where they were thrown
+     * from, so a monster standing on a ledge can still throw.
+     */
+    isHittingPlatform(fireball) {
+      const terrain = this.world.terrain;
+      if (!terrain || !terrain.blocksProjectile) return false;
+      if (Math.abs(fireball.x - fireball.fromX) < 0.4 && Math.abs(fireball.y - fireball.fromY) < 0.4) return false;
+      return terrain.blocksProjectile(fireball.x, fireball.y);
     }
 
     isHittingPlayer(fireball, player) {

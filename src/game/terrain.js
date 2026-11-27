@@ -21,9 +21,16 @@
   const CRUMBLE_RETURN_SECONDS = 3.2;
   /** Ground counts as a wall when its top is this much above his feet. */
   const WALL_STEP = 0.02;
+  /**
+   * How deep a platform is below its top, for stopping thrown things: a ledge, and a sky island on
+   * top of its slab (the tapering underside is left out). A little room above the top counts too.
+   */
+  const LEDGE_DEPTH = 0.45;
+  const ISLAND_SURFACE_DEPTH = 0.5;
+  const PROJECTILE_MARGIN = 0.1;
 
   /** A platform's surface, from its level data. */
-  function createPlatform({ x, y, width, bouncy = false, move = null, crumble = false, island = false }) {
+  function createPlatform({ x, y, width, bouncy = false, move = null, crumble = false, island = false, thickness = 0 }) {
     return {
       left: x,
       right: x + width,
@@ -34,6 +41,8 @@
       isCrumbly: crumble,
       /** A huge island in the sky: monsters may live on it however high it is. */
       isIsland: island,
+      /** How far below the top it's solid to thrown things (see blocksProjectile). */
+      depth: island ? ISLAND_SURFACE_DEPTH + thickness : LEDGE_DEPTH,
       /** Crumbling ledges: 'solid', 'shaking' (stood on) or 'fallen' (not there), for `stateSeconds`. */
       crumbleState: 'solid',
       stateSeconds: Infinity, // long settled: no fade-in at the start
@@ -152,6 +161,16 @@
         }
       }
       return x;
+    }
+
+    /**
+     * Whether a thrown thing (a fireball, a web ball) at (x, y) has hit a ledge or a sky island.
+     * The ground itself is checked with groundTopAt.
+     */
+    blocksProjectile(x, y) {
+      return this.platforms.some(platform => !platform.isGone
+        && x > platform.left && x < platform.right
+        && y <= platform.top + PROJECTILE_MARGIN && y >= platform.top - platform.depth);
     }
 
     /** Height of the ground at x (the grass line over a pit). */

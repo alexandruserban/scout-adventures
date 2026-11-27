@@ -1,5 +1,5 @@
 /**
- * The exit door button in the bottom-right corner of the main menu (title screen and pause menu): asks "Exit the game?" and then closes it.
+ * The exit door button in the top-right corner of the main menu (title screen and pause menu): asks "Exit the game?" and then closes it.
  * - In the phone app the Flutter shell listens on the `ForestApp` JavaScript channel and closes the app.
  * - In a browser the tab is closed if the browser allows it (only tabs a script opened can be);
  *   otherwise the game goes back to its title screen.

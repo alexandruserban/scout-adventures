@@ -18,6 +18,7 @@
   const soundButton = document.getElementById('menu-sound');
   const bestElement = document.getElementById('menu-best');
   const boyCanvas = document.getElementById('menu-boy');
+  const card = screen.querySelector('.menu-card');
 
   const DIFFICULTY_ICONS = { EASY: '🌱', NORMAL: '⚔️', HARD: '💀' };
   const PLAY_LABELS = { title: '▶ PLAY', continue: '▶ CONTINUE', resume: '▶ RESUME', restart: '▶ START GAME' };
@@ -49,6 +50,22 @@
     crtButton.textContent = document.getElementById('btn-crt').textContent;
     const best = getBestPoints();
     bestElement.textContent = best > 0 ? `HIGH SCORE (${level.label}): ${best.toLocaleString()}` : '';
+    fitCard();
+  }
+
+  /**
+   * Shrinks the card (CSS zoom) when it doesn't fit the screen, e.g. a landscape phone with a larger
+   * font or display size, so the menu never needs scrolling.
+   */
+  function fitCard() {
+    if (!isOpen()) return;
+    card.style.zoom = '';
+    const style = getComputedStyle(screen);
+    const roomHeight = screen.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    const roomWidth = screen.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const borders = card.offsetHeight - card.clientHeight;
+    const scale = Math.min(1, roomHeight / (card.scrollHeight + borders), roomWidth / card.offsetWidth);
+    if (scale < 1) card.style.zoom = Math.floor(scale * 100) / 100;
   }
 
   /** The boy idles (breathes) next to the title. */
@@ -160,6 +177,8 @@
       play();
     }
   });
+  window.addEventListener('resize', fitCard);
+  if (document.fonts) document.fonts.ready.then(fitCard);
   window.addEventListener('keyup', () => {
     if (isOpen()) refresh();
   });

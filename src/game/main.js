@@ -24,14 +24,12 @@
   // --- Boss fights ---
   /**
    * Every boss fight has three stages: the boss drops to the next one at these shares of its health
-   * (the last one is its rage). Each stage brings more mutant minions: this many at a time (one more
-   * from COMPANION_EXTRA_FROM_LEVEL on, and the difficulty's bossMinionBonus), topped up one by one
-   * every MINION_TRICKLE_SECONDS while there are fewer.
+   * (the last one is its rage). Each stage brings more mutant minions: this many at a time (plus the
+   * difficulty's bossMinionBonus), topped up one by one every MINION_TRICKLE_SECONDS while there are fewer.
    */
   const BOSS_STAGE_HEALTH = [2 / 3, 1 / 3];
   const STAGE_MINIONS = [2, 3, 4];
-  const COMPANION_EXTRA_FROM_LEVEL = 8;
-  const MINION_TRICKLE_SECONDS = [9, 7, 5.5];
+  const MINION_TRICKLE_SECONDS = [10, 8, 6.5];
   /**
    * The first bosses of an adventure go easier on a new player: less health, fewer minions in every
    * stage (but always at least one), minions trickling in more slowly, and the power cast less often.
@@ -43,9 +41,13 @@
   ];
   const NORMAL_BOSS = { hpScale: 1, fewerMinions: 0, trickleScale: 1, castIntervalScale: 1 };
   /** Never more minions than this at once (egg hatchlings included). */
-  const MAX_MINIONS = 6;
-  /** Sidekicks are this much stronger than the level's own monsters at its start. */
+  const MAX_MINIONS = 4;
+  /**
+   * Sidekicks are this much stronger than the level's own monsters at its start, but never stronger
+   * than MAX_COMPANION_POWER (so the late bosses' gangs don't get overwhelming).
+   */
   const COMPANION_POWER_BONUS = 1;
+  const MAX_COMPANION_POWER = 6;
   /** Sidekicks never land closer to the boy than this. */
   const COMPANION_MIN_DISTANCE = 3.5;
   /** The big BOSS FIGHT title stays up this long before the boss drops in. */
@@ -840,9 +842,8 @@
 
   /** How many minions the current stage keeps in the arena. */
   function stageMinions() {
-    const extra = level.number >= COMPANION_EXTRA_FROM_LEVEL ? 1 : 0;
     const fewer = bossEase().fewerMinions;
-    return Math.max(1, STAGE_MINIONS[bossStage - 1] + extra - fewer + (Difficulty.current.bossMinionBonus || 0));
+    return Math.max(1, STAGE_MINIONS[bossStage - 1] - fewer + (Difficulty.current.bossMinionBonus || 0));
   }
 
   /** Time between minions trickling in during the current stage. */
@@ -890,7 +891,7 @@
   /** One helper mutant at x. Returns false when the arena already holds as many as allowed. */
   function summonMinion(x) {
     if (!boss || boss.isGone || boss.hp <= 0 || livingMinions() >= MAX_MINIONS) return false;
-    const power = Math.min(10, 1 + Math.floor((level.number - 1) * 0.55) + COMPANION_POWER_BONUS + (bossStage - 1));
+    const power = Math.min(MAX_COMPANION_POWER, 1 + Math.floor((level.number - 1) * 0.55) + COMPANION_POWER_BONUS + (bossStage - 1));
     const bossLook = boss.genome
       ? { movement: boss.genome.movement, shape: boss.genome.appearance.shape, headgear: boss.genome.appearance.headgear, cyber: Boolean(boss.genome.appearance.cyber) }
       : null;

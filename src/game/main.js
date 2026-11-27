@@ -22,16 +22,24 @@
   const FUTURE_CYBER_CHANCE = 0.6;
 
   // --- Boss fights ---
-  /** Mutant sidekicks that drop in with the boss (one more from this level number on). */
-  const BOSS_COMPANIONS = 2;
+  /**
+   * Every boss fight has three stages: the boss drops to the next one at these shares of its health
+   * (the last one is its rage). Each stage brings more mutant minions: this many at a time (one more
+   * from COMPANION_EXTRA_FROM_LEVEL on, and the difficulty's bossMinionBonus), topped up one by one
+   * every MINION_TRICKLE_SECONDS while there are fewer.
+   */
+  const BOSS_STAGE_HEALTH = [2 / 3, 1 / 3];
+  const STAGE_MINIONS = [2, 3, 4];
   const COMPANION_EXTRA_FROM_LEVEL = 8;
+  const MINION_TRICKLE_SECONDS = [9, 7, 5.5];
+  /** Never more minions than this at once (egg hatchlings included). */
+  const MAX_MINIONS = 6;
   /** Sidekicks are this much stronger than the level's own monsters at its start. */
   const COMPANION_POWER_BONUS = 1;
   /** Sidekicks never land closer to the boy than this. */
   const COMPANION_MIN_DISTANCE = 3.5;
-  /** The boss flies into a rage at this share of its health, and this many more sidekicks arrive. */
-  const BOSS_RAGE_HEALTH = 0.5;
-  const RAGE_REINFORCEMENTS = 2;
+  /** The big BOSS FIGHT title stays up this long before the boss drops in. */
+  const BOSS_INTRO_SECONDS = 2.4;
   /** Helpers are this much smaller than ordinary mutants, with this share of their health. */
   const HELPER_SIZE = 0.7;
   const HELPER_HP_SHARE = 0.6;
@@ -46,23 +54,6 @@
     crawler: ['spit', 'charge'],
     octorocker: ['spit', 'leap']
   };
-  /**
-   * The boy's jump, as in player.js: a double jump peaks this high and he drifts this fast in the
-   * air. A ground boss he can't clear with a double jump (see bossIsTooBigToJump) gets footholds.
-   */
-  const DOUBLE_JUMP_PEAK = 3.39;
-  const PLAYER_GRAVITY = 25;
-  const PLAYER_AIR_SPEED = 4.6;
-  /** Clear the boss's body by at least this much, with this much spare distance across. */
-  const JUMP_CLEARANCE_MARGIN = 0.3;
-  const JUMP_DISTANCE_MARGIN = 1.2;
-  /** Each kind's touch box (see their isTouching): top as a share of its height, half-width of its width. */
-  const BOSS_TOUCH_TOP = { jelly: 1.4, golem: 1 };
-  const DEFAULT_BOSS_TOUCH_TOP = 0.85;
-  const BOSS_TOUCH_HALF_WIDTH = { golem: 0.3 };
-  const DEFAULT_BOSS_TOUCH_HALF_WIDTH = 0.35;
-  const MUTANT_BOSS_TITLES = ['THE GREAT', 'THE MIGHTY', 'KING', 'QUEEN', 'THE ANCIENT', 'THE COLOSSAL'];
-
   const BEST_POINTS_STORAGE_KEY = 'forest-pixel-adventure.bestPoints';
   /** The adventure in progress, saved at the start of every level so it can be continued after the game is closed. */
   const SAVED_RUN_STORAGE_KEY = 'forest-pixel-adventure.savedRun';
@@ -158,6 +149,8 @@
   const ArenaState = Object.freeze({
     /** The boy hasn't reached the arena yet. */
     CLOSED: 'CLOSED',
+    /** The arena is shut and BOSS FIGHT is up on the screen; the boss drops in when it goes. */
+    INTRO: 'INTRO',
     FIGHTING: 'FIGHTING',
     /** The boss is beaten; waiting for its leftovers (e.g. jelly halves) to go. */
     BOSS_DOWN: 'BOSS_DOWN',
@@ -243,6 +236,19 @@
     spawnEnemy: enemy => addEnemy(enemy)
   };
   world.projectiles = new Forest.ProjectileSystem(world);
+  /** Each boss's own signature power (see Forest.BossPowers). */
+  const bossPowers = new Forest.BossPowers({
+    scene: stage.scene,
+    effects,
+    particles,
+    projectiles: world.projectiles,
+    cameraController,
+    sprites,
+    getPhysics: () => world.levelPhysics,
+    skyY: () => stage.camera.position.y + stage.viewHeightUnits / 2 + 1,
+    spawnMinion: x => summonMinion(x),
+    say: (text, x, y, color) => floatingText.spawn(text, x, y, color)
+  });
   const hearts = new Forest.HeartPickups(world, collectHeart);
   const coins = new Forest.Coins(world, collectCoin);
   const floatingText = new Forest.FloatingText(stage.scene);
@@ -309,6 +315,12 @@
   /** The boss's display name (a randomly picked mutant boss is only named once it's generated). */
   let bossName = '';
   let arenaState = ArenaState.CLOSED;
+  /** Which of the boss fight's three stages it's in (1-3), and the time until another minion drops in. */
+  let bossStage = 1;
+  let minionTimer = 0;
+  let introTimer = 0;
+  /** The arena floor's spikes, out from the second stage (see level.arenaSpikes). */
+  let arenaSpikes = null;
   /** Where the boss fell (its shard appears there), and the shard itself once it's out. */
   let bossFallSpot = null;
   let shard = null;
@@ -377,6 +389,11 @@
     if (shard) shard.remove();
     shard = null;
     bossFallSpot = null;
+    bossPowers.clear();
+    if (arenaSpikes) arenaSpikes.dispose();
+    arenaSpikes = null;
+    hud.hideBossBar();
+    hud.hideBossTitle();
   }
 
   /** Lay out the hearts waiting in the level: all of its heart spots on Easy, fewer on harder settings (spread evenly). */
@@ -702,10 +719,17 @@
 
     if (arenaState === ArenaState.CLOSED && player.x >= level.arena.start + ARENA_TRIGGER_INSET && !player.isDefeated) {
       enterArena();
+    } else if (arenaState === ArenaState.INTRO) {
+      introTimer -= deltaSeconds;
+      if (introTimer <= 0) spawnBoss();
     } else if (arenaState === ArenaState.FIGHTING) {
-      updateBossFight();
-    } else if (arenaState === ArenaState.BOSS_DOWN && enemies.every(enemy => enemy.isGone)) {
-      dropShard();
+      updateBossFight(deltaSeconds);
+    } else if (arenaState === ArenaState.BOSS_DOWN) {
+      // Minions still dropping in when the boss fell go up as soon as they can be hit
+      enemies.forEach(enemy => {
+        if (enemy.isBossCompanion && enemy.isHittable) enemy.defeat();
+      });
+      if (enemies.every(enemy => enemy.isGone)) dropShard();
     } else if (arenaState === ArenaState.SHARD) {
       shard.update(deltaSeconds, player);
     } else if (arenaState === ArenaState.CLEARED) {
@@ -722,9 +746,11 @@
     }
   }
 
+  /** Walking in shuts the arena behind the boy and puts BOSS FIGHT up on the screen. */
   function enterArena() {
-    const { arena, boss: bossData } = level;
-    arenaState = ArenaState.FIGHTING;
+    const { arena } = level;
+    arenaState = ArenaState.INTRO;
+    introTimer = BOSS_INTRO_SECONDS;
     player.setBounds(arena.start + 0.5, arena.end - 0.3);
     cameraController.lockTo(arena.start, arena.end);
     // Stragglers outside the arena can't reach the fight any more; the rest stay on screen
@@ -733,73 +759,50 @@
       else confineToArena(enemy);
     });
     pendingEnemies = [];
+    hud.hideBanner();
+    hud.showBossTitle(BOSS_INTRO_SECONDS + 0.4);
+    Sfx.golemRoar();
+    cameraController.shake(0.2, 0.6);
+  }
 
+  /** The boss drops in with its first minions, and its powers wake up. */
+  function spawnBoss() {
+    const { boss: bossData } = level;
+    arenaState = ArenaState.FIGHTING;
+    bossStage = 1;
     const difficulty = Difficulty.current;
     const stats = {
-      hp: Math.max(4, bossData.hp + difficulty.creatureHpBonus * 3),
+      hp: Math.max(8, bossData.hp + difficulty.creatureHpBonus * 6),
       damage: 1,
       speed: difficulty.creatureSpeed
     };
-    const bossOptions = { x: bossData.x, stats, sizeScale: bossData.sizeScale, onDefeated: onBossDefeated };
+    // Bosses always land on the arena floor, never on its ledges
+    const bossOptions = { x: bossData.x, stats, sizeScale: bossData.sizeScale, onDefeated: onBossDefeated, allowLedges: false };
     bossName = bossData.name;
     if (bossData.kind === 'mutant') {
-      // Seeded by the level, so a retry faces the same monster. Signature bosses keep their exact look;
-      // a randomly picked mutant may or may not turn out cybernetic
-      const cyber = bossData.name ? Boolean(bossData.cyber) : bossData.cyber;
-      const genome = Forest.MonsterForge.generate({ power: bossData.power, movement: bossData.movement, seed: bossData.seed, cyber });
+      // Seeded, so the same world always has the very same monster
+      const genome = Forest.MonsterForge.generate({ power: bossData.power, movement: bossData.movement, seed: bossData.seed, cyber: Boolean(bossData.cyber) });
       boss = Forest.MonsterForge.create(world, { ...bossOptions, genome });
-      if (!bossName) bossName = mutantBossName(genome);
     } else {
       boss = new Forest.SkyCreatures[bossData.kind](world, bossOptions);
     }
     addEnemy(boss);
-    if (bossIsTooBigToJump()) addFootholds();
-    summonCompanions(level.number <= COMPANION_EXTRA_FROM_LEVEL ? BOSS_COMPANIONS : BOSS_COMPANIONS + 1);
+    summonCompanions(stageMinions());
+    minionTimer = MINION_TRICKLE_SECONDS[0];
+    bossPowers.start({ signature: bossData.signature, arena: level.arena, boss, player });
     Sfx.waveStart();
-    hud.showBanner({ title: `BOSS: ${bossName}`, subtitle: `${bossData.flavor} It brought little helpers!`, variant: 'boss', seconds: 3.2 });
+    hud.showBossBar(bossName, 1, 1);
+    hud.showBanner({ title: `BOSS: ${bossName}`, subtitle: `${bossData.flavor}<br>STAGE 1 OF 3 &middot; It brought little helpers!`, variant: 'boss', seconds: 3.4 });
   }
 
-  /**
-   * True when the boy can't double-jump over the boss from the ground: it's too tall or too wide.
-   * Flying bosses don't count, since he can run underneath them.
-   */
-  function bossIsTooBigToJump() {
-    if (boss.isFlyer || boss.kind === 'gloomwing') return false;
-    const gravityScale = world.levelPhysics.gravityScale || 1;
-    const peak = DOUBLE_JUMP_PEAK / gravityScale;
-    const clearHeight = boss.height * (BOSS_TOUCH_TOP[boss.kind] || DEFAULT_BOSS_TOUCH_TOP) + JUMP_CLEARANCE_MARGIN;
-    if (clearHeight >= peak) return true;
-    // How long a perfect double jump keeps his feet above the body, and how far he drifts meanwhile,
-    // against how far it is from touching it on one side to touching it on the other
-    const secondsAbove = 2 * Math.sqrt((2 * (peak - clearHeight)) / (PLAYER_GRAVITY * gravityScale));
-    const touchSpan = 2 * boss.width * (BOSS_TOUCH_HALF_WIDTH[boss.kind] || DEFAULT_BOSS_TOUCH_HALF_WIDTH) + player.width * 0.5;
-    return PLAYER_AIR_SPEED * secondsAbove < touchSpan * JUMP_DISTANCE_MARGIN;
+  /** How many minions the current stage keeps in the arena. */
+  function stageMinions() {
+    const extra = level.number >= COMPANION_EXTRA_FROM_LEVEL ? 1 : 0;
+    return Math.max(1, STAGE_MINIONS[bossStage - 1] + extra + (Difficulty.current.bossMinionBonus || 0));
   }
 
-  /**
-   * Three ledges in the arena: one low on each side and a higher one in the middle, so the boy can
-   * get above a giant boss and jump over it (or strike it from above).
-   */
-  function addFootholds() {
-    const { arena } = level;
-    const lift = Math.min(1.4, Math.sqrt(1 / (world.levelPhysics.gravityScale || 1)));
-    const center = (arena.start + arena.end) / 2;
-    const ledges = [
-      { x: arena.start + 3.5, y: 2.0 * lift, width: 3 },
-      { x: arena.end - 6.5, y: 2.0 * lift, width: 3 },
-      { x: center - 1.75, y: 3.9 * lift, width: 3.5 }
-    ];
-    ledges.forEach(ledge => {
-      const surface = world.terrain.addPlatform(ledge);
-      scenery.addPlatform(ledge, surface);
-      particles.burst(ledge.x + ledge.width / 2, ledge.y, 10, '#ffffff', 1.2, 0.4);
-    });
-  }
-
-  /** A title for a randomly picked mutant boss, from its species: e.g. "THE GREAT SPIKY CYBER-BIGHEAD". */
-  function mutantBossName(genome) {
-    const species = Forest.MonsterSpecies.forGenome(genome);
-    return `${MUTANT_BOSS_TITLES[genome.seed % MUTANT_BOSS_TITLES.length]} ${species.common.toUpperCase()}`;
+  function livingMinions() {
+    return enemies.filter(enemy => enemy.isBossCompanion && !enemy.isGone).length;
   }
 
   /** Arena enemies keep their whole body on screen (the arena is exactly one screen wide). */
@@ -822,47 +825,79 @@
   }
 
   /**
-   * Small helper mutants that drop in to fight beside the boss, landing away from the boy. A mutant
-   * boss brings little look-alikes of its own species; the other bosses bring small random mutants
-   * (often cybernetic in the future-tech worlds). Helpers never share the boss's abilities.
+   * Small helper mutants that drop in to fight beside the boss, spread over the arena away from the
+   * boy. A mutant boss brings little look-alikes of its own species; the other bosses bring small
+   * random mutants (often cybernetic in the future-tech worlds). Helpers never share the boss's abilities.
    */
   function summonCompanions(count) {
     const { arena } = level;
-    const power = Math.min(10, 1 + Math.floor((level.number - 1) * 0.55) + COMPANION_POWER_BONUS);
-    const bossLook = boss && boss.genome
-      ? { movement: boss.genome.movement, shape: boss.genome.appearance.shape, headgear: boss.genome.appearance.headgear, cyber: Boolean(boss.genome.appearance.cyber) }
-      : null;
     for (let i = 0; i < count; i++) {
       let x = arena.start + 3 + ((i + Math.random()) / count) * (arena.end - arena.start - 6);
       if (Math.abs(x - player.x) < COMPANION_MIN_DISTANCE) x = player.x + (x >= player.x ? 1 : -1) * COMPANION_MIN_DISTANCE;
-      const look = bossLook || { cyber: level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined };
-      const genome = Forest.MonsterForge.generate({ power, ...look, excludeAbilities: bossAbilityIds() });
-      const stats = Forest.MonsterForge.statsFor(genome, Difficulty.current);
-      const companion = Forest.MonsterForge.create(world, {
-        genome, x, allowLedges: false, onDefeated: onEnemyDefeated, sizeScale: HELPER_SIZE,
-        stats: { ...stats, hp: Math.max(1, Math.ceil(stats.hp * HELPER_HP_SHARE)) }
-      });
-      companion.isBossCompanion = true;
-      addEnemy(companion);
+      summonMinion(Forest.MathUtils.clamp(x, arena.start + 1.5, arena.end - 1.5));
     }
   }
 
-  /** During the fight: the boss flies into a rage at half health and calls for reinforcements. */
-  function updateBossFight() {
+  /** One helper mutant at x. Returns false when the arena already holds as many as allowed. */
+  function summonMinion(x) {
+    if (!boss || boss.isGone || boss.hp <= 0 || livingMinions() >= MAX_MINIONS) return false;
+    const power = Math.min(10, 1 + Math.floor((level.number - 1) * 0.55) + COMPANION_POWER_BONUS + (bossStage - 1));
+    const bossLook = boss.genome
+      ? { movement: boss.genome.movement, shape: boss.genome.appearance.shape, headgear: boss.genome.appearance.headgear, cyber: Boolean(boss.genome.appearance.cyber) }
+      : null;
+    const look = bossLook || { cyber: level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined };
+    const genome = Forest.MonsterForge.generate({ power, ...look, excludeAbilities: bossAbilityIds() });
+    const stats = Forest.MonsterForge.statsFor(genome, Difficulty.current);
+    const companion = Forest.MonsterForge.create(world, {
+      genome, x, allowLedges: false, onDefeated: onEnemyDefeated, sizeScale: HELPER_SIZE,
+      stats: { ...stats, hp: Math.max(1, Math.ceil(stats.hp * HELPER_HP_SHARE)) }
+    });
+    companion.isBossCompanion = true;
+    addEnemy(companion);
+    return true;
+  }
+
+  /**
+   * During the fight: at two thirds and one third of its health the boss moves on to its next
+   * stage (the last one is its rage), with more minions, spikes in the floor and its power cast
+   * more often. Between stages, minions keep trickling in while there are fewer than the stage wants.
+   */
+  function updateBossFight(deltaSeconds) {
     if (!boss || boss.isGone || boss.hp <= 0) return;
-    if (!boss.isRaging && boss.hp <= boss.maxHp * BOSS_RAGE_HEALTH) {
-      boss.enterRage();
-      summonCompanions(RAGE_REINFORCEMENTS);
-      Sfx.golemRoar();
-      cameraController.shake(0.25, 0.5);
-      hitStop.trigger(0.12);
-      effects.spawnRing({ color: '#ff3b3b', x: boss.x, y: boss.centerY, fromScale: 0.5, toScale: 9, lifetime: 0.5, z: 0.62 });
-      particles.burst(boss.x, boss.centerY, 26, '#ff5a1f', 2.6, 0.7);
-      hud.showBanner({ title: `${bossName} IS ENRAGED!`, subtitle: 'Faster, meaner... and it called for backup!', variant: 'boss', seconds: 2.6 });
+    hud.showBossBar(bossName, boss.hp / boss.maxHp, bossStage);
+    if (bossStage < 3 && boss.hp <= boss.maxHp * BOSS_STAGE_HEALTH[bossStage - 1]) enterBossStage(bossStage + 1);
+
+    minionTimer -= deltaSeconds;
+    if (minionTimer <= 0) {
+      minionTimer = MINION_TRICKLE_SECONDS[bossStage - 1];
+      if (livingMinions() < stageMinions()) summonCompanions(1);
     }
-    // Angry red embers rising off it for the rest of the fight
+    // Angry red embers rising off it in the last stage
     if (boss.isRaging && Math.random() < 0.35) {
       particles.burst(boss.x + (Math.random() - 0.5) * boss.width, boss.y + Math.random() * boss.height, 1, Math.random() < 0.5 ? '#ff3b3b' : '#ffb347', 0.6, 0.5);
+    }
+  }
+
+  function enterBossStage(newStage) {
+    bossStage = newStage;
+    bossPowers.setStage(newStage);
+    // The floor spikes for this stage pop out
+    const spikes = (level.arenaSpikes || []).filter(spike => spike.stage <= newStage);
+    if (arenaSpikes) arenaSpikes.dispose();
+    arenaSpikes = new Forest.SpikeTraps(stage.scene, spikes);
+    summonCompanions(Math.max(0, stageMinions() - livingMinions()));
+    minionTimer = MINION_TRICKLE_SECONDS[newStage - 1];
+    Sfx.golemRoar();
+    cameraController.shake(0.25, 0.5);
+    hitStop.trigger(0.12);
+    particles.burst(boss.x, boss.centerY, 26, '#ff5a1f', 2.6, 0.7);
+    if (newStage === 3) {
+      boss.enterRage();
+      effects.spawnRing({ color: '#ff3b3b', x: boss.x, y: boss.centerY, fromScale: 0.5, toScale: 9, lifetime: 0.5, z: 0.62 });
+      hud.showBanner({ title: `FINAL STAGE: ${bossName} IS ENRAGED!`, subtitle: 'Faster, meaner, more spikes... and the whole gang is here!', variant: 'boss', seconds: 2.8 });
+    } else {
+      effects.spawnRing({ color: '#ffb347', x: boss.x, y: boss.centerY, fromScale: 0.5, toScale: 7, lifetime: 0.45, z: 0.62 });
+      hud.showBanner({ title: `STAGE ${newStage} OF 3`, subtitle: `${bossName} gets angry! Spikes in the floor, and more minions are coming!`, variant: 'boss', seconds: 2.6 });
     }
   }
 
@@ -870,6 +905,11 @@
     onEnemyDefeated(enemy);
     Forest.Stats.add('bossesDefeated');
     arenaState = ArenaState.BOSS_DOWN;
+    // Its powers and the floor spikes stop with it
+    bossPowers.clear();
+    if (arenaSpikes) arenaSpikes.dispose();
+    arenaSpikes = null;
+    hud.hideBossBar();
     bossFallSpot = { x: enemy.x, y: enemy.centerY };
     // With their leader gone, the sidekicks blow up too
     enemies.forEach(other => {
@@ -1174,6 +1214,12 @@
       return;
     }
     Forest.Stats.add('gameOvers');
+    // Everything earned in this level is lost: the retry starts from the points it began with
+    const lostPoints = Math.max(0, points - levelStart.points);
+    points = levelStart.points;
+    refreshPoints();
+    bossPowers.clear();
+    hud.hideBossBar();
     const previousBestPoints = loadBest(BEST_POINTS_STORAGE_KEY);
     const isNewBestPoints = points > previousBestPoints;
     if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, points);
@@ -1181,6 +1227,7 @@
     hud.showGameOver(retryLevel, {
       levelLabel: `LEVEL ${level.number}: ${level.name}`,
       points,
+      lostPoints,
       bestPoints: Math.max(previousBestPoints, points),
       isNewBestPoints
     });
@@ -1324,6 +1371,8 @@
     scenery.update(gameDeltaSeconds);
     player.update(gameDeltaSeconds);
     spikeTraps.update(gameDeltaSeconds, player);
+    if (arenaSpikes) arenaSpikes.update(gameDeltaSeconds, player);
+    bossPowers.update(gameDeltaSeconds);
     worldTraps.update(gameDeltaSeconds, player);
     checkPitFall();
     checkStickyWebs();

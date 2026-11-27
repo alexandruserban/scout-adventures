@@ -227,6 +227,98 @@ body.screen-noir .film-overlay {
   text-shadow: 3px 3px 0 #284b12, 0 0 14px rgba(163, 230, 53, 0.4);
 }
 
+/* The BOSS FIGHT title: each letter slams down in turn, the whole thing shakes, then fades */
+#boss-title {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 23;
+  display: none;
+  font-size: 54px;
+  letter-spacing: 6px;
+  color: #ff2d2d;
+  text-shadow: 4px 4px 0 #3b0000, -2px -2px 0 #ffd166, 0 0 26px rgba(255, 45, 45, 0.8);
+}
+
+#boss-title.show {
+  display: block;
+  animation: boss-title-out 2.8s ease forwards;
+}
+
+#boss-title .boss-letter {
+  display: inline-block;
+  opacity: 0;
+  animation: boss-letter-in 0.32s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+
+@keyframes boss-letter-in {
+  0% { opacity: 0; transform: translateY(-80px) scale(2.2); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes boss-title-out {
+  0%, 30% { opacity: 1; transform: translate(-50%, -50%); }
+  34% { transform: translate(calc(-50% - 6px), calc(-50% + 3px)); }
+  38% { transform: translate(calc(-50% + 6px), calc(-50% - 3px)); }
+  42% { transform: translate(calc(-50% - 4px), -50%); }
+  46%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
+}
+
+/* Boss health bar along the top of the screen */
+#boss-bar {
+  position: absolute;
+  /* Just under the HUD cards */
+  top: calc(64px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(52vw, 420px);
+  pointer-events: none;
+  z-index: 21;
+  display: none;
+}
+
+#boss-bar.show { display: block; }
+
+.boss-bar-name {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  color: #ffd1c2;
+  text-shadow: 2px 2px 0 #000000;
+  margin-bottom: 5px;
+}
+
+.boss-bar-stage { color: #ffbe0b; }
+
+.boss-bar-track {
+  position: relative;
+  height: 12px;
+  background: #2a0a0a;
+  border: 2px solid #000000;
+  box-shadow: 0 0 0 2px #7a1d1d;
+}
+
+.boss-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(#ff6b3d, #d1121b);
+  transition: width 0.2s linear;
+}
+
+.boss-bar-mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #ffe066;
+}
+
+.game-over-lost { color: #ff8a8a; }
+
 @keyframes banner-in-out {
   0% { opacity: 0; transform: translateX(-50%) scale(0.6); }
   10% { opacity: 1; transform: translateX(-50%) scale(1.08); }
@@ -640,6 +732,10 @@ body.screen-noir .film-overlay {
 @media (max-width: 768px) {
   .banner-title { font-size: 13px; }
   .banner-subtitle { font-size: 7px; }
+  #boss-title { font-size: 32px; letter-spacing: 3px; }
+  #boss-bar { top: calc(44px + env(safe-area-inset-top, 0px)); }
+  .boss-bar-name { font-size: 6px; }
+  .boss-bar-track { height: 8px; }
 }
 
 /* Short landscape phones: keep the wave banner clear of the HUD cards */

@@ -69,8 +69,8 @@
   function autoCoins({ ground, platforms, arena }, jumpScale) {
     const coins = [];
     platforms.forEach(platform => {
-      // Moving stones over a pit leave their coins to the arc over it
-      if (platform.move && platform.essential) return;
+      // Moving stones over a pit leave their coins to the arc over it; the boss arena's ledges have none
+      if ((platform.move && platform.essential) || platform.arenaLedge) return;
       if (platform.island) {
         for (let x = platform.x + 1.5; x < platform.x + platform.width - 1.5; x += 3) coins.push(...coinRow(x, platform.y + GROUND_COIN_Y, 2));
         return;
@@ -211,11 +211,22 @@
   // The course generator
   // ==========================================
   /** The boss arena starts somewhere in this range (the level's length). */
-  const ARENA_START_RANGE = [148, 166];
+  const ARENA_START_RANGE = [300, 334];
   /** One screen wide (the view is 23 units), so the camera holds still and the boss can never get out of sight. */
   const ARENA_WIDTH = 22;
   /** The boss drops in this far into the arena. */
   const BOSS_OFFSET = 15;
+  /**
+   * Small ledges in every boss arena (x from the arena's start, height before the low-gravity lift,
+   * width): one low on each side, two higher, and one on top in the middle, to dodge the boss's
+   * floor attacks and to get above a giant boss.
+   */
+  const ARENA_LEDGES = [[2, 1.6, 2.2], [17.8, 1.6, 2.2], [6.2, 3.2, 2], [13.8, 3.2, 2], [10, 4.8, 2]];
+  /**
+   * Spikes in the arena floor (x from the arena's start, width, and the fight stage they come out
+   * in): under the gaps between the ledges, so there's always a safe ledge above them.
+   */
+  const ARENA_SPIKES = [[4.7, 1.4, 2], [15.9, 1.4, 2], [10.3, 1.4, 3]];
   /** Ordinary pits, and the wide ones with a stepping stone in the middle (before reach scaling). */
   const PIT_WIDTH = [1.7, 3.2];
   const WIDE_PIT_WIDTH = [4.6, 6.0];
@@ -244,7 +255,7 @@
   const SPIKE_WIDTH = [1.4, 2.2];
   const SPIKES_FROM_X = 14;
   /** Sky islands: how many (rounded), how wide, how far apart, and never before this x. */
-  const ISLAND_COUNT = [2, 3.4];
+  const ISLAND_COUNT = [4, 6.8];
   const ISLAND_WIDTH = [7, 28];
   const ISLAND_SPACING = 10;
   const ISLANDS_FROM_X = 20;
@@ -279,7 +290,7 @@
   const THIN_ICE_EVERY = 3;
   const THIN_ICE_WIDTH = [2.4, 3.2];
   /** Each world's own trap: how many in a level (first world, later worlds), and how far apart at least. */
-  const SPECIAL_TRAP_COUNT = [4, 7];
+  const SPECIAL_TRAP_COUNT = [8, 14];
   const SPECIAL_TRAP_SPACING = 8;
   const SPECIAL_TRAPS_FROM_X = 16;
   /** How much clear ground each trap needs behind (to the left) and ahead (to the right) of its spot. */
@@ -298,8 +309,8 @@
   const FIRST_POWER = 1;
   const POWER_PER_LEVEL = 0.55;
   const MAX_POWER = 10;
-  const BOSS_FIRST_HP = 10;
-  const BOSS_HP_PER_LEVEL = 0.7;
+  const BOSS_FIRST_HP = 24;
+  const BOSS_HP_PER_LEVEL = 1.2;
   const SKY_KINDS = ['nutling', 'thornback', 'gloomwing', 'jelly'];
   /** Share of a world's enemies that are its own creature (see `natives`). */
   const NATIVE_SHARE = 0.45;
@@ -591,10 +602,13 @@
       }
     });
 
-    // One high route, starting from solid ground
+    // A high route in each half of the level, starting from solid ground (well apart, so they never overlap)
     const routes = [];
-    const routeGround = ground.filter(([l, r, h = 0]) => h === 0 && r - l >= 7 && l > 8 && r < arena.start - 24);
-    if (routeGround.length > 0) {
+    const half = arena.start / 2;
+    const halves = [[8, half - 10], [half + 12, arena.start - 24]];
+    halves.forEach(([from, to]) => {
+      const routeGround = ground.filter(([l, r, h = 0]) => h === 0 && r - l >= 7 && l > from && r < to);
+      if (routeGround.length === 0) return;
       const [l, r] = pick(routeGround);
       const climb = random() < 0.5 ? 'tower' : 'lift';
       routes.push({
@@ -603,7 +617,7 @@
         length: 16,
         climb
       });
-    }
+    });
 
     // Huge islands in the sky; ledges that would crowd them make way
     const { islands, trampolines } = rollSkyIslands({ ground, routes, arena, random, between, jumpScale });
@@ -674,32 +688,31 @@
     const jumpScale = jumpScaleOf(level);
     const routePlatforms = [];
     const routeCoins = [];
+    const routeStashes = [];
     level.routes.forEach(route => {
       const built = buildHighRoute(route, jumpScale, level.arena.start, random);
       routePlatforms.push(...built.platforms);
+      routeStashes.push(built.platforms[built.platforms.length - 1]);
       routeCoins.push(...built.coins);
     });
     const kept = level.platforms.filter(platform => platform.essential || !routePlatforms.some(other => isCrowding(platform, other)));
     const coins = [...autoCoins({ ...level, platforms: kept }, jumpScale), ...routeCoins];
     const allPlatforms = [...kept, ...routePlatforms].map(platform => animatePlatform(platform, level.layout, random));
-    const heartSpots = placeHearts(level, routePlatforms);
+    const heartSpots = placeHearts(level, routeStashes);
     return Object.freeze({ ...level, platforms: allPlatforms, coins, heartSpots });
   }
 
   /** Hearts along the ground: one in each of this many stretches of the course. */
-  const GROUND_HEARTS = 4;
+  const GROUND_HEARTS = 8;
 
   /**
    * Where hearts wait to be picked up: the middle of every sky island, the stash at the end of the
-   * high route, and a few spread out along safe ground. Sorted from the start of the level.
+   * high routes, and a few spread out along safe ground. Sorted from the start of the level.
    */
-  function placeHearts(level, routePlatforms) {
+  function placeHearts(level, routeStashes) {
     const spots = level.platforms.filter(platform => platform.island)
       .map(island => ({ x: island.x + island.width / 2, y: island.y }));
-    if (routePlatforms.length) {
-      const stash = routePlatforms[routePlatforms.length - 1];
-      spots.push({ x: stash.x + stash.width / 2, y: stash.y });
-    }
+    routeStashes.forEach(stash => spots.push({ x: stash.x + stash.width / 2, y: stash.y }));
     const groundSegments = [...level.ground].sort((a, b) => a[0] - b[0]);
     for (let i = 1; i <= GROUND_HEARTS; i++) {
       const wanted = (level.arena.start * i) / (GROUND_HEARTS + 1);
@@ -716,7 +729,7 @@
   const BEAT_BOB_HEIGHT = 0.22;
 
   function animatePlatform(platform, layout, random) {
-    if (!layout || platform.move || platform.bouncy || platform.crumble || platform.island) return platform;
+    if (!layout || platform.move || platform.bouncy || platform.crumble || platform.island || platform.arenaLedge) return platform;
     if (layout.rising) {
       return { ...platform, move: { rise: RISE_DISTANCE, period: RISE_PERIOD[0] + random() * (RISE_PERIOD[1] - RISE_PERIOD[0]), phase: random() } };
     }
@@ -726,44 +739,6 @@
       return { ...platform, y: platform.y - BEAT_BOB_HEIGHT / 2, move: { dx: 0, dy: BEAT_BOB_HEIGHT, period, phase: random() < 0.5 ? 0 : 0.5 } };
     }
     return platform;
-  }
-
-  /** Share of levels guarded by a brand-new random mutant; the rest get a signature boss from any world. */
-  const RANDOM_MUTANT_BOSS_CHANCE = 0.6;
-  /** Random mutant bosses: power at the first level and growth per level, and their size. */
-  const MUTANT_BOSS_FIRST_POWER = 4;
-  const MUTANT_BOSS_POWER_PER_LEVEL = 0.45;
-  const MUTANT_BOSS_SIZE = [1.7, 2.1];
-  /** In the future-tech worlds, random mutant bosses are usually cyber. */
-  const FUTURE_CYBER_BOSS_CHANCE = 0.7;
-  const MUTANT_BOSS_FLAVORS = [
-    'Any monster can grow into a boss. This one ate its vegetables.',
-    'The biggest, meanest one in the whole world has found you!',
-    'It has been waiting for a worthy opponent. That\'s you.',
-    'Its little helpers never leave its side.',
-    'Nobody has ever seen one this big. Nobody wanted to.'
-  ];
-
-  /**
-   * Who guards this level, picked at random: usually a brand-new mutant of any species (named
-   * once it is generated, see the game), sometimes one of the signature bosses of any world.
-   */
-  function pickBoss(theme, random, position) {
-    if (random() >= RANDOM_MUTANT_BOSS_CHANCE) {
-      const signature = THEMES[Math.floor(random() * THEMES.length)].boss;
-      return { ...signature };
-    }
-    const movements = ['walker', 'walker', 'hopper', 'flyer'];
-    return {
-      kind: 'mutant',
-      power: Math.min(MAX_POWER, MUTANT_BOSS_FIRST_POWER + Math.floor(position * MUTANT_BOSS_POWER_PER_LEVEL)),
-      movement: movements[Math.floor(random() * movements.length)],
-      seed: Math.floor(random() * 0x7fffffff),
-      cyber: theme.future && random() < FUTURE_CYBER_BOSS_CHANCE ? true : undefined,
-      name: null,
-      flavor: MUTANT_BOSS_FLAVORS[Math.floor(random() * MUTANT_BOSS_FLAVORS.length)],
-      sizeScale: MUTANT_BOSS_SIZE[0] + random() * (MUTANT_BOSS_SIZE[1] - MUTANT_BOSS_SIZE[0])
-    };
   }
 
   /** A fresh random seed for a level. */
@@ -782,12 +757,20 @@
     const random = createSeededRandom(seed);
     const solidSides = !Forest.LevelScenery || Forest.LevelScenery.hasSolidGround(theme.theme);
     const course = rollCourse(theme, random, jumpScaleOf(theme), position, solidSides);
-    const boss = {
-      ...pickBoss(theme, random, position),
+    // Every world is guarded by its own boss, with its own signature power (see Forest.BossPowers)
+    const boss = theme.boss && {
+      ...theme.boss,
       hp: Math.round(BOSS_FIRST_HP + position * BOSS_HP_PER_LEVEL),
       x: course.arena.start + BOSS_OFFSET
     };
-    return finishLevel({ ...theme, ...course, number: position + 1, seed, playerStartX: 2, boss }, random);
+    const arenaLift = Math.min(1.4, Math.sqrt(jumpScaleOf(theme)));
+    const arenaLedges = ARENA_LEDGES.map(([x, y, width]) => ({ x: course.arena.start + x, y: y * arenaLift, width, essential: true, arenaLedge: true }));
+    const arenaSpikes = ARENA_SPIKES.map(([x, width, stage]) => ({
+      x: course.arena.start + x, width, height: 0, stage, period: 3.4 + random() * 0.6, phase: random()
+    }));
+    return finishLevel({
+      ...theme, ...course, platforms: [...course.platforms, ...arenaLedges], arenaSpikes, number: position + 1, seed, playerStartX: 2, boss
+    }, random);
   }
 
   /** The worlds in a freshly shuffled order (as indices into themes), for a new adventure. */
@@ -813,7 +796,7 @@
       icon: '🌲',
       flavor: 'Hop the gaps, grab the coins, and find out what rules these woods!',
       theme: 'forest',
-      boss: { kind: 'jelly', name: 'KING THUNDER JELLY', flavor: 'A giant jelly crackling with lightning! Jump when it lands!', sizeScale: 1.7 }
+      boss: { kind: 'jelly', signature: 'lightning', name: 'KING THUNDER JELLY', flavor: 'A giant jelly crackling with lightning! Jump when it lands!', sizeScale: 1.7 }
     },
     {
       id: 'dungeon',
@@ -824,7 +807,7 @@
       icon: '🏰',
       flavor: 'Torchlit halls and bottomless pits. Something big is smouldering below...',
       theme: 'dungeon',
-      boss: { kind: 'golem', name: 'THE CINDER GOLEM', flavor: 'A blazing giant crashes down! Smash its fireballs!', sizeScale: 1 }
+      boss: { kind: 'golem', signature: 'meteorRain', name: 'THE CINDER GOLEM', flavor: 'A blazing giant crashes down! Smash its fireballs!', sizeScale: 1 }
     },
     {
       id: 'treetops',
@@ -835,7 +818,7 @@
       icon: '☁️',
       flavor: 'High above the forest, branch to branch and cloud to cloud. Don\'t look down!',
       theme: 'treetops',
-      boss: { kind: 'gloomwing', name: 'THE GLOOMWING QUEEN', flavor: 'The mother of all moths rules the sky! Strike as she dives!', sizeScale: 2.2 }
+      boss: { kind: 'gloomwing', signature: 'sleepDust', name: 'THE GLOOMWING QUEEN', flavor: 'The mother of all moths rules the sky! Strike as she dives!', sizeScale: 2.2 }
     },
     {
       id: 'desert',
@@ -847,7 +830,7 @@
       flavor: 'Blazing sun and howling sandstorms. Watch the gusts when you jump!',
       theme: 'desert',
       hazard: 'wind',
-      boss: { kind: 'thornback', name: 'THE DUNE THORNBACK', flavor: 'A colossal beetle bursts from the sand! Jump its charge!', sizeScale: 2.0 }
+      boss: { kind: 'thornback', signature: 'burrowSpikes', name: 'THE DUNE THORNBACK', flavor: 'A colossal beetle bursts from the sand! Jump its charge!', sizeScale: 2.0 }
     },
     {
       id: 'ice',
@@ -859,7 +842,7 @@
       flavor: 'A silent night under the aurora. The ice is slippery: you can\'t stop on a dime!',
       theme: 'ice',
       physics: { slippery: true },
-      boss: { kind: 'mutant', power: 8, movement: 'walker', seed: 4242, name: 'THE FROST BEHEMOTH', flavor: 'Something enormous wakes beneath the snow!', sizeScale: 1.8 }
+      boss: { kind: 'mutant', power: 8, movement: 'walker', seed: 4242, signature: 'icicles', name: 'THE FROST BEHEMOTH', flavor: 'Something enormous wakes beneath the snow!', sizeScale: 1.8 }
     },
     {
       id: 'volcano',
@@ -871,7 +854,7 @@
       flavor: 'Rivers of lava and fire raining from the sky. Smash the lava bombs!',
       theme: 'volcano',
       hazard: 'lavaBombs',
-      boss: { kind: 'golem', name: 'THE MAGMA GOLEM', flavor: 'The heart of the volcano rises, bigger and angrier than ever!', sizeScale: 1.35 }
+      boss: { kind: 'golem', signature: 'eruption', name: 'THE MAGMA GOLEM', flavor: 'The heart of the volcano rises, bigger and angrier than ever!', sizeScale: 1.35 }
     },
     {
       id: 'candy',
@@ -883,7 +866,7 @@
       flavor: 'Sweet as can be... and full of teeth. Bounce on the marshmallows!',
       theme: 'candy',
       layout: { bouncy: true },
-      boss: { kind: 'nutling', name: 'THE JAWBREAKER', flavor: 'A giant candied nut with a mean bite! Watch its hops!', sizeScale: 2.6 }
+      boss: { kind: 'nutling', signature: 'shockwave', name: 'THE JAWBREAKER', flavor: 'A giant candied nut with a mean bite! Watch its hops!', sizeScale: 2.6 }
     },
     {
       id: 'moon',
@@ -895,7 +878,7 @@
       flavor: 'The Earth hangs overhead. Gravity is weak here: float across the craters!',
       theme: 'moon',
       physics: { gravityScale: 0.55 },
-      boss: { kind: 'mutant', power: 10, movement: 'flyer', seed: 9001, name: 'THE STAR DEVOURER', flavor: 'A monster from beyond the stars!', sizeScale: 2.0 }
+      boss: { kind: 'mutant', power: 10, movement: 'flyer', seed: 9001, signature: 'blackHole', name: 'THE STAR DEVOURER', flavor: 'A monster from beyond the stars!', sizeScale: 2.0 }
     },
     // --- Future meets fantasy ---
     {
@@ -908,7 +891,7 @@
       flavor: 'Wizard towers and hover-lights under a synthwave sun. The streets hum with magic!',
       theme: 'neon',
       future: true,
-      boss: { kind: 'mutant', power: 7, movement: 'flyer', seed: 7071, cyber: true, name: 'THE NEON WYRM', flavor: 'A glowing dragon made of pure electric spellfire!', sizeScale: 1.9 }
+      boss: { kind: 'mutant', power: 7, movement: 'flyer', seed: 7071, cyber: true, signature: 'laserSweep', name: 'THE NEON WYRM', flavor: 'A glowing dragon made of pure electric spellfire!', sizeScale: 1.9 }
     },
     {
       id: 'crystal',
@@ -920,7 +903,7 @@
       flavor: 'Enchanted crystals wired with ancient circuits. They hum and glow in the dark.',
       theme: 'crystal',
       future: true,
-      boss: { kind: 'golem', name: 'THE CRYSTAL SENTINEL', flavor: 'A guardian of living crystal and fire boots up!', sizeScale: 1.2 }
+      boss: { kind: 'golem', signature: 'crystalFan', name: 'THE CRYSTAL SENTINEL', flavor: 'A guardian of living crystal and fire boots up!', sizeScale: 1.2 }
     },
     {
       id: 'clockwork',
@@ -933,7 +916,7 @@
       theme: 'clockwork',
       future: true,
       hazard: 'wind',
-      boss: { kind: 'thornback', name: 'THE BRASS BEETLE TITAN', flavor: 'A wind-up war beetle the size of a house! Jump its charge!', sizeScale: 2.1 }
+      boss: { kind: 'thornback', signature: 'gearBombs', name: 'THE BRASS BEETLE TITAN', flavor: 'A wind-up war beetle the size of a house! Jump its charge!', sizeScale: 2.1 }
     },
     {
       id: 'atlantis',
@@ -946,7 +929,7 @@
       theme: 'atlantis',
       future: true,
       physics: { gravityScale: 0.75 },
-      boss: { kind: 'jelly', name: 'THE ABYSSAL MEGAJELLY', flavor: 'The city\'s power core has come alive... and it stings!', sizeScale: 1.9 }
+      boss: { kind: 'jelly', signature: 'tidalWave', name: 'THE ABYSSAL MEGAJELLY', flavor: 'The city\'s power core has come alive... and it stings!', sizeScale: 1.9 }
     },
     {
       id: 'fae',
@@ -959,7 +942,7 @@
       theme: 'fae',
       future: true,
       layout: { bouncy: true },
-      boss: { kind: 'gloomwing', name: 'THE PIXIE MOTH EMPRESS', flavor: 'Wings of light and a temper to match! Strike as she dives!', sizeScale: 2.3 }
+      boss: { kind: 'gloomwing', signature: 'starfall', name: 'THE PIXIE MOTH EMPRESS', flavor: 'Wings of light and a temper to match! Strike as she dives!', sizeScale: 2.3 }
     },
     {
       id: 'mechKeep',
@@ -972,7 +955,7 @@
       theme: 'mechKeep',
       future: true,
       hazard: 'lavaBombs',
-      boss: { kind: 'golem', name: 'THE DRAGON MECH', flavor: 'Half dragon, half war machine, all fire!', sizeScale: 1.45 }
+      boss: { kind: 'golem', signature: 'flameBreath', name: 'THE DRAGON MECH', flavor: 'Half dragon, half war machine, all fire!', sizeScale: 1.45 }
     },
     {
       id: 'rift',
@@ -985,7 +968,7 @@
       theme: 'rift',
       future: true,
       physics: { gravityScale: 0.6 },
-      boss: { kind: 'mutant', power: 9, movement: 'walker', seed: 3141, cyber: true, name: 'THE VOID KNIGHT', flavor: 'A warrior from between the worlds steps through the portal!', sizeScale: 1.9 }
+      boss: { kind: 'mutant', power: 9, movement: 'walker', seed: 3141, cyber: true, signature: 'voidStep', name: 'THE VOID KNIGHT', flavor: 'A warrior from between the worlds steps through the portal!', sizeScale: 1.9 }
     },
     {
       id: 'station',
@@ -998,7 +981,7 @@
       theme: 'station',
       future: true,
       physics: { slippery: true },
-      boss: { kind: 'mutant', power: 10, movement: 'flyer', seed: 2077, cyber: true, name: 'THE COSMIC ARCHMAGE', flavor: 'The station\'s mad wizard-machine wakes! Dodge its spells!', sizeScale: 2.0 }
+      boss: { kind: 'mutant', power: 10, movement: 'flyer', seed: 2077, cyber: true, signature: 'spellCircles', name: 'THE COSMIC ARCHMAGE', flavor: 'The station\'s mad wizard-machine wakes! Dodge its spells!', sizeScale: 2.0 }
     },
     // --- The strange worlds ---
     {
@@ -1011,7 +994,7 @@
       flavor: 'You fell into an old cartoon. Everything is black and white... even you!',
       theme: 'noir',
       screen: 'noir',
-      boss: { kind: 'golem', name: 'THE INK BLOT GOLEM', flavor: 'A giant of spilled ink stomps out of the film reel!', sizeScale: 1.25 }
+      boss: { kind: 'golem', signature: 'inkFlood', name: 'THE INK BLOT GOLEM', flavor: 'A giant of spilled ink stomps out of the film reel!', sizeScale: 1.25 }
     },
     {
       id: 'mothership',
@@ -1023,7 +1006,7 @@
       theme: 'mothership',
       future: true,
       natives: { kinds: ['crawler'], share: 0.55 },
-      boss: { kind: 'crawler', name: 'THE HIVE QUEEN', flavor: 'The mother of all crawlers skitters out of the dark! Jump her dash!', sizeScale: 2.6 }
+      boss: { kind: 'crawler', signature: 'broodEggs', name: 'THE HIVE QUEEN', flavor: 'The mother of all crawlers skitters out of the dark! Jump her dash!', sizeScale: 2.6 }
     },
     {
       id: 'rainbow',
@@ -1035,7 +1018,7 @@
       theme: 'rainbow',
       layout: { bouncy: true },
       natives: { kinds: ['spider'], share: 0.55 },
-      boss: { kind: 'spider', name: 'THE PRISM WIDOW', flavor: 'A colossal spider spins down from the rainbow! Dodge her pounce!', sizeScale: 2.6 }
+      boss: { kind: 'spider', signature: 'prismBeams', name: 'THE PRISM WIDOW', flavor: 'A colossal spider spins down from the rainbow! Dodge her pounce!', sizeScale: 2.6 }
     },
     {
       id: 'rising',
@@ -1048,7 +1031,7 @@
       theme: 'rising',
       physics: { gravityScale: 0.8 },
       layout: { rising: true },
-      boss: { kind: 'mutant', power: 9, movement: 'flyer', seed: 6174, name: 'THE GRAVITY THIEF', flavor: 'It stole the world\'s gravity, and now it wants yours!', sizeScale: 2.0 }
+      boss: { kind: 'mutant', power: 9, movement: 'flyer', seed: 6174, signature: 'gravitySteal', name: 'THE GRAVITY THIEF', flavor: 'It stole the world\'s gravity, and now it wants yours!', sizeScale: 2.0 }
     },
     {
       id: 'kitchen',
@@ -1062,7 +1045,7 @@
       hazard: 'lavaBombs',
       bombStyle: { colorIndex: 2 },
       layout: { bouncy: true },
-      boss: { kind: 'jelly', name: 'THE MIGHTY JELLO', flavor: 'Dessert has come alive! It wobbles, it zaps, it splits!', sizeScale: 2.0 }
+      boss: { kind: 'jelly', signature: 'jellyQuake', name: 'THE MIGHTY JELLO', flavor: 'Dessert has come alive! It wobbles, it zaps, it splits!', sizeScale: 2.0 }
     },
     {
       id: 'concert',
@@ -1074,7 +1057,7 @@
       theme: 'concert',
       layout: { bouncy: true, beat: 140 },
       natives: { kinds: ['octorocker'], share: 0.45 },
-      boss: { kind: 'octorocker', name: 'THE TENTACLE KING OF ROCK', flavor: 'The lead singer crowd-surfs right at you! Dodge the notes!', sizeScale: 2.2 }
+      boss: { kind: 'octorocker', signature: 'soundBlast', name: 'THE TENTACLE KING OF ROCK', flavor: 'The lead singer crowd-surfs right at you! Dodge the notes!', sizeScale: 2.2 }
     }
   ].map(theme => Object.freeze(theme));
 

@@ -13,7 +13,7 @@
       /** Boss rewards can raise the hearts up to this many. */
       maxHearts: 12,
       /**
-       * How many hearts wait in each level, on its heart spots (see Forest.Levels; a level has 6-8).
+       * How many hearts wait in each level, on its heart spots (see Forest.Levels; a level has 12-17).
        * Infinity: every spot.
        */
       placedHearts: Infinity,
@@ -37,14 +37,16 @@
       /** Multiplies the boss wave's fixed escorts (the nutlings and gloomwing beside the golem). */
       bossEscortScale: 0.34,
       /** This many fewer mutants join each boss wave. */
-      bossMutantReduction: 1
+      bossMutantReduction: 1,
+      /** Added to how many minions each stage of a boss fight brings. */
+      bossMinionBonus: -1
     }),
     NORMAL: Object.freeze({
       id: 'NORMAL',
       label: 'NORMAL',
       startHearts: 5,
       maxHearts: 8,
-      placedHearts: 7,
+      placedHearts: 12,
       lavaBombAimedChance: 0.2,
       heartDropScale: 1.5,
       creatureSpeed: 1,
@@ -53,14 +55,15 @@
       cycleRamp: 0.7,
       pointsMultiplier: 1.5,
       bossEscortScale: 0.67,
-      bossMutantReduction: 1
+      bossMutantReduction: 1,
+      bossMinionBonus: 0
     }),
     HARD: Object.freeze({
       id: 'HARD',
       label: 'HARD',
       startHearts: 3,
       maxHearts: 6,
-      placedHearts: 4,
+      placedHearts: 7,
       lavaBombAimedChance: 0.35,
       heartDropScale: 1,
       creatureSpeed: 1.25,
@@ -69,7 +72,8 @@
       cycleRamp: 1,
       pointsMultiplier: 2,
       bossEscortScale: 1,
-      bossMutantReduction: 0
+      bossMutantReduction: 0,
+      bossMinionBonus: 1
     })
   });
 

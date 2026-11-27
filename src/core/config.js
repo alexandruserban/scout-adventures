@@ -16,7 +16,7 @@
 
     /** Outer horizontal limits shared by every level (each level also has its own, tighter bounds). */
     LEVEL_START_X: -8,
-    LEVEL_END_X: 240,
+    LEVEL_END_X: 480,
 
     /** Camera height when the player stands on the ground. */
     CAMERA_REST_Y: 2.6,

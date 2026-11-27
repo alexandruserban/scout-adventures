@@ -158,6 +158,15 @@
   <!-- Level, boss and wave announcements (fade in and out by themselves) -->
   <div id="wave-banner"></div>
 
+  <!-- The big BOSS FIGHT title when the boy walks into a boss arena -->
+  <div id="boss-title" aria-hidden="true"></div>
+
+  <!-- The boss's health, with marks where its next stages start -->
+  <div id="boss-bar">
+    <div class="boss-bar-name"><span id="boss-bar-name"></span><span id="boss-bar-stage" class="boss-bar-stage"></span></div>
+    <div class="boss-bar-track"><div id="boss-bar-fill" class="boss-bar-fill"></div><div class="boss-bar-mark" style="left: 33.3%"></div><div class="boss-bar-mark" style="left: 66.7%"></div></div>
+  </div>
+
   <!-- "New species discovered" notes (fade in and out by themselves) -->
   <div id="species-toast"></div>
 
@@ -285,6 +294,7 @@
   <script src="src/game/coins.js"></script>
   <script src="src/game/starShard.js"></script>
   <script src="src/game/traps.js"></script>
+  <script src="src/game/bossPowers.js"></script>
   <script src="src/game/worldTraps.js"></script>
   <script src="src/game/scrapbook.js"></script>
   <script src="src/game/stats.js"></script>

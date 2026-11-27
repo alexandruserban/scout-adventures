@@ -3,7 +3,7 @@
   const { GROUND_Y, LEVEL_START_X, LEVEL_END_X } = Forest.Config;
   const { randomBetween } = Forest.MathUtils;
 
-  const LEAF_COUNT = 24;
+  const LEAF_COUNT = 48;
   const LEAF_Z = 0.8;
   const MIN_HEIGHT = 1.0;
   const MAX_HEIGHT = 8.0;

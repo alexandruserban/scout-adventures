@@ -8,6 +8,12 @@
       this.bannerElement = document.getElementById('wave-banner');
       this.pointsElement = document.getElementById('hud-points');
       this.toastElement = document.getElementById('species-toast');
+      this.bossTitleElement = document.getElementById('boss-title');
+      this.bossBarElement = document.getElementById('boss-bar');
+      this.bossBarName = document.getElementById('boss-bar-name');
+      this.bossBarStage = document.getElementById('boss-bar-stage');
+      this.bossBarFill = document.getElementById('boss-bar-fill');
+      this.lastBossBar = '';
       this.lastScoreHtml = null;
       this.lastPointsHtml = null;
     }
@@ -85,13 +91,52 @@
       this.bannerElement.className = '';
     }
 
+    /** BOSS FIGHT in huge letters, slamming down one by one, gone after `seconds`. */
+    showBossTitle(seconds) {
+      const title = this.bossTitleElement;
+      title.innerHTML = [...'BOSS FIGHT'].map((letter, i) => (letter === ' '
+        ? '<span class="boss-letter">&nbsp;</span>'
+        : `<span class="boss-letter" style="animation-delay: ${(i * 0.07).toFixed(2)}s">${letter}</span>`)).join('');
+      title.className = '';
+      void title.offsetWidth; // restart the CSS animation
+      title.style.animationDuration = `${seconds}s`;
+      title.className = 'show';
+    }
+
+    hideBossTitle() {
+      this.bossTitleElement.className = '';
+    }
+
+    /**
+     * The boss's health bar. Cheap to call every frame.
+     * @param {string} name
+     * @param {number} fraction of its health left (0-1)
+     * @param {number} stage of the fight (1-3)
+     */
+    showBossBar(name, fraction, stage) {
+      const percent = Math.max(0, Math.min(100, Math.round(fraction * 1000) / 10));
+      const key = `${name}|${percent}|${stage}`;
+      if (key === this.lastBossBar) return;
+      this.lastBossBar = key;
+      this.bossBarName.textContent = name;
+      this.bossBarStage.textContent = `STAGE ${stage}/3`;
+      this.bossBarFill.style.width = `${percent}%`;
+      this.bossBarElement.className = 'show';
+    }
+
+    hideBossBar() {
+      this.lastBossBar = '';
+      this.bossBarElement.className = '';
+    }
+
     /**
      * The boy was defeated somewhere in a level.
      * @param {() => void} onRetry restart the level
-     * @param {{levelLabel:string, points:number, bestPoints:number, isNewBestPoints:boolean}} run
+     * @param {{levelLabel:string, points:number, lostPoints?:number, bestPoints:number, isNewBestPoints:boolean}} run
      */
-    showGameOver(onRetry, { levelLabel, points, bestPoints, isNewBestPoints }) {
-      const message = `The boy fell in ${levelLabel}.<br><br>POINTS: ${points.toLocaleString()}<br>`
+    showGameOver(onRetry, { levelLabel, points, lostPoints = 0, bestPoints, isNewBestPoints }) {
+      const lost = lostPoints > 0 ? `<span class="game-over-lost">-${lostPoints.toLocaleString()} POINTS FROM THIS LEVEL LOST</span><br>` : '';
+      const message = `The boy fell in ${levelLabel}.<br><br>${lost}POINTS: ${points.toLocaleString()}<br>`
         + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
       this.showOverlay({
         variant: 'game-over',

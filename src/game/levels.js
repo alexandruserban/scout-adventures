@@ -8,8 +8,8 @@
  * `layout.rising` makes the ledges float up, `layout.beat` makes them bob to the music, `natives`
  * fills the world with its own creatures and `screen` gives the whole screen a look (black and white). Forest.Levels.generate() then rolls
  * the course itself: where the ground breaks into pits, the ledges, stairs and stepping stones, the
- * high route, the enemies and the coins. An adventure visits every world once, in a shuffled order
- * (Forest.Levels.createRun), and the monsters and bosses get tougher with each world visited.
+ * high route, the enemies and the coins. An adventure visits every world once: the forest first,
+ * then each family of worlds shuffled (Forest.Levels.createRun), and the monsters and bosses get tougher with each world visited.
  *
  * Positions are in world units: x along the level, y up from the grass line (0).
  *  - ground:    [left, right, height] solid segments; the spaces between them are bottomless pits.
@@ -781,14 +781,32 @@
     }, random);
   }
 
-  /** The worlds in a freshly shuffled order (as indices into themes), for a new adventure. */
-  function createRun() {
-    const order = THEMES.map((_, index) => index);
-    for (let i = order.length - 1; i > 0; i--) {
+  /**
+   * The order of an adventure, by family: the forest always comes first, then the other fantasy
+   * worlds, then the sci-fi ones, then the strange ones, each family shuffled. A world missing from
+   * these lists goes at the end.
+   */
+  const RUN_FAMILIES = [
+    ['forest'],
+    ['dungeon', 'treetops', 'desert', 'ice', 'volcano', 'candy', 'moon'],
+    ['neon', 'crystal', 'clockwork', 'atlantis', 'fae', 'mechKeep', 'rift', 'station'],
+    ['noir', 'mothership', 'rainbow', 'rising', 'kitchen', 'concert']
+  ];
+
+  function shuffle(list) {
+    for (let i = list.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
+      [list[i], list[j]] = [list[j], list[i]];
     }
-    return order;
+    return list;
+  }
+
+  /** The worlds in a fresh order (as indices into themes) for a new adventure: see RUN_FAMILIES. */
+  function createRun() {
+    const indexOf = id => THEMES.findIndex(theme => theme.id === id);
+    const order = RUN_FAMILIES.flatMap(family => shuffle(family.map(indexOf).filter(index => index >= 0)));
+    const rest = THEMES.map((_, index) => index).filter(index => !order.includes(index));
+    return [...order, ...shuffle(rest)];
   }
 
   // ==========================================

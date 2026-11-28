@@ -107,6 +107,8 @@
    * down closer to him than this.
    */
   const SPAWN_GRACE_SECONDS = 0.8;
+  /** What a monster loses when the boy bumps into it (he loses a heart for it too). */
+  const BUMP_DAMAGE = 1;
   const SPAWN_MIN_DISTANCE = 4;
   /** Enemies left this far behind are quietly removed. */
   const DESPAWN_DISTANCE = 30;
@@ -1459,7 +1461,11 @@
         return;
       }
       if (enemy.canHurtPlayer && enemy.isTouching(player)) {
+        const hpBefore = player.hp;
         player.takeDamage(enemy.damage || 1, enemy.x);
+        // Bumping into it hurts both of them: when the boy loses a heart, the monster loses one hit too
+        // (only then, so touching it while he blinks after a hit doesn't wear it down every frame)
+        if (player.hp < hpBefore && enemy.isHittable) enemy.takeHit(BUMP_DAMAGE, player.x);
       }
     });
     enemies = enemies.filter(enemy => !enemy.isGone);

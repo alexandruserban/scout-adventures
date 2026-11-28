@@ -363,7 +363,8 @@
   let levelStart = { points: 0, coins: 0, coinsOffered: 0, maxHp: 0 };
   /**
    * Losing the boss fight brings the boy back at the start of the fight (not the level), with the
-   * points he had when it started, less this share of them. That's never saved: leaving the game
+   * points he had when it started, less this share of them. Each further defeat takes this share
+   * again from what's left (150,000 -> 135,000 -> 121,500 ...). That's never saved: leaving the game
    * and resuming still goes back to the start of the level, with the points from back then.
    */
   const BOSS_RETRY_PENALTY = 0.1;
@@ -1164,14 +1165,15 @@
    * @param {number} [seed] the course to play again (a resumed test level); a new one otherwise
    */
   function playTestLevel(worldId, seed, { toBoss = false } = {}) {
-    const index = Levels.themes.findIndex(theme => theme.id === worldId);
+    // It plays as the level it is in the adventure's order (which sets how tough it is)
+    const order = Levels.createRun();
+    const index = order.indexOf(Levels.themes.findIndex(theme => theme.id === worldId));
     if (index < 0) return;
     isTestLevel = true;
     points = 0;
     coinsCollected = 0;
     coinsOffered = 0;
-    // The adventure's order puts every world at its own index
-    runOrder = Levels.themes.map((_, themeIndex) => themeIndex);
+    runOrder = order;
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
     // A test level starts with as many hearts as the difficulty ever allows, to try any world in full
     const { maxHearts } = Difficulty.current;
@@ -1392,28 +1394,45 @@
       return;
     }
     Forest.Stats.add('gameOvers');
-    // Beaten by the boss: back to the start of the fight, with its starting points less the penalty.
+    // Beaten by the boss: he picks. Either try the fight again, with its starting points less the
+    // penalty, or play the whole level again with the points he had when he first entered it.
     // Anywhere else, everything earned in this level is lost: the retry starts from the points it began with.
     const inBossFight = Boolean(bossFightStart) && (arenaState === ArenaState.INTRO || arenaState === ArenaState.FIGHTING);
-    const retryPoints = inBossFight ? Math.round(bossFightStart.points * (1 - BOSS_RETRY_PENALTY)) : levelStart.points;
-    const lostPoints = Math.max(0, points - retryPoints);
-    points = retryPoints;
-    retryAfterDefeat = inBossFight ? retryBossFight : retryLevel;
-    refreshPoints();
+    const bossRetryPoints = inBossFight ? Math.round(bossFightStart.points * (1 - BOSS_RETRY_PENALTY)) : 0;
+    const levelRetryPoints = levelStart.points;
+    // [R] tries the boss again (the button on the card for it); the other button restarts the level
+    retryAfterDefeat = inBossFight ? retryBossAfterDefeat : retryLevel;
     bossPowers.clear();
     hud.hideBossBar();
+    // Shown (and kept as a high score) is what the better of the choices leaves him
+    const keptPoints = inBossFight ? Math.max(bossRetryPoints, levelRetryPoints) : levelRetryPoints;
     const previousBestPoints = loadBest(BEST_POINTS_STORAGE_KEY);
-    const isNewBestPoints = points > previousBestPoints;
-    if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, points);
+    const isNewBestPoints = keptPoints > previousBestPoints;
+    if (isNewBestPoints) saveBest(BEST_POINTS_STORAGE_KEY, keptPoints);
 
-    hud.showGameOver(retryAfterDefeat, {
+    const run = {
       levelLabel: `LEVEL ${level.number}: ${level.name}`,
-      inBossFight,
       points,
-      lostPoints,
-      bestPoints: Math.max(previousBestPoints, points),
+      bestPoints: Math.max(previousBestPoints, keptPoints),
       isNewBestPoints
-    });
+    };
+    if (inBossFight) {
+      hud.showBossDefeat({ ...run, bossRetryPoints, levelRetryPoints, onRetryBoss: retryBossAfterDefeat, onRestartLevel: retryLevel });
+      return;
+    }
+    points = levelRetryPoints;
+    refreshPoints();
+    hud.showGameOver(retryLevel, { ...run, points, lostPoints: Math.max(0, run.points - levelRetryPoints) });
+  }
+
+  /**
+   * Lost to the boss and chose to fight it again: the fight's starting points less the penalty.
+   * The next defeat in this fight takes its share from what's left then (150,000 -> 135,000 -> 121,500 ...).
+   */
+  function retryBossAfterDefeat() {
+    points = Math.round(bossFightStart.points * (1 - BOSS_RETRY_PENALTY));
+    bossFightStart.points = points;
+    retryBossFight();
   }
 
   /** Bests are tracked separately for each difficulty. */

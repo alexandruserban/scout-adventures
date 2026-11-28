@@ -134,8 +134,8 @@
      * @param {() => void} onRetry restart the level
      * @param {{levelLabel:string, points:number, lostPoints?:number, bestPoints:number, isNewBestPoints:boolean}} run
      */
-    showGameOver(onRetry, { levelLabel, inBossFight = false, points, lostPoints = 0, bestPoints, isNewBestPoints }) {
-      const lostWhat = inBossFight ? 'POINTS LOST (THE BOSS FIGHT\'S, AND 10%)' : 'POINTS FROM THIS LEVEL LOST';
+    showGameOver(onRetry, { levelLabel, points, lostPoints = 0, bestPoints, isNewBestPoints }) {
+      const lostWhat = 'POINTS FROM THIS LEVEL LOST';
       const lost = lostPoints > 0 ? `<span class="game-over-lost">-${lostPoints.toLocaleString()} ${lostWhat}</span><br>` : '';
       const message = `The boy fell in ${levelLabel}.<br><br>${lost}POINTS: ${points.toLocaleString()}<br>`
         + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
@@ -144,8 +144,31 @@
         titleClass: 'text-red',
         title: 'DEFEATED!',
         message,
-        buttonLabel: inBossFight ? 'PRESS [ R ] TO TRY THE BOSS AGAIN' : 'PRESS [ R ] TO TRY THE LEVEL AGAIN',
+        buttonLabel: 'PRESS [ R ] TO TRY THE LEVEL AGAIN',
         onRestart: onRetry
+      });
+    }
+
+    /**
+     * Beaten by a boss: try the fight again (losing a share of the points) or play the whole level
+     * again from the start, with the points the boy had when he first entered it.
+     * @param {{levelLabel:string, points:number, bossRetryPoints:number, levelRetryPoints:number,
+     *   bestPoints:number, isNewBestPoints:boolean, onRetryBoss:() => void, onRestartLevel:() => void}} run
+     */
+    showBossDefeat({ levelLabel, bossRetryPoints, levelRetryPoints, bestPoints, isNewBestPoints, onRetryBoss, onRestartLevel }) {
+      const message = `The boss beat the boy in ${levelLabel}.<br><br>`
+        + `TRY THE BOSS AGAIN: ${bossRetryPoints.toLocaleString()} POINTS <span class="game-over-lost">(-10%)</span><br>`
+        + `RESTART THE LEVEL: ${levelRetryPoints.toLocaleString()} POINTS<br><br>`
+        + (isNewBestPoints ? '&#9733; NEW HIGH SCORE! &#9733;' : `HIGH SCORE: ${bestPoints.toLocaleString()}`);
+      this.showOverlay({
+        variant: 'game-over',
+        titleClass: 'text-red',
+        title: 'DEFEATED!',
+        message,
+        buttons: [
+          { label: '[ R ] RETRY BOSS (-10%)', onClick: onRetryBoss },
+          { label: '↺ RESTART LEVEL', onClick: onRestartLevel }
+        ]
       });
     }
 

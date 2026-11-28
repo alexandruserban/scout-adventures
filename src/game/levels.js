@@ -9,7 +9,7 @@
  * fills the world with its own creatures and `screen` gives the whole screen a look (black and white). Forest.Levels.generate() then rolls
  * the course itself: where the ground breaks into pits, the ledges, stairs and stepping stones, the
  * high route, the enemies and the coins. An adventure visits every world once: the forest first,
- * then each family of worlds shuffled (Forest.Levels.createRun), and the monsters and bosses get tougher with each world visited.
+ * then the fantasy, sci-fi and strange worlds in a fixed order (Forest.Levels.createRun), and the monsters and bosses get tougher with each world visited.
  *
  * Positions are in world units: x along the level, y up from the grass line (0).
  *  - ground:    [left, right, height] solid segments; the spaces between them are bottomless pits.
@@ -863,15 +863,18 @@
   }
 
   /**
-   * The order of an adventure, by family: the forest always comes first, then the other fantasy
-   * worlds, then the sci-fi ones, then the strange ones, each family shuffled. A world missing from
-   * these lists goes at the end.
+   * The order of an adventure: the forest first, then the fantasy worlds, the sci-fi ones and the
+   * strange ones. Each family goes from gentle to tough: plain ground before slippery ground, low
+   * gravity and lava, and it ends on its strongest boss. A world missing from this list goes at the end.
    */
-  const RUN_FAMILIES = [
-    ['forest'],
-    ['dungeon', 'treetops', 'desert', 'ice', 'volcano', 'candy', 'moon'],
-    ['neon', 'crystal', 'clockwork', 'atlantis', 'fae', 'mechKeep', 'rift', 'station'],
-    ['noir', 'mothership', 'rainbow', 'rising', 'kitchen', 'concert']
+  const RUN_ORDER = [
+    'forest',
+    // Fantasy
+    'candy', 'treetops', 'dungeon', 'desert', 'ice', 'volcano', 'moon',
+    // Sci-fi
+    'fae', 'crystal', 'atlantis', 'neon', 'clockwork', 'mechKeep', 'rift', 'station',
+    // Strange
+    'noir', 'rainbow', 'kitchen', 'mothership', 'rising', 'concert'
   ];
 
   function shuffle(list) {
@@ -882,10 +885,10 @@
     return list;
   }
 
-  /** The worlds in a fresh order (as indices into themes) for a new adventure: see RUN_FAMILIES. */
+  /** The worlds in order (as indices into themes) for a new adventure: see RUN_ORDER. */
   function createRun() {
     const indexOf = id => THEMES.findIndex(theme => theme.id === id);
-    const order = RUN_FAMILIES.flatMap(family => shuffle(family.map(indexOf).filter(index => index >= 0)));
+    const order = RUN_ORDER.map(indexOf).filter(index => index >= 0);
     const rest = THEMES.map((_, index) => index).filter(index => !order.includes(index));
     return [...order, ...shuffle(rest)];
   }

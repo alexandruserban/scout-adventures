@@ -19,7 +19,11 @@
 
   function fillChoices() {
     if (worldSelect.options.length > 0) return;
-    Forest.Levels.themes.forEach((theme, index) => worldSelect.add(new Option(`${index + 1}. ${theme.icon} ${theme.name}`, theme.id)));
+    // In the adventure's order, numbered as the level each one is
+    Forest.Levels.createRun().forEach((themeIndex, position) => {
+      const theme = Forest.Levels.themes[themeIndex];
+      worldSelect.add(new Option(`${position + 1}. ${theme.icon} ${theme.name}`, theme.id));
+    });
   }
 
   /** RESUME when the picked world has an unfinished course to go back to, PLAY for a fresh one. */

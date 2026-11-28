@@ -7,6 +7,30 @@
     'btn-touch-atk': 'attack'
   };
 
+  /**
+   * Jump and attack sit close together, and their touch areas reach past the buttons. A touch in
+   * either area goes to whichever of the two visible buttons is nearer the finger, and a near tie
+   * counts as attack (a stray jump mid-fight hurts more than a stray swing).
+   */
+  const ACTION_BUTTON_IDS = { jump: 'btn-touch-jump', attack: 'btn-touch-atk' };
+  /** Attack wins unless jump is nearer by more than this many CSS pixels. */
+  const ATTACK_PREFERENCE_PIXELS = 12;
+
+  /** Distance in CSS pixels from (x, y) to the nearest point of an element's box (0 inside it). */
+  function distanceToElement(element, x, y) {
+    const box = element.getBoundingClientRect();
+    const dx = Math.max(box.left - x, 0, x - box.right);
+    const dy = Math.max(box.top - y, 0, y - box.bottom);
+    return Math.hypot(dx, dy);
+  }
+
+  function nearerOfJumpAndAttack(x, y) {
+    const jump = document.getElementById(ACTION_BUTTON_IDS.jump);
+    const attack = document.getElementById(ACTION_BUTTON_IDS.attack);
+    if (!jump || !attack) return undefined;
+    return distanceToElement(jump, x, y) + ATTACK_PREFERENCE_PIXELS < distanceToElement(attack, x, y) ? 'jump' : 'attack';
+  }
+
   /** @param {Forest.InputController} input */
   function bind(input) {
     bindTouches(input);
@@ -32,7 +56,9 @@
     const actionUnder = touch => {
       const element = document.elementFromPoint(touch.clientX, touch.clientY);
       const button = element && element.closest('.touch-btn');
-      return button ? BUTTON_ACTIONS[button.id] : undefined;
+      const action = button ? BUTTON_ACTIONS[button.id] : undefined;
+      if (action === 'jump' || action === 'attack') return nearerOfJumpAndAttack(touch.clientX, touch.clientY);
+      return action;
     };
 
     const forgetFinger = identifier => {

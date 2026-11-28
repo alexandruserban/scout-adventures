@@ -15,9 +15,14 @@
   /** Training mushrooms patrol this far either side of where they appear. */
   const TRAINING_PATROL_DISTANCE = 3.5;
   /** Mushrooms placed in a level patrol this far either side of where they appear. */
-  const LEVEL_PATROL_DISTANCE = 3;
+  const LEVEL_PATROL_DISTANCE = 5;
   /** Chance that an enemy with a ledge above its spot lands on the ledge instead of the ground. */
   const LEDGE_LANDING_CHANCE = 0.5;
+  /**
+   * Monsters placed in a level roam no further than this either side of where they came down: when
+   * the boy gets past, they wait at the edge of their patch and patrol it instead of following him.
+   */
+  const LEVEL_ROAM_DISTANCE = 8;
   /** Share of mutants that come with cybernetic implants in the future-tech worlds (elsewhere it depends on power). */
   const FUTURE_CYBER_CHANCE = 0.6;
 
@@ -252,7 +257,12 @@
     /** The current level's ground and platforms (see Forest.Terrain). */
     terrain: null,
     /** Adds an enemy created mid-fight (e.g. the halves of a split Thunder Jelly). */
-    spawnEnemy: enemy => addEnemy(enemy)
+    spawnEnemy: enemy => addEnemy(enemy),
+    /**
+     * Seconds until any monster may start another fireball, laser or rocket attack, so two of them
+     * never land on the boy at the same moment (see the `ranged` attacks in monsterAbilities.js).
+     */
+    rangedLull: 0
   };
   world.projectiles = new Forest.ProjectileSystem(world);
   /** Each boss's own signature power (see Forest.BossPowers). */
@@ -493,7 +503,7 @@
    * Its world comes from the shuffled run order and gets a freshly rolled course, unless
    * `course` (an already generated level, e.g. on a retry) is given.
    */
-  function startLevel(index, hp, maxHp, { course = null, note = '', seed } = {}) {
+  function startLevel(index, hp, maxHp, { course = null, note = '', seed, toBoss = false } = {}) {
     isTraining = false;
     hasWon = false;
     levelIndex = index;
@@ -524,6 +534,7 @@
         // A continued adventure rebuilds the very same course from its saved seed
         const levelData = course || Levels.generate(worldTheme, { position: index, seed });
         buildLevel(levelData, { hp, maxHp });
+        if (toBoss) skipToArena();
         // A test level has its own save, so it never overwrites the saved adventure
         if (isTestLevel) saveTestLevel();
         else saveRun(Math.min(hp, maxHp), maxHp);
@@ -532,10 +543,22 @@
         refreshPoints();
       },
       onReady: () => {
+        // Straight into the boss fight: its own title shows instead
+        if (toBoss) return;
         Sfx.waveStart();
         hud.showBanner({ title: `LEVEL ${level.number}: ${level.name}`, subtitle: level.flavor, variant: 'wave', seconds: 3.4 });
       }
     });
+  }
+
+  /** TESTING ONLY: put the boy at the arena's entrance (nothing on the way is left), so the boss fight starts right away. */
+  function skipToArena() {
+    pendingEnemies = [];
+    const { hp, maxHp } = player;
+    player.reset(level.arena.start + ARENA_TRIGGER_INSET + 0.5, maxHp);
+    player.hp = hp;
+    refreshHealth();
+    cameraController.snapTo(player);
   }
 
   /**
@@ -728,13 +751,17 @@
       // A new random monster every time, so the scrapbook keeps filling up
       // The future-tech worlds are crawling with cybernetic mutants
       const cyber = level.future && Math.random() < FUTURE_CYBER_CHANCE ? true : undefined;
-      const genome = Forest.MonsterForge.generate({ power: entry.power, cyber });
+      // Easier difficulties meet weaker (fewer abilities, less health) monsters in the later worlds
+      const power = Math.max(1, Math.round(entry.power * difficulty.monsterPowerScale));
+      const genome = Forest.MonsterForge.generate({ power, cyber });
       enemy = Forest.MonsterForge.create(world, { ...options, genome, stats: Forest.MonsterForge.statsFor(genome, difficulty) });
     } else {
       const ramp = levelIndex * RAMP_PER_LEVEL * difficulty.cycleRamp;
       const stats = Forest.WaveDirector.creatureStats(entry.kind, difficulty, ramp);
       enemy = new Forest.SkyCreatures[entry.kind](world, { ...options, stats });
     }
+    // It guards its own patch (flyers already keep to their stretch of sky)
+    if (enemy.leashTo) enemy.leashTo(enemy.x, LEVEL_ROAM_DISTANCE);
     // Counts towards the "every monster defeated" bonus
     enemy.isLevelMonster = true;
     addEnemy(enemy);
@@ -931,6 +958,7 @@
   function enterBossStage(newStage) {
     bossStage = newStage;
     bossPowers.setStage(newStage);
+    rewardBossStage();
     summonCompanions(Math.max(0, stageMinions() - livingMinions()));
     minionTimer = minionTrickleSeconds();
     Sfx.golemRoar();
@@ -945,6 +973,12 @@
       effects.spawnRing({ color: '#ffb347', x: boss.x, y: boss.centerY, fromScale: 0.5, toScale: 7, lifetime: 0.45, z: 0.62 });
       hud.showBanner({ title: `STAGE ${newStage} OF 3`, subtitle: `${bossName} gets angry, and more minions are coming!`, variant: 'boss', seconds: 2.6 });
     }
+  }
+
+  /** Every boss stage the boy gets through sends a heart floating down from the sky into the middle of the arena. */
+  function rewardBossStage() {
+    const middleX = (level.arena.start + level.arena.end) / 2;
+    hearts.dropFromSky(middleX, stage.camera.position.y + stage.viewHeightUnits / 2 + 1);
   }
 
   function onBossDefeated(enemy) {
@@ -1110,6 +1144,16 @@
    */
   let isTestLevel = false;
   const TEST_LEVEL_STORAGE_KEY = 'forest-pixel-adventure.testLevel';
+  /** The world last played as a test level (kept after it's won, so the picker can preselect it). */
+  const LAST_TEST_WORLD_STORAGE_KEY = 'forest-pixel-adventure.lastTestWorld';
+
+  function loadLastTestWorld() {
+    try {
+      return localStorage.getItem(LAST_TEST_WORLD_STORAGE_KEY);
+    } catch (error) {
+      return null;
+    }
+  }
 
   /**
    * Play just one world. It plays as the level it has in the adventure's order (the worlds are listed
@@ -1117,7 +1161,7 @@
    * @param {string} worldId
    * @param {number} [seed] the course to play again (a resumed test level); a new one otherwise
    */
-  function playTestLevel(worldId, seed) {
+  function playTestLevel(worldId, seed, { toBoss = false } = {}) {
     const index = Levels.themes.findIndex(theme => theme.id === worldId);
     if (index < 0) return;
     isTestLevel = true;
@@ -1127,15 +1171,18 @@
     // The adventure's order puts every world at its own index
     runOrder = Levels.themes.map((_, themeIndex) => themeIndex);
     bestPointsBeforeRun = loadBest(BEST_POINTS_STORAGE_KEY);
-    const { startHearts } = Difficulty.current;
-    const note = seed === undefined ? `🧪 TEST LEVEL ${index + 1}` : `🧪 RESUMING TEST LEVEL ${index + 1}`;
-    startLevel(index, startHearts, startHearts, { note, seed });
+    // A test level starts with as many hearts as the difficulty ever allows, to try any world in full
+    const { maxHearts } = Difficulty.current;
+    const note = toBoss ? `🧪 TEST LEVEL ${index + 1} · BOSS FIGHT`
+      : seed === undefined ? `🧪 TEST LEVEL ${index + 1}` : `🧪 RESUMING TEST LEVEL ${index + 1}`;
+    startLevel(index, maxHearts, maxHearts, { note, seed, toBoss });
     closeMainMenu();
   }
 
   function saveTestLevel() {
     try {
       localStorage.setItem(TEST_LEVEL_STORAGE_KEY, JSON.stringify({ worldId: level.id, seed: level.seed }));
+      localStorage.setItem(LAST_TEST_WORLD_STORAGE_KEY, level.id);
     } catch (error) {
       // Storage unavailable: the test level just can't be resumed later
     }
@@ -1551,6 +1598,7 @@
       else spawnApproachingEnemies();
     }
     updateEnemies(gameDeltaSeconds);
+    world.rangedLull = Math.max(0, world.rangedLull - gameDeltaSeconds);
     if (!isTraining) {
       despawnDistantEnemies();
       updateArena(gameDeltaSeconds);
@@ -1681,16 +1729,20 @@
      * Jump straight to a level of this adventure (1-22), e.g. from the console: Forest.Game.goToLevel(3)
      * @param {number} number
      */
-    /** TESTING ONLY (to be removed): play just one world (see playTestLevel). */
-    playTestLevel(worldId) {
-      playTestLevel(worldId);
+    /**
+     * TESTING ONLY (to be removed): play just one world (see playTestLevel). Its unfinished course
+     * is picked up again if it has one; with `toBoss` the boy starts at the boss arena.
+     */
+    playTestLevel(worldId, { toBoss = false } = {}) {
+      const saved = loadTestLevel();
+      playTestLevel(worldId, saved && saved.worldId === worldId ? saved.seed : undefined, { toBoss });
     },
 
-    /** TESTING ONLY: pick the unfinished test level up again on the same course. */
-    resumeTestLevel() {
-      const saved = loadTestLevel();
-      if (saved) playTestLevel(saved.worldId, saved.seed);
+    /** TESTING ONLY: the world last played as a test level (its id), or null. */
+    get lastTestWorld() {
+      return loadLastTestWorld();
     },
+
 
     /** TESTING ONLY: the unfinished test level ({worldId, seed, name, icon}), or null. */
     get savedTestLevel() {

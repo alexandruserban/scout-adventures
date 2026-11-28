@@ -162,6 +162,7 @@
   /** Puff up with a glowing mouth, then lob fireballs that come down on the boy. */
   const spit = {
     cooldown: [2.2, 3.4],
+    ranged: true,
 
     canStart(monster, player) {
       const distance = Math.abs(player.x - monster.x);
@@ -205,21 +206,22 @@
 
   /** Flyers only: dive in a U-shaped arc through the boy's position and back up the other side. */
   const swoop = {
-    cooldown: [1.2, 2.2],
+    cooldown: [2.2, 3.4],
 
     canStart(monster, player) {
       return monster.isFlying && Math.abs(player.x - monster.x) < 6;
     },
 
     start(monster, player) {
-      const duration = 1.0 / monster.speed;
+      const distanceX = (player.x - monster.x) * 2;
+      const duration = monster.swoopDuration(1.5, distanceX);
       monster.state = CreatureState.SWOOP;
       monster.stateTimer = duration;
       monster.swoopPath = {
         duration,
         startX: monster.x,
         startY: monster.y,
-        distanceX: (player.x - monster.x) * 2,
+        distanceX,
         depth: Math.max(0.5, monster.y - (monster.floorY + 0.3))
       };
       monster.tint = NOVA_TINT;
@@ -358,6 +360,7 @@
    */
   const laser = {
     cooldown: [2.4, 3.6],
+    ranged: true,
     range: 10,
     /** How close the beam has to pass to the boy's body to hit. */
     hitDistance: 0.3,
@@ -426,6 +429,7 @@
   /** Rocket pods pop open, then a salvo of rockets arcs down on the boy. Smash them! */
   const rockets = {
     cooldown: [2.8, 4.0],
+    ranged: true,
     secondsBetweenRockets: 0.22,
     flightSeconds: 1.15,
     tint: 0xc8dcff,

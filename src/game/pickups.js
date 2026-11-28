@@ -32,7 +32,7 @@
   /** Bounces lose this much speed; slower than BOUNCE_STOP_SPEED it settles. */
   const HEART_BOUNCINESS = 0.45;
   const BOUNCE_STOP_SPEED = 1.5;
-  const HEART_LIFETIME = 10;
+  const HEART_LIFETIME = 20;
   /** Blinks for this long before vanishing. */
   const HEART_BLINK_SECONDS = 3;
   /** Can't be grabbed the instant it appears, so it visibly pops out first. */
@@ -41,6 +41,8 @@
   const HEART_BOB_SPEED = 4;
   const HEART_BOB_HEIGHT = 0.06;
   const LEVEL_MARGIN = 0.4;
+  /** A heart dropped from the sky floats down no faster than this, so the boy sees it coming. */
+  const SKY_HEART_FALL_SPEED = 3.5;
   /** A heart that fell this far into a pit is gone. */
   const FALLEN_AWAY_Y = -6;
 
@@ -75,6 +77,13 @@
       this.particles.burst(x, y, 6, '#ff6b6b', 0.8, 0.4);
     }
 
+    /** Let a heart float down from the sky at (x, skyY); it stays until picked up. */
+    dropFromSky(x, skyY) {
+      const mesh = createSpriteMesh(this.sprite, this.unitsPerPixel);
+      this.scene.add(mesh);
+      this.hearts.push({ mesh, x, y: skyY, velocityX: 0, velocityY: 0, age: 0, stays: true, maxFallSpeed: SKY_HEART_FALL_SPEED });
+    }
+
     /** A heart already lying in the level at (x, y), standing on whatever is there; it never blinks away. */
     place(x, y) {
       const mesh = createSpriteMesh(this.sprite, this.unitsPerPixel);
@@ -105,6 +114,7 @@
     move(heart, deltaSeconds) {
       const previousY = heart.y;
       heart.velocityY -= HEART_GRAVITY * deltaSeconds;
+      if (heart.maxFallSpeed) heart.velocityY = Math.max(heart.velocityY, -heart.maxFallSpeed);
       heart.x = clamp(heart.x + heart.velocityX * deltaSeconds, LEVEL_START_X + LEVEL_MARGIN, LEVEL_END_X - LEVEL_MARGIN);
       heart.y += heart.velocityY * deltaSeconds;
 

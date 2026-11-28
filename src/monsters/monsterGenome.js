@@ -62,6 +62,12 @@
   /** Salt for the cyber dice, so the rest of a seed's monster looks the same with or without implants. */
   const CYBER_SEED_SALT = 0x5bd1e995;
 
+  /**
+   * Fireball, laser and rocket attacks: a monster rolls at most one of them (a laser with fireballs
+   * on top was too much to dodge). A boss's rage can still add the others.
+   */
+  const RANGED_ATTACKS = ['spit', 'laser', 'rockets'];
+
   /** Abilities a mini monster (from Brood or Splitter) never inherits, so they can't multiply forever. */
   const NO_MINI_ABILITIES = ['brood', 'splitter', 'regenerate', 'shield'];
 
@@ -234,7 +240,9 @@
     }
 
     while (chosen.length < MAX_ABILITIES) {
-      const options = Object.values(ABILITIES).filter(ability => affordable(ability) && !chosen.includes(ability.id));
+      const hasRanged = chosen.some(id => RANGED_ATTACKS.includes(id));
+      const options = Object.values(ABILITIES).filter(ability => affordable(ability) && !chosen.includes(ability.id)
+        && !(hasRanged && RANGED_ATTACKS.includes(ability.id)));
       // Sometimes keep a little budget unspent, so not every monster is maxed out
       if (options.length === 0 || (chosen.length > 0 && dice.chance(0.25))) break;
       const next = dice.pick(options);

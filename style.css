@@ -1525,10 +1525,14 @@ body.screen-noir .film-overlay {
   color: #a3e635;
 }
 
-.test-level-resume {
-  display: block;
-  width: 100%;
+.test-level-actions {
+  display: flex;
+  gap: 10px;
   margin-bottom: 12px;
+}
+
+.test-level-actions .pixel-btn {
+  flex: 1;
   font-size: 9px;
   padding: 8px 10px;
 }

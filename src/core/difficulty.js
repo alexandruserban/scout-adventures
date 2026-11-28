@@ -11,7 +11,7 @@
       label: 'EASY',
       startHearts: 10,
       /** Boss rewards can raise the hearts up to this many. */
-      maxHearts: 12,
+      maxHearts: 10,
       /**
        * How many hearts wait in each level, on its heart spots (see Forest.Levels; a level has 12-17).
        * Infinity: every spot.
@@ -39,24 +39,27 @@
       /** This many fewer mutants join each boss wave. */
       bossMutantReduction: 1,
       /** Added to how many minions each stage of a boss fight brings. */
-      bossMinionBonus: -1
+      bossMinionBonus: -1,
+      /** Multiplies the strength of a level's random monsters (fewer abilities and less health in later worlds). */
+      monsterPowerScale: 0.7
     }),
     NORMAL: Object.freeze({
       id: 'NORMAL',
       label: 'NORMAL',
-      startHearts: 5,
+      startHearts: 6,
       maxHearts: 8,
-      placedHearts: 12,
+      placedHearts: 15,
       lavaBombAimedChance: 0.2,
-      heartDropScale: 1.5,
+      heartDropScale: 1.8,
       creatureSpeed: 1,
       creatureHpBonus: 0,
       spawnIntervalScale: 1,
-      cycleRamp: 0.7,
+      cycleRamp: 0.5,
       pointsMultiplier: 1.5,
       bossEscortScale: 0.67,
       bossMutantReduction: 1,
-      bossMinionBonus: 0
+      bossMinionBonus: 0,
+      monsterPowerScale: 0.8
     }),
     HARD: Object.freeze({
       id: 'HARD',
@@ -73,7 +76,8 @@
       pointsMultiplier: 2,
       bossEscortScale: 1,
       bossMutantReduction: 0,
-      bossMinionBonus: 1
+      bossMinionBonus: 1,
+      monsterPowerScale: 1
     })
   });
 

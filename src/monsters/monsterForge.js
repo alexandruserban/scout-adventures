@@ -32,6 +32,8 @@
   const HOP_SPEED_X = 2.8;
   const HOP_SPEED_Y = [5, 6.5];
   const HOP_INTERVAL = 0.8;
+  /** After one monster starts a fireball, laser or rocket attack, no other may start one for this long. */
+  const RANGED_LULL_SECONDS = 1.6;
   const HOVER_HEIGHT = 2.4;
   const FLAP_SECONDS = 0.12;
 
@@ -275,13 +277,16 @@
     }
 
     tryStartAttack(player) {
-      const ready = this.attacks.filter(attack => attack.canStart(this, player));
+      // Only one fireball / laser / rocket attack at a time across all the monsters
+      const isRangedBlocked = this.world.rangedLull > 0;
+      const ready = this.attacks.filter(attack => !(attack.ranged && isRangedBlocked) && attack.canStart(this, player));
       if (ready.length === 0) {
         this.attackCooldown = ATTACK_RETRY_SECONDS;
         return;
       }
       this.activeAttack = ready[Math.floor(Math.random() * ready.length)];
       this.attackPhase = null;
+      if (this.activeAttack.ranged) this.world.rangedLull = RANGED_LULL_SECONDS;
       this.activeAttack.start(this, player);
     }
 

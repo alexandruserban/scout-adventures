@@ -34,7 +34,7 @@
   const FLAP_SECONDS = 0.12;
   /** Ground attacks only start when the boy is no more than this far above or below. */
   const ATTACK_HEIGHT = 2.5;
-  const SWOOP_SECONDS = 1.1;
+  const SWOOP_SECONDS = 1.6;
   const SWOOP_BOTTOM = 0.5;
 
   const FIRE_TRAIL = ['#ff8a2a', '#ffd25e'];
@@ -471,11 +471,11 @@
     /** Dive in a U-shaped arc through the boy's position and back up on the other side. */
     startSwoop(player) {
       this.state = CreatureState.SWOOP;
-      this.swoopSeconds = SWOOP_SECONDS / this.speed;
+      this.swoopDistanceX = (player.x - this.x) * 2;
+      this.swoopSeconds = this.swoopDuration(SWOOP_SECONDS, this.swoopDistanceX);
       this.stateTimer = this.swoopSeconds;
       this.swoopStartX = this.x;
       this.swoopStartY = this.y;
-      this.swoopDistanceX = (player.x - this.x) * 2;
       this.swoopDepth = Math.max(0.5, this.y - (this.floorY + SWOOP_BOTTOM));
       this.showFrame('attack');
       Sfx.swoopScreech();

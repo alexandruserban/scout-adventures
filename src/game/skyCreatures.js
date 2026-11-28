@@ -58,9 +58,14 @@
    * speed, instead of hanging beside the boy (where he'd jump straight into them). They only attack
    * when he's within this distance.
    */
-  const FLY_PATROL_RANGE = 4;
+  const FLY_PATROL_RANGE = 6;
   const FLY_PATROL_SPEED = 1.6;
   const FLY_ATTACK_RANGE = 7;
+  /**
+   * A dive (swoop) never sweeps sideways faster than this (units per second, before the creature's
+   * own speed): from far away it takes longer, so the boy has time to see it coming and dodge.
+   */
+  const SWOOP_MAX_SPEED = 5;
 
   // --- Drawing ---
   const MESH_Z = 0.26;
@@ -462,6 +467,14 @@
       this.facing = this.isWithinAttackRange(player) && !player.isDefeated ? directionTowards(this.x, player.x) : this.flyDirection;
     }
 
+    /**
+     * How long a dive that crosses `distanceX` sideways lasts: at least `baseSeconds`, longer when
+     * it would otherwise be faster than SWOOP_MAX_SPEED, and quicker for faster creatures.
+     */
+    swoopDuration(baseSeconds, distanceX) {
+      return Math.max(baseSeconds, Math.abs(distanceX) / SWOOP_MAX_SPEED) / this.speed;
+    }
+
     /** The boy is close enough for a flyer to attack him (droppers pass `range` for "right below"). */
     isWithinAttackRange(player, range = FLY_ATTACK_RANGE) {
       return Math.abs(player.x - this.x) < range;
@@ -472,6 +485,17 @@
       const hitEdge = clampedX !== this.x;
       this.x = clampedX;
       return hitEdge;
+    }
+
+    /**
+     * Keep it on its own patch: no further than `range` either side of `homeX` (on top of the
+     * ground or ledge it stands on), so a level's monsters guard their spot instead of following
+     * the boy all the way along the level and piling up behind him.
+     */
+    leashTo(homeX, range) {
+      this.minX = Math.max(this.minX, homeX - range);
+      this.maxX = Math.max(this.minX, Math.min(this.maxX, homeX + range));
+      this.keepInsideLevel();
     }
 
     /**
@@ -809,9 +833,9 @@
   // ==========================================
   const MOTH_HOVER_HEIGHT = 2.5;
   const MOTH_HOVER_SECONDS = [2.2, 3.4];
-  const MOTH_SWOOP_SECONDS = 1.3;
+  const MOTH_SWOOP_SECONDS = 1.8;
   /** Before diving it stops and glows for this long, so the boy can see the dive coming. */
-  const MOTH_WARNING_SECONDS = 0.5;
+  const MOTH_WARNING_SECONDS = 0.8;
   /** If another moth is already diving, wait this long and check again: only one dives at a time. */
   const MOTH_DIVE_RETRY_SECONDS = 0.6;
   /** Moths that have started a dive (finished ones are filtered out by state). */
@@ -905,11 +929,11 @@
       this.state = CreatureState.SWOOP;
       this.isWarning = false;
       divingMoths.add(this);
-      this.swoopSeconds = MOTH_SWOOP_SECONDS / this.speed;
+      this.swoopDistanceX = (player.x - this.x) * 2;
+      this.swoopSeconds = this.swoopDuration(MOTH_SWOOP_SECONDS, this.swoopDistanceX);
       this.stateTimer = this.swoopSeconds;
       this.swoopStartX = this.x;
       this.swoopStartY = this.y;
-      this.swoopDistanceX = (player.x - this.x) * 2;
       this.swoopDepth = Math.max(0.5, this.y - (this.floorY + MOTH_DIVE_BOTTOM));
       this.tint = MOTH_DIVE_TINT;
       this.showFrame('up');

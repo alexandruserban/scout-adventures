@@ -32,7 +32,7 @@
   /** Bounces lose this much speed; slower than BOUNCE_STOP_SPEED it settles. */
   const HEART_BOUNCINESS = 0.45;
   const BOUNCE_STOP_SPEED = 1.5;
-  const HEART_LIFETIME = 20;
+  const HEART_LIFETIME = 15;
   /** Blinks for this long before vanishing. */
   const HEART_BLINK_SECONDS = 3;
   /** Can't be grabbed the instant it appears, so it visibly pops out first. */
